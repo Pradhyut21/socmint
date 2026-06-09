@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛡️ SOCIMINT Intelligence Platform
 
-## Getting Started
+> **Next-Generation Social Media & Financial Intelligence (SOCMINT / OSINT) Platform optimized for Indian Contexts.**
 
-First, run the development server:
+A powerful, full-stack Next.js intelligence platform designed to map digital footprints, uncover shadow accounts, and trace financial and legal histories.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Key Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Feature | Description |
+| :--- | :--- |
+| **🤖 AI Chat Assistant** | Integrated AI agent (`AiChat`) to help analysts query and interpret intelligence data in real-time. |
+| **🔗 Interactive Network Graph** | Visualize complex relationships, alias connections, and associate networks. |
+| **🕵️ Shadow Account Prober** | Advanced algorithms to detect undisclosed alternate or "burner" profiles across platforms. |
+| **🏦 UPI & Financial Footprint** | Specialized integration to trace UPI (Unified Payments Interface) transactions and financial linkages. |
+| **⚖️ Indian Kanoon Integration** | Direct fetching of legal records and court proceedings from the Indian Kanoon database. |
+| **📍 Geo-Spatial Location Map** | Interactive `Leaflet` maps to pinpoint timelines and physical locations derived from digital activity. |
+| **⏱️ Evasion Timeline** | Track and map chronological efforts by targets to obscure their digital identity or location. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🏗️ Architecture
 
-To learn more about Next.js, take a look at the following resources:
+Unlike typical split-stack applications, this platform utilizes a modern, unified **Full-Stack Next.js (App Router)** architecture:
+- **Frontend:** React 19, TailwindCSS 4, Lucide Icons
+- **Backend:** Next.js Serverless API Routes (Node.js/TypeScript)
+- **Mapping:** Leaflet.js
+- **Language:** 100% TypeScript for end-to-end type safety
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Quick Start
 
-## Deploy on Vercel
+### Prerequisites
+- Node.js 20+
+- npm, yarn, or pnpm
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Local Development Setup
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Pradhyut21/SOCIMINT.git
+   cd SOCIMINT
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser to access the dashboard.
+
+---
+
+## 📡 API Capabilities
+
+The backend leverages Next.js API routes located in `app/api/`:
+- `POST /api/investigate`: Triggers the core investigation and data collection logic.
+- `POST /api/chat`: Communicates with the AI analyst assistant.
+- `GET /api/nexus`: Retrieves graph-based network relational data.
+
+---
+
+## 🇮🇳 Why This Stands Out
+
+While most OSINT tools focus solely on western social platforms, this platform is uniquely tailored for deep intelligence gathering in **India**. By combining **UPI footprint analysis** with **Indian Kanoon court records**, analysts get a comprehensive, real-world view of a target's financial and legal standing, not just their online posts.
