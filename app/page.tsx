@@ -362,9 +362,14 @@ export default function Dashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {activeSuspect.accounts.map((acc) => (
                             <div key={acc.id} className="p-4 bg-slate-950/40 border border-slate-900 rounded-xl relative">
-                              <span className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono ${
-                                acc.confidence === "CONFIRMED" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25" : "bg-slate-700/30 text-slate-400"
-                              }`}>{acc.confidence}</span>
+                              <div className="flex items-center gap-1 absolute top-2 right-2">
+                                {acc.tier === 1 && (
+                                  <span className="text-[7px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1 py-0.5 rounded font-mono">T1 API</span>
+                                )}
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold font-mono ${
+                                  acc.confidence === "CONFIRMED" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25" : "bg-slate-700/30 text-slate-400"
+                                }`}>{acc.confidence}</span>
+                              </div>
                               <h5 className="text-xs font-bold text-white uppercase font-mono">{acc.platform}</h5>
                               <span className="text-[10px] text-blue-400 font-mono">@{acc.username}</span>
                               <p className="text-[10px] text-slate-400 mt-2 font-mono">{acc.bio || "No bio available."}</p>
@@ -552,7 +557,7 @@ export default function Dashboard() {
         <footer className="h-10 border-t border-slate-900 bg-[#080c16] flex items-center justify-between px-6 text-[9px] font-mono text-slate-500 flex-shrink-0 z-20 print:hidden">
           <div className="flex items-center gap-1">
             <Shield className="w-3.5 h-3.5 text-blue-500" />
-            <span>SOCMINT Shield v1.0 • Government Hackathon Submission</span>
+            <span>SOCMINT Shield v2.0 • Government Hackathon Submission • 20-Platform OSINT Engine</span>
           </div>
           <div>DPDP Act 2023 & Section 65B Indian Evidence Act Compliant</div>
         </footer>

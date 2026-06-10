@@ -9,13 +9,14 @@ interface SearchHeroProps {
 }
 
 const MILESTONES = [
-  "Initializing SOCMINT Shield Engine...",
-  "Sweeping public social platforms in parallel...",
-  "Checking public API enrichments where available...",
-  "Aggregating public activity indicators...",
-  "Preparing live legal and news search links...",
-  "Scoring alias confidence from public response signals...",
-  "Generating Behavioral Risk Score (BRS) data...",
+  "Initializing SOCMINT Shield v2 Engine...",
+  "Sweeping 20 platforms in parallel (Tier 1 APIs + HTTP probes)...",
+  "Fetching GitHub, Reddit, HackerNews, Dev.to, GitLab data...",
+  "Running HTTP existence checks on 14 Tier-2 platforms...",
+  "Checking Indian Kanoon & MCA21 public registries...",
+  "Running alias detection (Levenshtein + writing style)...",
+  "Shadow account prober scanning handle variants...",
+  "Computing 5-factor Behavioral Risk Score (BRS)...",
   "Preserving digital evidence chain of custody..."
 ];
 
@@ -189,9 +190,9 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
 
       {/* Demo helper tags */}
       {!isSearching && (
-        <div className="mt-8 text-center bg-slate-950/40 border border-slate-800/40 p-4 rounded-xl max-w-lg">
-          <p className="text-xs text-slate-400 font-mono mb-2">Quick live queries (click one to fill and test):</p>
-          <div className="flex flex-wrap gap-2 justify-center">
+        <div className="mt-8 text-center bg-slate-950/40 border border-slate-800/40 p-4 rounded-xl max-w-2xl">
+          <p className="text-xs text-slate-400 font-mono mb-3">Quick queries — click to fill & run (live public OSINT):</p>
+          <div className="flex flex-wrap gap-2 justify-center mb-3">
             <button 
               onClick={() => { setQuery("torvalds"); setSearchType("username"); }}
               className="text-xs px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-md text-blue-400 hover:text-blue-300 font-mono hover:bg-slate-850"
@@ -210,6 +211,25 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
             >
               vercel
             </button>
+          </div>
+          <div className="border-t border-slate-800 pt-3">
+            <p className="text-[10px] text-slate-500 font-mono mb-2 uppercase tracking-wide">Demo mode — hackathon subjects with full mock dossiers:</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <button
+                onClick={() => onSearch("shadowtrader99", "username")}
+                className="text-xs px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 hover:text-rose-300 font-mono hover:bg-rose-500/15 flex items-center gap-1.5 font-semibold"
+              >
+                <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
+                Demo: shadowtrader99
+              </button>
+              <button
+                onClick={() => onSearch("sneha_fintech", "username")}
+                className="text-xs px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 hover:text-amber-300 font-mono hover:bg-amber-500/15 flex items-center gap-1.5 font-semibold"
+              >
+                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                Demo: sneha_fintech
+              </button>
+            </div>
           </div>
         </div>
       )}

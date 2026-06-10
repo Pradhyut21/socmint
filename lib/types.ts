@@ -33,6 +33,17 @@ export interface UpiFootprint {
   };
 }
 
+export interface NewsArticle {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  sentiment: "NEUTRAL" | "NEGATIVE" | "POSITIVE";
+  relevanceScore: number;
+}
+
 export interface NexusAnalysis {
   key_finding: string;
   connected_signals: { signal1: string; signal2: string; connection: string }[];
@@ -40,9 +51,32 @@ export interface NexusAnalysis {
   investigator_priority: string;
 }
 
+export interface BreachRecord {
+  name: string;
+  breachDate: string;
+  dataClasses: string[];
+  description: string;
+  domain: string;
+  isVerified: boolean;
+  pwnCount: number;
+}
+
+export interface HibpResult {
+  email: string;
+  breachCount: number;
+  breaches: BreachRecord[];
+  pasteCount: number;
+  status: "FOUND" | "CLEAN" | "NOT_CONFIGURED" | "ERROR";
+  note: string;
+  checkedAt: string;
+}
+
 export interface PlatformAccount {
   id: string;
-  platform: "instagram" | "twitter" | "facebook" | "telegram" | "reddit" | "linkedin" | "github" | "quora";
+  platform: "instagram" | "twitter" | "facebook" | "telegram" | "reddit" | "linkedin" | "github" | "quora"
+    | "hackernews" | "devto" | "gitlab" | "tumblr" | "tiktok" | "snapchat" | "pinterest"
+    | "soundcloud" | "medium" | "steam" | "pastebin" | "youtube";
+  tier?: 1 | 2;
   username: string;
   profileUrl: string;
   displayName: string;
@@ -119,6 +153,8 @@ export interface SuspectProfile {
   legalRecords: LegalRecord[];
   aliasResults: AliasResult[];
   upiFootprint?: UpiFootprint;
+  hibpResult?: HibpResult;
+  newsArticles?: NewsArticle[];
   nexusAnalysis?: NexusAnalysis;
   network: {
     nodes: NetworkNode[];
