@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { SuspectProfile, LegalRecord } from "../lib/types";
-import { Scale, Newspaper, Building, CheckCircle2, ArrowUpRight, Search, Sparkles } from "lucide-react";
+import { Scale, Newspaper, Building, CheckCircle2, ArrowUpRight, Search, Sparkles, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface LegalRecordsProps {
   suspect: SuspectProfile;
@@ -35,8 +35,9 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
     }
   };
 
-  const getCredibilityBadge = (score: string) => {
-    switch (score) {
+  const getCredibilityBadge = (score: "HIGH" | "MEDIUM" | "LOW" | number) => {
+    const level = typeof score === "number" ? (score >= 90 ? "HIGH" : score >= 60 ? "MEDIUM" : "LOW") : score;
+    switch (level) {
       case "HIGH":
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded">
@@ -94,8 +95,7 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
         </div>
 
         <div className="space-y-4">
-          {suspect.legalRecords.map((rec) => (
-            <div 
+          {suspect.legalRecords.map((rec) => (            <div 
               key={rec.id}
               onClick={() => {
                 setActiveRecordId(rec.id);
@@ -153,6 +153,47 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
           ))}
         </div>
       </div>
+
+      {/* News Articles Section — only shown if NewsAPI is configured */}
+      {suspect.newsArticles && suspect.newsArticles.length > 0 && (
+        <div className="lg:col-span-2 mt-2">
+          <div className="glass-panel p-5 rounded-2xl border border-slate-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Newspaper className="w-4 h-4 text-sky-400" />
+              <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+                Live News & Media Mentions ({suspect.newsArticles.length})
+              </h4>
+              <span className="text-[9px] text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded font-mono ml-auto">
+                NewsAPI Live
+              </span>
+            </div>
+            <div className="space-y-3">
+              {suspect.newsArticles.map((article) => {
+                const SentimentIcon = article.sentiment === "NEGATIVE" ? TrendingDown : article.sentiment === "POSITIVE" ? TrendingUp : Minus;
+                const sentimentColor = article.sentiment === "NEGATIVE" ? "text-rose-400" : article.sentiment === "POSITIVE" ? "text-emerald-400" : "text-slate-400";
+                return (
+                  <div key={article.id} className="p-4 bg-slate-950/30 border border-slate-900 rounded-xl flex items-start gap-3 hover:border-slate-700 transition-all">
+                    <SentimentIcon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${sentimentColor}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                        <span className="text-[10px] font-bold text-slate-400 font-mono">{article.source}</span>
+                        <span className="text-[9px] text-slate-500 font-mono">{article.publishedAt.slice(0, 10)}</span>
+                      </div>
+                      <a href={article.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-white hover:text-blue-400 transition-colors line-clamp-1 font-mono">
+                        {article.title}
+                      </a>
+                      <p className="text-[10px] text-slate-400 mt-1 line-clamp-2 font-mono leading-relaxed">{article.description}</p>
+                    </div>
+                    <a href={article.url} target="_blank" rel="noreferrer" className="flex-shrink-0 text-blue-500 hover:text-blue-400">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Right Column: AI Detail Reader & Synthesis */}
       <div className="lg:col-span-1">
