@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -6,6 +7,12 @@ const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+  const rl = checkRateLimit(ip);
+  if (!rl.allowed) {
+    return NextResponse.json({ key_finding: "Rate limit exceeded.", connected_signals: [], anomalies: [], investigator_priority: "Wait before retrying." }, { status: 429 });
+  }
+
   try {
     const { profile } = await request.json();
 

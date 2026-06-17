@@ -40,6 +40,14 @@ export default function AiChat({ suspect }: AiChatProps) {
         body: JSON.stringify({ question: trimmed, profile: suspect }),
       });
 
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = await response.json();
+        setAnswer(data.answer || data.error || "No response content.");
+        setLoading(false);
+        return;
+      }
+
       if (!response.body) {
         throw new Error("No response body");
       }

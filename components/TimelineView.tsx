@@ -139,7 +139,12 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
       </div>
 
       {/* Timeline List */}
-      {filteredPosts.length === 0 ? (
+      {suspect.posts.length === 0 ? (
+        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
+          <Clock className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+          <p className="text-sm text-slate-400">No public posts registered for this suspect profile.</p>
+        </div>
+      ) : filteredPosts.length === 0 ? (
         <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
           <Clock className="w-8 h-8 text-slate-600 mx-auto mb-3" />
           <p className="text-sm text-slate-400">No public posts matched the active filters.</p>

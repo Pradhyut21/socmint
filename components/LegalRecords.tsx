@@ -71,6 +71,7 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
         body: JSON.stringify({
           question: `Summarize this legal/public record for an investigating officer. State what is confirmed and what must be verified at the original source: ${JSON.stringify(record)}`,
           profile: suspect,
+          stream: false,
         }),
       });
       const data = await response.json();
@@ -95,62 +96,70 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
         </div>
 
         <div className="space-y-4">
-          {suspect.legalRecords.map((rec) => (            <div 
-              key={rec.id}
-              onClick={() => {
-                setActiveRecordId(rec.id);
-                handleAiSummarize(rec);
-              }}
-              className={`glass-panel p-5 rounded-2xl border transition-all cursor-pointer ${
-                activeRecordId === rec.id 
-                  ? "border-blue-500/50 bg-blue-950/10 shadow-lg"
-                  : "border-slate-800 hover:border-slate-700"
-              }`}
-            >
-              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className={`p-1.5 rounded-lg ${getSourceBadgeColor(rec.recordType)}`}>
-                    {getSourceIcon(rec.recordType)}
-                  </span>
-                  <div>
-                    <span className="text-xs font-bold text-white block">{rec.source}</span>
-                    <span className="text-[9px] text-slate-500 font-mono">{rec.date}</span>
-                  </div>
-                </div>
-                {getCredibilityBadge(rec.credibilityScore)}
-              </div>
-
-              <h5 className="text-xs font-bold text-white mb-2 font-mono leading-snug">
-                {rec.title}
-              </h5>
-
-              <p className="text-[11px] text-slate-400 font-mono leading-relaxed line-clamp-2">
-                {rec.summary}
-              </p>
-
-              <div className="mt-4 pt-3 border-t border-slate-900 flex flex-col gap-2 text-[10px] font-mono">
-                <div className="flex items-center justify-between">
-                  {rec.status && (
-                    <span className="text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                      Status: {rec.status}
-                    </span>
-                  )}
-                  <a 
-                    href={rec.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-500 hover:text-blue-400 flex items-center gap-0.5 ml-auto hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    View Original Registry <ArrowUpRight className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-                <span className="text-[9px] text-slate-600 block border-t border-slate-900/50 pt-1">
-                  Captured at {new Date(rec.capturedAt || suspect.capturedAt).toLocaleTimeString("en-IN")} IST from public source
-                </span>
-              </div>
+          {suspect.legalRecords.length === 0 ? (
+            <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
+              <Scale className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-400">No public registry or legal records found for this profile.</p>
             </div>
-          ))}
+          ) : (
+            suspect.legalRecords.map((rec) => (
+              <div 
+                key={rec.id}
+                onClick={() => {
+                  setActiveRecordId(rec.id);
+                  handleAiSummarize(rec);
+                }}
+                className={`glass-panel p-5 rounded-2xl border transition-all cursor-pointer ${
+                  activeRecordId === rec.id 
+                    ? "border-blue-500/50 bg-blue-950/10 shadow-lg"
+                    : "border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`p-1.5 rounded-lg ${getSourceBadgeColor(rec.recordType)}`}>
+                      {getSourceIcon(rec.recordType)}
+                    </span>
+                    <div>
+                      <span className="text-xs font-bold text-white block">{rec.source}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">{rec.date}</span>
+                    </div>
+                  </div>
+                  {getCredibilityBadge(rec.credibilityScore)}
+                </div>
+
+                <h5 className="text-xs font-bold text-white mb-2 font-mono leading-snug">
+                  {rec.title}
+                </h5>
+
+                <p className="text-[11px] text-slate-400 font-mono leading-relaxed line-clamp-2">
+                  {rec.summary}
+                </p>
+
+                <div className="mt-4 pt-3 border-t border-slate-900 flex flex-col gap-2 text-[10px] font-mono">
+                  <div className="flex items-center justify-between">
+                    {rec.status && (
+                      <span className="text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                        Status: {rec.status}
+                      </span>
+                    )}
+                    <a 
+                      href={rec.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-500 hover:text-blue-400 flex items-center gap-0.5 ml-auto hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      View Original Registry <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                  <span className="text-[9px] text-slate-600 block border-t border-slate-900/50 pt-1">
+                    Captured at {new Date(rec.capturedAt || suspect.capturedAt).toLocaleTimeString("en-IN")} IST from public source
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

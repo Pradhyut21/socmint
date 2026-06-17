@@ -178,17 +178,23 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
           </div>
 
           <div className="space-y-3">
-            {suspect.riskSignals.map((signal, idx) => (
-              <div 
-                key={idx}
-                className="flex items-start gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all"
-              >
-                <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 text-xs font-bold font-mono">
-                  {idx + 1}
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed font-mono">{signal}</p>
+            {suspect.riskSignals.length === 0 ? (
+              <div className="text-center py-8 text-xs text-slate-500 font-mono">
+                No risk signals detected for this subject.
               </div>
-            ))}
+            ) : (
+              suspect.riskSignals.map((signal, idx) => (
+                <div 
+                  key={idx}
+                  className="flex items-start gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all"
+                >
+                  <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 text-xs font-bold font-mono">
+                    {idx + 1}
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed font-mono">{signal}</p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -207,7 +213,12 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {suspect.accounts.map((acc) => (
+            {suspect.accounts.length === 0 ? (
+              <div className="text-center py-8 text-xs text-slate-500 font-mono col-span-2">
+                No linked platform identities discovered.
+              </div>
+            ) : (
+              suspect.accounts.map((acc) => (
               <div 
                 key={acc.id}
                 className="p-4 bg-slate-950/40 border border-slate-900 hover:border-blue-500/30 rounded-xl transition-all relative overflow-hidden group"
@@ -269,7 +280,7 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
                   </span>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
         </div>

@@ -18,8 +18,11 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
   const [hoveredNode, setHoveredNode] = useState<NetworkNode | null>(null);
   const [draggedNode, setDraggedNode] = useState<any>(null);
 
+  const hasNetworkData = suspect.network && suspect.network.nodes && suspect.network.nodes.length > 0;
+
   // Initialize network nodes and layout coordinates
   useEffect(() => {
+    if (!hasNetworkData) return;
     const width = containerRef.current?.clientWidth || 600;
     const height = 450;
     
@@ -327,6 +330,15 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
     });
     setNodes(initializedNodes);
   };
+
+  if (!hasNetworkData) {
+    return (
+      <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono max-w-2xl mx-auto my-6 flex flex-col items-center justify-center min-h-[300px]">
+        <Share2 className="w-8 h-8 text-slate-600 mb-3 animate-pulse" />
+        <p className="text-sm text-slate-400">No network link or relational graph data found for this suspect.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

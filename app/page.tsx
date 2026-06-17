@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { SuspectProfile } from "../lib/types";
+import { SuspectProfile, DossierInput } from "../lib/types";
 import SearchHero from "../components/SearchHero";
 import ProfileOverview from "../components/ProfileOverview";
 import TimelineView from "../components/TimelineView";
@@ -11,10 +11,17 @@ import LocationMap from "../components/LocationMap";
 import EvasionTimeline from "../components/EvasionTimeline";
 import EvidencePackage from "../components/EvidencePackage";
 import AiChat from "../components/AiChat";
+import CryptoTraceCard from "../components/CryptoTraceCard";
+import DarkWebMonitor from "../components/DarkWebMonitor";
+import NLPAnalyzer from "../components/NLPAnalyzer";
+import WikidataCard from "../components/WikidataCard";
+import ShadowAccounts from "../components/ShadowAccounts";
+import FaceScanCard from "../components/FaceScanCard";
 
 import { 
   ShieldAlert, Search, Bell, FolderOpen, Info, Shield, 
-  MapPin, Clock, ArrowLeft, RefreshCw, LogOut, CheckCircle2, AlertOctagon 
+  MapPin, Clock, ArrowLeft, RefreshCw, LogOut, CheckCircle2, AlertOctagon,
+  Menu, X, ChevronLeft, ChevronRight
 } from "lucide-react";
 
 interface AlertItem {
@@ -28,6 +35,39 @@ interface AlertItem {
 
 export default function Dashboard() {
   const [activeView, setActiveView] = useState<"search" | "alerts" | "cases" | "compliance">("search");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const tabContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Ctrl+K Keyboard Shortcut to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="search"], input[placeholder*="Search"], input[placeholder*="handle"], input[placeholder*="Query"]') as HTMLInputElement | null;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const scrollTabs = (direction: "left" | "right") => {
+    if (tabContainerRef.current) {
+      const scrollAmount = 200;
+      tabContainerRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth"
+      });
+    }
+  };
+
+  const [analystName, setAnalystName] = useState("Inspector Prasad");
+  const [analystBadge, setAnalystBadge] = useState("CY-8902");
+  const [analystUnit, setAnalystUnit] = useState("Karnataka Cell");
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeSuspect, setActiveSuspect] = useState<SuspectProfile | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -80,15 +120,49 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSearch = async (query: string, type: string) => {
+  // Load history from localStorage on mount
+  useEffect(() => {
+    const storedHistory = localStorage.getItem("socmint_recent_investigations");
+    if (storedHistory) {
+      try {
+        setRecentInvestigations(JSON.parse(storedHistory));
+      } catch (e) {
+        console.error("Failed to parse stored investigations", e);
+      }
+    }
+
+    const storedLogs = localStorage.getItem("socmint_audit_logs");
+    if (storedLogs) {
+      try {
+        setAuditLogs(JSON.parse(storedLogs));
+      } catch (e) {
+        console.error("Failed to parse stored audit logs", e);
+      }
+    }
+
+    const storedName = localStorage.getItem("socmint_analyst_name");
+    if (storedName) setAnalystName(storedName);
+
+    const storedBadge = localStorage.getItem("socmint_analyst_badge");
+    if (storedBadge) setAnalystBadge(storedBadge);
+
+    const storedUnit = localStorage.getItem("socmint_analyst_unit");
+    if (storedUnit) setAnalystUnit(storedUnit);
+  }, []);
+
+  const handleSearch = async (query: string, type: string, dossier?: DossierInput) => {
     setIsSearching(true);
     setSearchError("");
 
     try {
+      const requestBody: Record<string, unknown> = { query, type };
+      if (type === "dossier" && dossier) {
+        requestBody.dossier = dossier;
+      }
       const response = await fetch("/api/investigate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, type }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -98,17 +172,28 @@ export default function Dashboard() {
 
       const result = data.profile as SuspectProfile;
       setActiveSuspect(result);
-      setRecentInvestigations((prev) => [result, ...prev.filter((profile) => profile.caseReference !== result.caseReference)].slice(0, 8));
+      
+      let updatedHistory: SuspectProfile[] = [];
+      setRecentInvestigations((prev) => {
+        updatedHistory = [result, ...prev.filter((profile) => profile.caseReference !== result.caseReference)].slice(0, 8);
+        localStorage.setItem("socmint_recent_investigations", JSON.stringify(updatedHistory));
+        return updatedHistory;
+      });
+
       setIsSearching(false);
-      setActiveTab("overview");
+      setActiveTab(type === "face" ? "face" : type === "crypto" ? "crypto" : "overview");
       setActiveView("search");
 
       const newLog = {
-        id: (auditLogs.length + 1).toString(),
+        id: Date.now().toString(),
         action: `Live public OSINT sweep completed for query: "${query}" (Type: ${type}). Accounts found: ${result.accounts.length}.`,
         timestamp: new Date().toLocaleTimeString("en-IN") + " IST"
       };
-      setAuditLogs(prev => [newLog, ...prev]);
+      setAuditLogs(prev => {
+        const updated = [newLog, ...prev];
+        localStorage.setItem("socmint_audit_logs", JSON.stringify(updated));
+        return updated;
+      });
 
       // Fire off background NEXUS Analysis
       fetch("/api/nexus", {
@@ -119,9 +204,11 @@ export default function Dashboard() {
         .then(res => res.json())
         .then(nexusData => {
           setActiveSuspect(prev => prev ? { ...prev, nexusAnalysis: nexusData } : null);
-          setRecentInvestigations(prev => 
-            prev.map(p => p.caseReference === result.caseReference ? { ...p, nexusAnalysis: nexusData } : p)
-          );
+          setRecentInvestigations(prev => {
+            const updated = prev.map(p => p.caseReference === result.caseReference ? { ...p, nexusAnalysis: nexusData } : p);
+            localStorage.setItem("socmint_recent_investigations", JSON.stringify(updated));
+            return updated;
+          });
         })
         .catch(() => {});
 
@@ -129,6 +216,28 @@ export default function Dashboard() {
       setSearchError(error instanceof Error ? error.message : "Investigation failed.");
       setIsSearching(false);
     }
+  };
+
+  const handleClearHistory = () => {
+    if (confirm("Are you sure you want to clear all investigation history? This will also reset audit logs.")) {
+      setRecentInvestigations([]);
+      const defaultLogs = [
+        { id: "1", action: "Officer authorized session started", timestamp: new Date().toLocaleTimeString("en-IN") + " IST" }
+      ];
+      setAuditLogs(defaultLogs);
+      localStorage.removeItem("socmint_recent_investigations");
+      localStorage.setItem("socmint_audit_logs", JSON.stringify(defaultLogs));
+    }
+  };
+
+  const handleSaveAnalystSettings = (name: string, badge: string, unit: string) => {
+    setAnalystName(name);
+    setAnalystBadge(badge);
+    setAnalystUnit(unit);
+    localStorage.setItem("socmint_analyst_name", name);
+    localStorage.setItem("socmint_analyst_badge", badge);
+    localStorage.setItem("socmint_analyst_unit", unit);
+    setShowSettingsModal(false);
   };
 
   const handleTopBarSearchSubmit = (e: React.FormEvent) => {
@@ -153,23 +262,41 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-[#080c16] text-slate-200 overflow-hidden font-sans">
       
+      {/* Sidebar Mobile Backdrop */}
+      {sidebarOpen && (
+        <div 
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300"
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-[#0a0f1e]/80 border-r border-slate-900 flex flex-col justify-between flex-shrink-0 z-30 print:hidden">
+      <aside className={`w-64 bg-[#0a0f1e]/95 md:bg-[#0a0f1e]/80 border-r border-slate-900 flex flex-col justify-between flex-shrink-0 fixed md:static inset-y-0 left-0 transition-transform duration-300 ease-in-out z-40 md:z-30 print:hidden ${
+        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      }`}>
         <div>
           {/* Brand Logo */}
-          <div className="h-16 flex items-center gap-2.5 px-6 border-b border-slate-900">
-            <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-xl glow-blue">
-              <ShieldAlert className="w-5 h-5 text-blue-500" />
+          <div className="h-16 flex items-center justify-between gap-2.5 px-6 border-b border-slate-900">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-xl glow-blue">
+                <ShieldAlert className="w-5 h-5 text-blue-500" />
+              </div>
+              <span className="font-bold tracking-tight text-white font-mono text-base">
+                SOCMINT<span className="text-blue-500">SHIELD</span>
+              </span>
             </div>
-            <span className="font-bold tracking-tight text-white font-mono text-base">
-              SOCMINT<span className="text-blue-500">SHIELD</span>
-            </span>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-1 bg-slate-950 border border-slate-900 rounded-lg text-slate-400 md:hidden focus:outline-none"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Nav Links */}
           <nav className="p-4 space-y-1">
             <button
-              onClick={() => { setActiveView("search"); }}
+              onClick={() => { setActiveView("search"); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
                 activeView === "search"
                   ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
@@ -181,7 +308,7 @@ export default function Dashboard() {
             </button>
 
             <button
-              onClick={() => { setActiveView("alerts"); }}
+              onClick={() => { setActiveView("alerts"); setSidebarOpen(false); }}
               className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
                 activeView === "alerts"
                   ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
@@ -200,7 +327,7 @@ export default function Dashboard() {
             </button>
 
             <button
-              onClick={() => { setActiveView("cases"); }}
+              onClick={() => { setActiveView("cases"); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
                 activeView === "cases"
                   ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
@@ -212,7 +339,7 @@ export default function Dashboard() {
             </button>
 
             <button
-              onClick={() => { setActiveView("compliance"); }}
+              onClick={() => { setActiveView("compliance"); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
                 activeView === "compliance"
                   ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
@@ -226,17 +353,18 @@ export default function Dashboard() {
         </div>
 
         {/* Auditor Profile Footer */}
-        <div className="p-4 border-t border-slate-900 bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-300 font-mono">
-              IP
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-white truncate">Inspector Prasad</span>
-              <span className="text-[9px] text-slate-500 font-mono truncate">CY-8902 • Karnataka Cell</span>
-            </div>
+        <button 
+          onClick={() => setShowSettingsModal(true)}
+          className="p-4 border-t border-slate-900 bg-slate-950/40 hover:bg-slate-950/80 transition-colors w-full text-left flex items-center gap-3 focus:outline-none"
+        >
+          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-300 font-mono flex-shrink-0">
+            {analystName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()}
           </div>
-        </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-bold text-white truncate">{analystName}</span>
+            <span className="text-[9px] text-slate-500 font-mono truncate">{analystBadge} • {analystUnit}</span>
+          </div>
+        </button>
       </aside>
 
       {/* Main Content Area */}
@@ -246,17 +374,28 @@ export default function Dashboard() {
         <header className="h-16 border-b border-slate-900 bg-[#0a0f1e]/40 backdrop-blur-sm flex items-center justify-between px-6 flex-shrink-0 z-20 print:hidden">
           <div className="flex items-center gap-4 flex-1">
             
+            {/* Hamburger menu for mobile */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-1.5 bg-slate-950 border border-slate-900 rounded-lg text-slate-400 hover:text-slate-200 md:hidden focus:outline-none"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+
             {/* Topbar Quick Search - only shown when suspect page is loaded */}
             {activeSuspect && activeView === "search" && (
-              <form onSubmit={handleTopBarSearchSubmit} className="relative w-full max-w-sm">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+              <form onSubmit={handleTopBarSearchSubmit} className="relative w-full max-w-sm flex items-center">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3" />
                 <input
                   type="text"
                   value={topBarQuery}
                   onChange={(e) => setTopBarQuery(e.target.value)}
                   placeholder="Sweep another suspect handle..."
-                  className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl bg-slate-950/80 border border-slate-900 focus:border-blue-500/40 focus:ring-0 outline-none text-white font-mono placeholder:text-slate-500"
+                  className="w-full pl-9 pr-14 py-1.5 text-xs rounded-xl bg-slate-950/80 border border-slate-900 focus:border-blue-500/40 focus:ring-0 outline-none text-white font-mono placeholder:text-slate-500"
                 />
+                <div className="absolute right-3 px-1.5 py-0.5 rounded text-[8px] font-mono text-slate-500 bg-slate-900 border border-slate-800 pointer-events-none select-none">
+                  Ctrl+K
+                </div>
               </form>
             )}
             
@@ -305,12 +444,21 @@ export default function Dashboard() {
                   
                   {/* Back Navigation & Summary Header */}
                   <div className="flex items-center justify-between border-b border-slate-900 pb-4 flex-wrap gap-3 print:hidden">
-                    <button
-                      onClick={handleClearSuspect}
-                      className="px-3 py-1.5 bg-slate-950 border border-slate-900 rounded-lg text-xs font-mono text-slate-400 hover:text-slate-200 hover:bg-slate-900 flex items-center gap-1 transition-all"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" /> New Search
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleClearSuspect}
+                        className="px-3 py-1.5 bg-slate-950 border border-slate-900 rounded-lg text-xs font-mono text-slate-400 hover:text-slate-200 hover:bg-slate-900 flex items-center gap-1 transition-all"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" /> New Search
+                      </button>
+
+                      <button
+                        onClick={() => window.print()}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all shadow-md glow-blue"
+                      >
+                        Export Report
+                      </button>
+                    </div>
                     
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-slate-500 font-mono">Preserved Profile Dossier:</span>
@@ -320,34 +468,62 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Suspect Dashboard Navigation Tabs */}
-                  <div className="flex border-b border-slate-900 space-x-1 p-1 bg-slate-950/40 rounded-xl w-max max-w-full overflow-x-auto print:hidden">
-                    {[
-                      { id: "overview", label: "Overview" },
-                      { id: "accounts", label: "Linked Accounts" },
-                      { id: "posts", label: "Post Timeline" },
-                      { id: "legal", label: "Legal & Public Records" },
-                      { id: "network", label: "Network Graph" },
-                      { id: "location", label: "Geotag Trail" },
-                      { id: "evasion", label: "Evasion Timeline", hasBadge: activeSuspect.aliasResults?.some(a => a.evasionPattern) },
-                      { id: "chat", label: "AI Chat" },
-                      { id: "evidence", label: "Court Certificate" }
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 py-2 rounded-lg text-xs font-mono font-medium transition-all relative ${
-                          activeTab === tab.id
-                            ? "bg-blue-600 text-white shadow-md glow-blue"
-                            : "text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        {tab.label}
-                        {tab.hasBadge && (
-                          <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)]"></span>
-                        )}
-                      </button>
-                    ))}
+                  {/* Suspect Dashboard Navigation Tabs with horizontal scroll arrows */}
+                  <div className="flex items-center gap-1.5 max-w-full print:hidden">
+                    <button
+                      onClick={() => scrollTabs("left")}
+                      className="p-1.5 bg-slate-950/80 hover:bg-slate-900 border border-slate-900 rounded-lg text-slate-400 hover:text-white flex-shrink-0 transition-colors cursor-pointer"
+                      title="Scroll Left"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div 
+                      ref={tabContainerRef}
+                      className="flex border-b border-slate-900 space-x-1 p-1 bg-slate-950/40 rounded-xl overflow-x-auto scrollbar-none flex-grow"
+                      style={{ scrollbarWidth: "none" }}
+                    >
+                      {[
+                        { id: "overview", label: "Overview" },
+                        { id: "accounts", label: "Linked Accounts" },
+                        { id: "posts", label: "Post Timeline" },
+                        { id: "wikidata", label: "Wikidata Registry" },
+                        { id: "nlp", label: "NLP Analysis" },
+                        { id: "face", label: "Face Scan" },
+                        { id: "shadow", label: "Shadow Profiles", hasBadge: !!(activeSuspect.shadowAccounts && activeSuspect.shadowAccounts.length > 0) },
+                        { id: "crypto", label: "Crypto Trace", hasBadge: !!activeSuspect.cryptoTrace },
+                        { id: "darkweb", label: "Dark Web Logs" },
+                        { id: "legal", label: "Legal & Public Records" },
+                        { id: "network", label: "Network Graph" },
+                        { id: "location", label: "Geotag Trail" },
+                        { id: "evasion", label: "Evasion Timeline", hasBadge: activeSuspect.aliasResults?.some(a => a.evasionPattern) },
+                        { id: "chat", label: "AI Chat" },
+                        { id: "evidence", label: "Court Certificate" }
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`px-4 py-2 rounded-lg text-xs font-mono font-medium transition-all relative flex-shrink-0 ${
+                            activeTab === tab.id
+                              ? "bg-blue-600 text-white shadow-md glow-blue"
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          {tab.label}
+                          {tab.hasBadge && (
+                            <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)]"></span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => scrollTabs("right")}
+                      className="p-1.5 bg-slate-950/80 hover:bg-slate-900 border border-slate-900 rounded-lg text-slate-400 hover:text-white flex-shrink-0 transition-colors cursor-pointer"
+                      title="Scroll Right"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {/* Active Tab rendering */}
@@ -384,6 +560,12 @@ export default function Dashboard() {
                     )}
 
                     {activeTab === "posts" && <TimelineView suspect={activeSuspect} />}
+                    {activeTab === "wikidata" && <WikidataCard suspect={activeSuspect} />}
+                    {activeTab === "nlp" && <NLPAnalyzer suspect={activeSuspect} />}
+                    {activeTab === "face" && <FaceScanCard suspect={activeSuspect} />}
+                    {activeTab === "shadow" && <ShadowAccounts suspect={activeSuspect} />}
+                    {activeTab === "crypto" && <CryptoTraceCard suspect={activeSuspect} />}
+                    {activeTab === "darkweb" && <DarkWebMonitor suspect={activeSuspect} />}
                     {activeTab === "legal" && <LegalRecords suspect={activeSuspect} />}
                     {activeTab === "network" && <NetworkGraph suspect={activeSuspect} />}
                     {activeTab === "location" && <LocationMap suspect={activeSuspect} />}
@@ -459,7 +641,17 @@ export default function Dashboard() {
                 <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
                   Investigated Suspect Archives
                 </h4>
-                <span className="text-xs text-slate-500 font-mono">Tamper-proof audit listing</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500 font-mono">Tamper-proof audit listing</span>
+                  {recentInvestigations.length > 0 && (
+                    <button
+                      onClick={handleClearHistory}
+                      className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold font-mono text-rose-450 border border-rose-500/20 hover:border-rose-500/35 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      Clear History
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -563,6 +755,75 @@ export default function Dashboard() {
         </footer>
 
       </div>
+
+      {/* Analyst Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-950 border border-slate-800 p-6 rounded-2xl shadow-2xl font-mono text-xs">
+            <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4 border-b border-slate-900 pb-2">
+              Analyst Identity Settings
+            </h4>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const name = formData.get("name") as string || "Inspector Prasad";
+              const badge = formData.get("badge") as string || "CY-8902";
+              const unit = formData.get("unit") as string || "Karnataka Cell";
+              handleSaveAnalystSettings(name, badge, unit);
+            }} className="space-y-4">
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Analyst Name</label>
+                <input 
+                  type="text" 
+                  name="name" 
+                  defaultValue={analystName}
+                  className="w-full p-2 bg-slate-905 border border-slate-800 rounded-lg text-white outline-none focus:border-blue-500/40"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Badge ID</label>
+                <input 
+                  type="text" 
+                  name="badge" 
+                  defaultValue={analystBadge}
+                  className="w-full p-2 bg-slate-905 border border-slate-800 rounded-lg text-white outline-none focus:border-blue-500/40"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1">Unit / Division</label>
+                <input 
+                  type="text" 
+                  name="unit" 
+                  defaultValue={analystUnit}
+                  className="w-full p-2 bg-slate-905 border border-slate-800 rounded-lg text-white outline-none focus:border-blue-500/40"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-3 py-1.5 bg-[#0a0f1d] border border-slate-900 text-slate-400 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md glow-blue"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

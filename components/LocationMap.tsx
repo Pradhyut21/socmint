@@ -182,68 +182,77 @@ export default function LocationMap({ suspect }: LocationMapProps) {
           <span className="text-[10px] text-slate-500 font-mono">Dynamic OSINT coordinates mapping</span>
         </div>
 
-        {/* Map Node element */}
-        <div className="w-full h-[380px] rounded-2xl border border-slate-900 bg-slate-950 overflow-hidden relative">
-          <div ref={mapContainerRef} className="w-full h-full z-10" />
-          {!mapLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20 font-mono text-xs text-slate-500">
-              Initializing spatial mapping data...
-            </div>
-          )}
-        </div>
-
-        {/* Location Trace Timeline list */}
-        <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-          <h5 className="text-xs font-bold text-white font-mono uppercase mb-4 tracking-wider">
-            Chronological Geotag Trace
-          </h5>
-          <div className="space-y-4">
-            {suspect.locations.map((loc, idx) => {
-              const isAlert = !!loc.crimeMatched;
-              return (
-                <div 
-                  key={idx}
-                  className={`flex items-start gap-4 p-3 bg-slate-950/30 border rounded-xl transition-all ${
-                    isAlert ? "border-rose-500/20 bg-rose-950/5 hover:border-rose-500/30" : "border-slate-900 hover:border-slate-850"
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg ${
-                    isAlert ? "bg-rose-600/10 border border-rose-500/20 text-rose-400" : "bg-blue-600/10 border border-blue-500/20 text-blue-400"
-                  }`}>
-                    <MapPin className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 font-mono text-xs">
-                    <div className="flex items-center justify-between mb-1 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-xs">{loc.locationName}</span>
-                        {isAlert && (
-                          <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider uppercase">
-                            Crime Proximity Correlation
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-slate-500 text-[10px] flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" /> {loc.date}
-                      </span>
-                    </div>
-                    <p className="text-slate-400 text-[11px] mb-1">{loc.details}</p>
-                    {isAlert && (
-                      <div className="bg-rose-950/20 border border-rose-900/30 p-2.5 rounded-lg mb-2 text-rose-300 text-[10px] leading-relaxed">
-                        <span className="font-bold block mb-0.5">⚠️ Nearby Crime Scene Match:</span>
-                        {loc.crimeMatched?.title} (FIR Date: {loc.crimeMatched?.date})
-                      </div>
-                    )}
-                    <div className="flex items-center gap-4 text-[10px] text-slate-500">
-                      <span>Source: <span className="text-blue-400">{loc.source.toUpperCase()}</span></span>
-                      <span>Coordinates: {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        {/* Map and timeline layout or empty state */}
+        {suspect.locations.length === 0 ? (
+          <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono flex-1 flex flex-col items-center justify-center min-h-[300px]">
+            <MapPin className="w-8 h-8 text-slate-600 mb-3 animate-pulse" />
+            <p className="text-sm text-slate-400">No public geotag locations discovered for this profile.</p>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Map Node element */}
+            <div className="w-full h-[380px] rounded-2xl border border-slate-900 bg-slate-950 overflow-hidden relative">
+              <div ref={mapContainerRef} className="w-full h-full z-10" />
+              {!mapLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20 font-mono text-xs text-slate-500">
+                  Initializing spatial mapping data...
+                </div>
+              )}
+            </div>
 
+            {/* Location Trace Timeline list */}
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800">
+              <h5 className="text-xs font-bold text-white font-mono uppercase mb-4 tracking-wider">
+                Chronological Geotag Trace
+              </h5>
+              <div className="space-y-4">
+                {suspect.locations.map((loc, idx) => {
+                  const isAlert = !!loc.crimeMatched;
+                  return (
+                    <div 
+                      key={idx}
+                      className={`flex items-start gap-4 p-3 bg-slate-950/30 border rounded-xl transition-all ${
+                        isAlert ? "border-rose-500/20 bg-rose-950/5 hover:border-rose-500/30" : "border-slate-900 hover:border-slate-850"
+                      }`}
+                    >
+                      <div className={`p-2 rounded-lg ${
+                        isAlert ? "bg-rose-600/10 border border-rose-500/20 text-rose-400" : "bg-blue-600/10 border border-blue-500/20 text-blue-400"
+                      }`}>
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 font-mono text-xs">
+                        <div className="flex items-center justify-between mb-1 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-xs">{loc.locationName}</span>
+                            {isAlert && (
+                              <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider uppercase">
+                                Crime Proximity Correlation
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-slate-500 text-[10px] flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" /> {loc.date}
+                          </span>
+                        </div>
+                        <p className="text-slate-400 text-[11px] mb-1">{loc.details}</p>
+                        {isAlert && (
+                          <div className="bg-rose-950/20 border border-rose-900/30 p-2.5 rounded-lg mb-2 text-rose-300 text-[10px] leading-relaxed">
+                            <span className="font-bold block mb-0.5">⚠️ Nearby Crime Scene Match:</span>
+                            {loc.crimeMatched?.title} (FIR Date: {loc.crimeMatched?.date})
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4 text-[10px] text-slate-500">
+                          <span>Source: <span className="text-blue-400">{loc.source.toUpperCase()}</span></span>
+                          <span>Coordinates: {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Right Column: Private Records Request Generator */}

@@ -1,4 +1,4 @@
-import { PlatformAccount, Post, AliasResult } from "../types";
+import { PlatformAccount, Post, AliasResult, ShadowAccountResult } from "../types";
 
 // ── Levenshtein Distance ────────────────────────────────────────────
 export function levenshtein(a: string, b: string): number {
@@ -170,20 +170,7 @@ export function generateHandleVariants(username: string): string[] {
   return [...variants].filter(v => v.length >= 3 && v.length <= 30);
 }
 
-// ── Shadow Account Detection Engine ─────────────────────────────────
-export interface ShadowAccountResult {
-  handle: string;
-  platform: string;
-  profileUrl: string;
-  detectionMethod: string;
-  handleSimilarity: number;
-  bioCrossRef: number;
-  avatarMatch: number;
-  overallConfidence: number;
-  confidenceLevel: "CONFIRMED" | "PROBABLE" | "POSSIBLE";
-  signals: string[];
-  isPrivate: boolean;
-}
+
 
 export function detectShadowAccounts(
   primaryHandle: string,

@@ -7,7 +7,7 @@ const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
 
 export async function POST(request: NextRequest) {
   try {
-    const { question, profile } = await request.json();
+    const { question, profile, stream = true } = await request.json();
 
     if (!question || typeof question !== "string") {
       return NextResponse.json({ error: "Question is required." }, { status: 400 });
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         temperature: 0.2,
         top_p: 0.7,
         max_tokens: 700,
-        stream: true,
+        stream: stream,
         messages: [
           {
             role: "system",
@@ -75,6 +75,14 @@ export async function POST(request: NextRequest) {
         { error: "NVIDIA API request failed.", details: errorText },
         { status: response.status }
       );
+    }
+
+    if (!stream) {
+      const data = await response.json();
+      return NextResponse.json({
+        answer: data.choices?.[0]?.message?.content || "No response content.",
+        provider: "nvidia",
+      });
     }
 
     // Return the response directly to stream it to the client

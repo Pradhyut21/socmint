@@ -133,6 +133,66 @@ export interface NetworkLink {
   weight: number;
 }
 
+export interface ShadowAccountResult {
+  handle: string;
+  platform: string;
+  profileUrl: string;
+  detectionMethod: string;
+  handleSimilarity: number;
+  bioCrossRef: number;
+  avatarMatch: number;
+  overallConfidence: number;
+  confidenceLevel: "CONFIRMED" | "PROBABLE" | "POSSIBLE";
+  signals: string[];
+  isPrivate: boolean;
+}
+
+export interface CryptoTransaction {
+  hash: string;
+  timestamp: string;
+  from: string;
+  to: string;
+  amount: number;
+  type: "INCOMING" | "OUTGOING";
+  mixerFlag: boolean;
+  mixerName?: string;
+  riskScore: number;
+}
+
+export interface CryptoTraceResult {
+  address: string;
+  coin: "BTC" | "ETH" | "LTC";
+  balance: number;
+  totalReceived: number;
+  totalSent: number;
+  riskScore: number;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  associatedMixers: string[];
+  transactions: CryptoTransaction[];
+  note: string;
+}
+
+export interface FaceScanMetadata {
+  landmarks: { name: string; x: number; y: number; width: number; height: number }[];
+  exif: {
+    camera: string;
+    lens: string;
+    software: string;
+    created: string;
+    gps: {
+      lat: string;
+      lng: string;
+      place: string;
+    };
+  };
+  deepfake: {
+    isSynthetic: boolean;
+    score: number;
+    note: string;
+    factors: { name: string; score: number }[];
+  };
+}
+
 export interface SuspectProfile {
   username: string;
   realName: string;
@@ -156,6 +216,9 @@ export interface SuspectProfile {
   hibpResult?: HibpResult;
   newsArticles?: NewsArticle[];
   nexusAnalysis?: NexusAnalysis;
+  shadowAccounts?: ShadowAccountResult[];
+  cryptoTrace?: CryptoTraceResult;
+  faceScan?: FaceScanMetadata;
   network: {
     nodes: NetworkNode[];
     links: NetworkLink[];
@@ -176,4 +239,12 @@ export interface SuspectProfile {
   }[];
   caseReference: string;
   capturedAt: string;
+}
+
+export interface DossierInput {
+  usernames: string[];
+  realName: string;
+  email: string;
+  phone: string;
+  faceData: string;
 }
