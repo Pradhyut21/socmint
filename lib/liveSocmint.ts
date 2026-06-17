@@ -402,9 +402,10 @@ async function fuzzyGithubSearch(username: string): Promise<{ account?: Partial<
       }))
       .sort((a: { distance: number }, b: { distance: number }) => a.distance - b.distance);
 
-    // Only accept matches within edit distance 3 (handles typos like kishansaai → kishansaaai)
+    // Only accept matches within edit distance relative to query length to avoid false positives (e.g. pradhyut -> prashant)
+    const maxDistance = lowerQuery.length <= 5 ? 1 : lowerQuery.length <= 9 ? 2 : 3;
     const bestMatch = ranked[0];
-    if (!bestMatch || bestMatch.distance > 3) return { posts: [] };
+    if (!bestMatch || bestMatch.distance > maxDistance) return { posts: [] };
 
     const resolvedUsername = bestMatch.login;
     console.log(`[SOCMINT] Fuzzy match: "${username}" → "${resolvedUsername}" (edit distance: ${bestMatch.distance})`);
@@ -447,7 +448,7 @@ async function fuzzyGithubSearch(username: string): Promise<{ account?: Partial<
   }
 }
 
-async function fetchGithubActivity(username: string): Promise<{ account?: Partial<PlatformAccount>; posts: Post[]; resolvedUsername?: string }> {
+async function fetchGithubActivity(username: string, isNameQuery = false): Promise<{ account?: Partial<PlatformAccount>; posts: Post[]; resolvedUsername?: string }> {
   // Delegate to demo data module for known hackathon subjects
   const demoData = getDemoGithubData(username);
   if (demoData) return demoData;
@@ -458,8 +459,11 @@ async function fetchGithubActivity(username: string): Promise<{ account?: Partia
       fetchWithTimeout(`https://api.github.com/users/${username}/events/public?per_page=5`),
     ]);
 
-    // If exact match fails, try fuzzy search via GitHub Search API
+    // If exact match fails, try fuzzy search via GitHub Search API (only if it's a username query, not a name-based guess)
     if (!userResponse.ok) {
+      if (isNameQuery) {
+        return { posts: [] };
+      }
       return await fuzzyGithubSearch(username);
     }
 
@@ -906,7 +910,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     type === "name" || type === "username" ? fetchMcaCompanySearch(legalName || query) : Promise.resolve([]),
     type === "phone" ? fetchUpiFootprint(query) : Promise.resolve(undefined),
     type === "email" ? fetchHibpBreaches(query) : Promise.resolve(undefined),
-    type === "crypto" ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchGithubActivity(username),
+    type === "crypto" ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchGithubActivity(username, type === "name"),
     type === "crypto" ? Promise.resolve([] as Post[]) : fetchRedditActivity(username),
     type === "crypto" ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchHackerNewsActivity(username),
     type === "crypto" ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchDevToActivity(username),

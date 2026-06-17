@@ -54,6 +54,69 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Simulated Real-Time OSINT Alerts Generator (simulates background socket notifications)
+  useEffect(() => {
+    const alertsPool = [
+      {
+        type: "warning",
+        title: "UPI transactional footprint detected for sneha_fintech",
+        details: "Structured deposit of ₹1,45,000 recorded via IPIN transaction gateway. High risk routing detected."
+      },
+      {
+        type: "critical",
+        title: "New dark web credit card leak matching Vikram Rathore",
+        details: "Email ID vikram.r@secmail.io matched active SQL dump of carding forum 'Rescator'."
+      },
+      {
+        type: "info",
+        title: "GitHub commit activity recorded for rk_crypto_dev",
+        details: "Push request submitted to private contract repository. Commit signed with active GPG key."
+      },
+      {
+        type: "warning",
+        title: "Geotag proximity warning for shadowtrader99",
+        details: "Public IP routing endpoint registered at Indiranagar block within 400m of reported Mule bank branch."
+      },
+      {
+        type: "info",
+        title: "MCA21 corporate records update index sweep",
+        details: "V.R. Digital Logistics Pvt Ltd status changed to 'Under Resolution Process' in official registry."
+      }
+    ];
+
+    const interval = setInterval(() => {
+      const template = alertsPool[Math.floor(Math.random() * alertsPool.length)];
+      const newAlert = {
+        id: `alert-${Date.now()}`,
+        type: template.type as "critical" | "warning" | "info",
+        title: template.title,
+        timestamp: new Date().toLocaleTimeString("en-IN") + " IST",
+        details: template.details,
+        isRead: false
+      };
+
+      setAlerts(prev => {
+        const updated = [newAlert, ...prev].slice(0, 15);
+        localStorage.setItem("socmint_alerts", JSON.stringify(updated));
+        return updated;
+      });
+      
+      const newLog = {
+        id: `log-${Date.now()}`,
+        action: `Real-time discovery alert received: "${template.title}"`,
+        timestamp: new Date().toLocaleTimeString("en-IN") + " IST"
+      };
+      setAuditLogs(prev => {
+        const updated = [newLog, ...prev];
+        localStorage.setItem("socmint_audit_logs", JSON.stringify(updated));
+        return updated;
+      });
+
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const scrollTabs = (direction: "left" | "right") => {
     if (tabContainerRef.current) {
       const scrollAmount = 200;
@@ -140,6 +203,15 @@ export default function Dashboard() {
       }
     }
 
+    const storedAlerts = localStorage.getItem("socmint_alerts");
+    if (storedAlerts) {
+      try {
+        setAlerts(JSON.parse(storedAlerts));
+      } catch (e) {
+        console.error("Failed to parse stored alerts", e);
+      }
+    }
+
     const storedName = localStorage.getItem("socmint_analyst_name");
     if (storedName) setAnalystName(storedName);
 
@@ -219,14 +291,28 @@ export default function Dashboard() {
   };
 
   const handleClearHistory = () => {
-    if (confirm("Are you sure you want to clear all investigation history? This will also reset audit logs.")) {
+    if (confirm("Are you sure you want to clear all investigation history? This will also reset audit logs and alerts.")) {
       setRecentInvestigations([]);
       const defaultLogs = [
         { id: "1", action: "Officer authorized session started", timestamp: new Date().toLocaleTimeString("en-IN") + " IST" }
       ];
       setAuditLogs(defaultLogs);
+      
+      const defaultAlerts: AlertItem[] = [
+        {
+          id: "a1",
+          type: "critical",
+          title: "@shadowtrader99 deleted Reddit account u/shadow_trader_in",
+          timestamp: new Date().toLocaleTimeString("en-IN") + " IST",
+          details: "Evidence preservation completed. Raw data block locked with SHA-256 integrity hash.",
+          isRead: false
+        }
+      ];
+      setAlerts(defaultAlerts);
+      
       localStorage.removeItem("socmint_recent_investigations");
       localStorage.setItem("socmint_audit_logs", JSON.stringify(defaultLogs));
+      localStorage.setItem("socmint_alerts", JSON.stringify(defaultAlerts));
     }
   };
 
@@ -254,7 +340,11 @@ export default function Dashboard() {
   };
 
   const handleMarkAlertRead = (id: string) => {
-    setAlerts(prev => prev.map(a => a.id === id ? { ...a, isRead: true } : a));
+    setAlerts(prev => {
+      const updated = prev.map(a => a.id === id ? { ...a, isRead: true } : a);
+      localStorage.setItem("socmint_alerts", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const unreadAlertCount = alerts.filter(a => !a.isRead).length;
@@ -536,7 +626,7 @@ export default function Dashboard() {
                           Discovered Platform Profiles
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {activeSuspect.accounts.map((acc) => (
+                          {(activeSuspect.accounts || []).map((acc) => (
                             <div key={acc.id} className="p-4 bg-slate-950/40 border border-slate-900 rounded-xl relative">
                               <div className="flex items-center gap-1 absolute top-2 right-2">
                                 {acc.tier === 1 && (
@@ -665,7 +755,7 @@ export default function Dashboard() {
 
                 {recentInvestigations.map((profile) => (
                   <div 
-                    key={profile.username}
+                    key={profile.caseReference}
                     onClick={() => {
                       setActiveSuspect(profile);
                       setActiveTab("overview");
@@ -695,7 +785,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-900 flex justify-between items-center text-[9px] font-mono text-slate-400">
-                      <span>{profile.accounts.length} Platforms Linked</span>
+                      <span>{(profile.accounts || []).length} Platforms Linked</span>
                       <span>BRS: <strong className="text-white">{profile.riskScore}</strong></span>
                     </div>
                   </div>

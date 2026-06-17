@@ -178,12 +178,12 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
           </div>
 
           <div className="space-y-3">
-            {suspect.riskSignals.length === 0 ? (
+            {(suspect.riskSignals || []).length === 0 ? (
               <div className="text-center py-8 text-xs text-slate-500 font-mono">
                 No risk signals detected for this subject.
               </div>
             ) : (
-              suspect.riskSignals.map((signal, idx) => (
+              (suspect.riskSignals || []).map((signal, idx) => (
                 <div 
                   key={idx}
                   className="flex items-start gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all"
@@ -202,7 +202,7 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
         <div className="glass-panel p-6 rounded-2xl border border-slate-800">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
-              Discovered linked platform identities ({suspect.accounts.length})
+              Discovered linked platform identities ({(suspect.accounts || []).length})
             </h4>
             <button 
               onClick={() => onSelectTab("accounts")}
@@ -213,12 +213,12 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {suspect.accounts.length === 0 ? (
+            {(suspect.accounts || []).length === 0 ? (
               <div className="text-center py-8 text-xs text-slate-500 font-mono col-span-2">
                 No linked platform identities discovered.
               </div>
             ) : (
-              suspect.accounts.map((acc) => (
+              (suspect.accounts || []).map((acc) => (
               <div 
                 key={acc.id}
                 className="p-4 bg-slate-950/40 border border-slate-900 hover:border-blue-500/30 rounded-xl transition-all relative overflow-hidden group"

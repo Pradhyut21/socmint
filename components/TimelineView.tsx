@@ -69,12 +69,12 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
 
   const getUniquePlatforms = () => {
     const platforms = new Set<string>();
-    suspect.posts.forEach((p) => platforms.add(p.platform));
+    (suspect.posts || []).forEach((p) => platforms.add(p.platform));
     return Array.from(platforms);
   };
 
   // Filter posts based on UI controls
-  const filteredPosts = suspect.posts.filter((post) => {
+  const filteredPosts = (suspect.posts || []).filter((post) => {
     const matchesPlatform = filterPlatform === "all" || post.platform === filterPlatform;
     const matchesRisk = filterRisk === "all" || post.flagLevel === filterRisk;
     const matchesSearch = searchQuery.trim() === "" || 
@@ -139,7 +139,7 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
       </div>
 
       {/* Timeline List */}
-      {suspect.posts.length === 0 ? (
+      {(suspect.posts || []).length === 0 ? (
         <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
           <Clock className="w-8 h-8 text-slate-600 mx-auto mb-3" />
           <p className="text-sm text-slate-400">No public posts registered for this suspect profile.</p>

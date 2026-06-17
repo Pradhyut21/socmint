@@ -90,19 +90,19 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
       <div className="lg:col-span-2 flex flex-col gap-4">
         <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
           <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
-            Discovered Legal & Public Filings ({suspect.legalRecords.length})
+            Discovered Legal & Public Filings ({(suspect.legalRecords || []).length})
           </h4>
           <span className="text-[10px] text-slate-500 font-mono">Sources: eCourts, MCA21, News indices</span>
         </div>
 
         <div className="space-y-4">
-          {suspect.legalRecords.length === 0 ? (
+          {(suspect.legalRecords || []).length === 0 ? (
             <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
               <Scale className="w-8 h-8 text-slate-600 mx-auto mb-3" />
               <p className="text-sm text-slate-400">No public registry or legal records found for this profile.</p>
             </div>
           ) : (
-            suspect.legalRecords.map((rec) => (
+            (suspect.legalRecords || []).map((rec) => (
               <div 
                 key={rec.id}
                 onClick={() => {

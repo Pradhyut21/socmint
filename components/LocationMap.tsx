@@ -37,8 +37,8 @@ export default function LocationMap({ suspect }: LocationMapProps) {
         }
 
         // Suspect center coordinates (e.g. Bangalore)
-        const centerLat = suspect.locations[0]?.lat || 12.9716;
-        const centerLng = suspect.locations[0]?.lng || 77.5946;
+        const centerLat = (suspect.locations || [])[0]?.lat || 12.9716;
+        const centerLng = (suspect.locations || [])[0]?.lng || 77.5946;
 
         map = L.map(mapContainerRef.current!, {
           center: [centerLat, centerLng],
@@ -81,7 +81,7 @@ export default function LocationMap({ suspect }: LocationMapProps) {
 
         L.Marker.prototype.options.icon = DefaultIcon;
 
-        suspect.locations.forEach((loc) => {
+        (suspect.locations || []).forEach((loc) => {
           pathCoords.push([loc.lat, loc.lng]);
           
           const markerIcon = loc.crimeMatched ? AlertIcon : DefaultIcon;
@@ -183,7 +183,7 @@ export default function LocationMap({ suspect }: LocationMapProps) {
         </div>
 
         {/* Map and timeline layout or empty state */}
-        {suspect.locations.length === 0 ? (
+        {(suspect.locations || []).length === 0 ? (
           <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono flex-1 flex flex-col items-center justify-center min-h-[300px]">
             <MapPin className="w-8 h-8 text-slate-600 mb-3 animate-pulse" />
             <p className="text-sm text-slate-400">No public geotag locations discovered for this profile.</p>
@@ -206,7 +206,7 @@ export default function LocationMap({ suspect }: LocationMapProps) {
                 Chronological Geotag Trace
               </h5>
               <div className="space-y-4">
-                {suspect.locations.map((loc, idx) => {
+                {(suspect.locations || []).map((loc, idx) => {
                   const isAlert = !!loc.crimeMatched;
                   return (
                     <div 
