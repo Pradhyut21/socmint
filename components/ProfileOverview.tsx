@@ -333,7 +333,7 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
               <div className="border-t border-slate-900 pt-4 mt-4">
                 <div className="text-slate-500 mb-2">Probable UPI IDs (Inferred)</div>
                 <div className="flex flex-wrap gap-2">
-                  {suspect.upiFootprint.probableUpiIds.map(upi => (
+                  {suspect.upiFootprint.probableUpiIds.map((upi: any) => (
                     <span key={upi.id} className="bg-slate-950/40 border border-slate-800 text-slate-300 px-2 py-1 rounded text-[10px]">
                       {upi.id}
                     </span>
@@ -373,14 +373,14 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
 
             {suspect.hibpResult.breaches.length > 0 && (
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {suspect.hibpResult.breaches.map((breach, idx) => (
+                {suspect.hibpResult.breaches.map((breach: any, idx: number) => (
                   <div key={idx} className="p-3 bg-rose-950/10 border border-rose-500/15 rounded-xl font-mono text-xs">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-rose-300">{breach.name}</span>
                       <span className="text-[9px] text-slate-500">{breach.breachDate}</span>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {breach.dataClasses.slice(0, 4).map((dc, i) => (
+                      {breach.dataClasses.slice(0, 4).map((dc: any, i: number) => (
                         <span key={i} className="text-[8px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded">
                           {dc}
                         </span>

@@ -265,7 +265,7 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
         <div style={{ fontSize: "11px", marginBottom: "20px" }}>
           {suspect.posts.filter(p => p.flagLevel !== "NORMAL").map((post, index) => (
             <div key={index} style={{ borderBottom: "1px solid #eee", padding: "8px 0" }}>
-              <strong>[{post.platform.toUpperCase()} - {new Date(post.postedAt).toLocaleDateString("en-IN")}]</strong>: {post.content}<br />
+              <strong>[{post.platform.toUpperCase()} - {post.postedAt || post.timestamp ? new Date(post.postedAt || post.timestamp || "").toLocaleDateString("en-IN") : "Unknown Date"}]</strong>: {post.content}<br />
               <span style={{ color: "#777", fontSize: "10px" }}>AI flag reasoning: {post.flagReason}</span>
             </div>
           ))}
@@ -319,7 +319,7 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
         <div style={{ fontSize: "11px", marginBottom: "20px" }}>
           {suspect.legalRecords.length > 0 ? suspect.legalRecords.map((record, index) => (
             <div key={index} style={{ borderBottom: "1px solid #eee", padding: "8px 0" }}>
-              <strong>[{record.source.toUpperCase()} - {new Date(record.date).toLocaleDateString("en-IN")}]</strong>: {record.title}<br />
+              <strong>[{(record.source || "Unknown Source").toUpperCase()} - {new Date(record.date).toLocaleDateString("en-IN")}]</strong>: {record.title}<br />
               <span style={{ color: "#777", fontSize: "10px" }}>{record.summary}</span>
             </div>
           )) : (

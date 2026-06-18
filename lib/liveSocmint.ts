@@ -995,16 +995,21 @@ export async function investigatePublicSubject(query: string, type: string): Pro
   }
 
   if (type === "crypto" && cryptoTrace) {
+    const coin = cryptoTrace.coin || "BTC";
+    const balance = cryptoTrace.balance || "0";
+    const associatedMixers = cryptoTrace.associatedMixers || [];
+    const lastTxTimestamp = cryptoTrace.transactions[cryptoTrace.transactions.length - 1]?.timestamp;
+    const creationDate = lastTxTimestamp ? lastTxTimestamp.slice(0, 10) : new Date().toISOString().slice(0, 10);
     accounts.push({
       id: `crypto-${query}`,
       platform: "github",
       username: query.slice(0, 12) + "...",
-      profileUrl: `https://blockchair.com/${cryptoTrace.coin.toLowerCase()}/address/${query}`,
-      displayName: `${cryptoTrace.coin} Ledger Target`,
-      bio: `Cryptocurrency public address trace for ${query}. Balance: ${cryptoTrace.balance} ${cryptoTrace.coin}. Mixer risk: ${cryptoTrace.associatedMixers.length > 0 ? "HIGH" : "CLEAN"}.`,
+      profileUrl: `https://blockchair.com/${coin.toLowerCase()}/address/${query}`,
+      displayName: `${coin} Ledger Target`,
+      bio: `Cryptocurrency public address trace for ${query}. Balance: ${balance} ${coin}. Mixer risk: ${associatedMixers.length > 0 ? "HIGH" : "CLEAN"}.`,
       deepfakeFlag: false,
       followers: cryptoTrace.transactions.length,
-      creationDate: cryptoTrace.transactions[cryptoTrace.transactions.length - 1]?.timestamp.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      creationDate: creationDate,
       confidence: "CONFIRMED",
       reason: "Direct cryptographic ledger trace verification.",
       capturedAt
@@ -1260,7 +1265,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     }),
     ...posts.map(async (post) => {
       const text = post.content;
-      const defaultDate = post.postedAt.slice(0, 10);
+      const defaultDate = (post.postedAt || post.timestamp || post.capturedAt || capturedAt).slice(0, 10);
       await processTextForLocations(text, post.platform, defaultDate);
     })
   ]);
@@ -1306,9 +1311,11 @@ export async function investigatePublicSubject(query: string, type: string): Pro
 
   // ── Phase 7: Compute risk score ───────────────────────────────────
   const risk = deriveRisk(accounts, posts, legalRecords);
-  if (cryptoTrace && cryptoTrace.riskScore > risk.riskScore) {
+  if (cryptoTrace && cryptoTrace.riskScore !== undefined && cryptoTrace.riskScore > risk.riskScore) {
     risk.riskScore = cryptoTrace.riskScore;
-    risk.riskLevel = cryptoTrace.riskLevel;
+    if (cryptoTrace.riskLevel) {
+      risk.riskLevel = cryptoTrace.riskLevel as any;
+    }
   }
 
   // ── Phase 8: Build risk signal explanations ───────────────────────
@@ -1329,7 +1336,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     hibpResult && hibpResult.status === "FOUND"
       ? `⚠️ Email found in ${hibpResult.breachCount} data breach(es) via HIBP — credentials may be compromised.`
       : "Data breach check: not performed (email not provided or API not configured).",
-    cryptoTrace && cryptoTrace.associatedMixers.length > 0
+    cryptoTrace && cryptoTrace.associatedMixers && cryptoTrace.associatedMixers.length > 0 && cryptoTrace.address
       ? `⚠️ Crypto ledger address ${cryptoTrace.address.slice(0, 10)}... linked to mixing service: ${cryptoTrace.associatedMixers.join(", ")}.`
       : "Cryptocurrency ledger trace shows no active mixer integrations.",
     "All evidence sourced from public OSINT only. DPDP Act 2023 & Section 65B IEA compliant.",
@@ -1414,7 +1421,9 @@ export async function investigatePublicSubject(query: string, type: string): Pro
 
   for (let i = 0; i < accounts.length; i++) {
     for (let j = i + 1; j < accounts.length; j++) {
-      if (accounts[i].displayName && accounts[j].displayName && accounts[i].displayName.toLowerCase() === accounts[j].displayName.toLowerCase()) {
+      const nameI = accounts[i].displayName;
+      const nameJ = accounts[j].displayName;
+      if (nameI && nameJ && nameI.toLowerCase() === nameJ.toLowerCase()) {
         links.push({
           source: `${accounts[i].platform}:${accounts[i].username}`,
           target: `${accounts[j].platform}:${accounts[j].username}`,
@@ -1425,11 +1434,13 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     }
   }
 
-  if (cryptoTrace) {
-    const nodeId = `crypto:${cryptoTrace.address}`;
+  if (cryptoTrace && cryptoTrace.address) {
+    const coin = cryptoTrace.coin || "BTC";
+    const address = cryptoTrace.address;
+    const nodeId = `crypto:${address}`;
     nodes.push({
       id: nodeId,
-      label: `${cryptoTrace.coin} ADDR\n${cryptoTrace.address.slice(0, 10)}...`,
+      label: `${coin} ADDR\n${address.slice(0, 10)}...`,
       group: "mule",
       val: 18
     });
@@ -1545,7 +1556,11 @@ function mergeProfiles(profiles: SuspectProfile[], primaryName?: string): Suspec
       }
     }
   }
-  base.posts = allPosts.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+  base.posts = allPosts.sort((a, b) => {
+    const dateA = new Date(a.postedAt || a.timestamp || 0).getTime();
+    const dateB = new Date(b.postedAt || b.timestamp || 0).getTime();
+    return dateB - dateA;
+  });
 
   // Union legal records
   const legalIds = new Set<string>();

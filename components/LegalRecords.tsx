@@ -35,8 +35,8 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
     }
   };
 
-  const getCredibilityBadge = (score: "HIGH" | "MEDIUM" | "LOW" | number) => {
-    const level = typeof score === "number" ? (score >= 90 ? "HIGH" : score >= 60 ? "MEDIUM" : "LOW") : score;
+  const getCredibilityBadge = (score?: "HIGH" | "MEDIUM" | "LOW" | number) => {
+    const level = score === undefined ? "LOW" : (typeof score === "number" ? (score >= 90 ? "HIGH" : score >= 60 ? "MEDIUM" : "LOW") : score);
     switch (level) {
       case "HIGH":
         return (
@@ -117,8 +117,8 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
               >
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className={`p-1.5 rounded-lg ${getSourceBadgeColor(rec.recordType)}`}>
-                      {getSourceIcon(rec.recordType)}
+                    <span className={`p-1.5 rounded-lg ${getSourceBadgeColor(rec.recordType || "Court Case")}`}>
+                      {getSourceIcon(rec.recordType || "Court Case")}
                     </span>
                     <div>
                       <span className="text-xs font-bold text-white block">{rec.source}</span>
@@ -220,8 +220,8 @@ export default function LegalRecords({ suspect }: LegalRecordsProps) {
               if (!activeRec) return null;
               return (
                 <div className="flex-1 flex flex-col">
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-bold font-mono w-max mb-3 ${getSourceBadgeColor(activeRec.recordType)}`}>
-                    {activeRec.recordType.toUpperCase()}
+                  <span className={`px-2 py-0.5 rounded text-[8px] font-bold font-mono w-max mb-3 ${getSourceBadgeColor(activeRec.recordType || "Court Case")}`}>
+                    {(activeRec.recordType || "Court Case").toUpperCase()}
                   </span>
 
                   <h5 className="text-xs font-bold text-white mb-3 font-mono leading-snug">

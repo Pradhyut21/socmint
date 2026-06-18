@@ -227,7 +227,7 @@ export function detectShadowAccounts(
     // 6. Temporal proximity (account creation)
     const primaryAccount = allAccounts.find(a => a.username.toLowerCase() === primaryClean);
     let temporalScore = 0;
-    if (primaryAccount) {
+    if (primaryAccount && account.creationDate && primaryAccount.creationDate) {
       const dayGap = Math.abs(
         new Date(account.creationDate).getTime() - new Date(primaryAccount.creationDate).getTime()
       ) / (1000 * 60 * 60 * 24);
@@ -249,7 +249,7 @@ export function detectShadowAccounts(
       results.push({
         handle: account.username,
         platform: account.platform,
-        profileUrl: account.profileUrl,
+        profileUrl: account.profileUrl || account.url || "",
         detectionMethod: signals.length > 0 ? signals[0] : "Aggregate heuristic correlation",
         handleSimilarity: hScore,
         bioCrossRef: bioResult.score,
@@ -263,7 +263,7 @@ export function detectShadowAccounts(
   }
 
   // Sort by confidence descending
-  results.sort((a, b) => b.overallConfidence - a.overallConfidence);
+  results.sort((a, b) => (b.overallConfidence || 0) - (a.overallConfidence || 0));
   return results;
 }
 

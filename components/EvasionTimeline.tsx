@@ -15,9 +15,11 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
   const timelineNodes: any[] = [];
   
   // 1. Add Original account (assuming the oldest one or the primary query)
-  const sortedAccounts = [...suspect.accounts].sort((a, b) => 
-    new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
-  );
+  const sortedAccounts = [...suspect.accounts].sort((a, b) => {
+    const dateA = a.creationDate ? new Date(a.creationDate).getTime() : 0;
+    const dateB = b.creationDate ? new Date(b.creationDate).getTime() : 0;
+    return dateA - dateB;
+  });
   
   const originalAccount = sortedAccounts[0];
   if (originalAccount) {
@@ -26,7 +28,9 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
       type: "original",
       title: `@${originalAccount.username} created`,
       subtitle: originalAccount.platform,
-      date: new Date(originalAccount.creationDate).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+      date: originalAccount.creationDate
+        ? new Date(originalAccount.creationDate).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
+        : "Unknown Date",
       status: "active — potential fraud activity",
       account: originalAccount,
       color: "blue"

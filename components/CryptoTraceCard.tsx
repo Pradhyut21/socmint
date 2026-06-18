@@ -150,7 +150,7 @@ export default function CryptoTraceCard({ suspect }: CryptoTraceCardProps) {
                         </div>
                         <div>
                           <span className="text-[10px] text-slate-500 block">
-                            {new Date(tx.timestamp).toLocaleString("en-IN")}
+                            {tx.timestamp || tx.date ? new Date(tx.timestamp || tx.date || "").toLocaleString("en-IN") : "Unknown Date"}
                           </span>
                           <span className="text-xs text-white break-all block max-w-md truncate">
                             Hash: {tx.hash}

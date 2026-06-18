@@ -64,7 +64,8 @@ function writingStyleScore(primaryPosts: Post[], account: PlatformAccount, posts
   return Math.round(overlap * 0.55 + punctuationSimilarity * 0.25 + capsSimilarity * 0.2);
 }
 
-function timingScore(primaryDate: string, accountDate: string) {
+function timingScore(primaryDate: string | undefined, accountDate: string | undefined) {
+  if (!primaryDate || !accountDate) return 20;
   const primary = new Date(primaryDate).getTime();
   const account = new Date(accountDate).getTime();
   if (!Number.isFinite(primary) || !Number.isFinite(account)) return 20;
@@ -106,15 +107,14 @@ export function detectAliases(primaryUsername: string, accounts: PlatformAccount
       if (aliasSignals.length === 0) aliasSignals.push("Weak public-link signals; manual verification recommended");
 
       const evasionPattern = timing >= 75 && account.id !== primaryAccount.id && username >= 40;
-      const dayGap = Math.round(
-        Math.abs(new Date(account.creationDate).getTime() - new Date(primaryAccount.creationDate).getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
+      const date1 = account.creationDate ? new Date(account.creationDate).getTime() : 0;
+      const date2 = primaryAccount.creationDate ? new Date(primaryAccount.creationDate).getTime() : 0;
+      const dayGap = Math.round(Math.abs(date1 - date2) / (1000 * 60 * 60 * 24));
 
       return {
         platform: account.platform,
         handle: account.username,
-        profileUrl: account.profileUrl,
+        profileUrl: account.profileUrl || account.url || "",
         isAlias: confidence >= 40,
         confidence,
         confidenceLevel: level(confidence),

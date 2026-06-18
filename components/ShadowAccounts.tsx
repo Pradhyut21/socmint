@@ -39,49 +39,52 @@ export default function ShadowAccounts({ suspect }: ShadowAccountsProps) {
           </div>
         ) : (
           <div className="space-y-4">
-            {shadowAccounts.map((acc, idx) => (
-              <div 
-                key={idx}
-                onClick={() => setSelectedAccount(acc)}
-                className={`glass-panel p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
-                  selectedAccount?.handle === acc.handle ? "border-blue-500/50 bg-blue-950/5" : "border-slate-850 hover:border-slate-750"
-                }`}
-              >
-                {/* Confidence bar color */}
-                <div className={`absolute top-0 left-0 bottom-0 w-1 ${
-                  acc.overallConfidence >= 80 ? "bg-rose-500 glow-red" :
-                  acc.overallConfidence >= 55 ? "bg-orange-500 glow-amber" : "bg-blue-500"
-                }`}></div>
+            {shadowAccounts.map((acc, idx) => {
+              const confidence = acc.overallConfidence || 0;
+              return (
+                <div 
+                  key={idx}
+                  onClick={() => setSelectedAccount(acc)}
+                  className={`glass-panel p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
+                    selectedAccount?.handle === acc.handle ? "border-blue-500/50 bg-blue-950/5" : "border-slate-850 hover:border-slate-750"
+                  }`}
+                >
+                  {/* Confidence bar color */}
+                  <div className={`absolute top-0 left-0 bottom-0 w-1 ${
+                    confidence >= 80 ? "bg-rose-500 glow-red" :
+                    confidence >= 55 ? "bg-orange-500 glow-amber" : "bg-blue-500"
+                  }`}></div>
 
-                <div className="flex justify-between items-start flex-wrap gap-2 mb-3 pl-2">
-                  <div>
-                    <span className="text-xs font-bold text-white block uppercase">{acc.platform}</span>
-                    <span className="text-xs text-blue-400 block font-semibold">@{acc.handle}</span>
+                  <div className="flex justify-between items-start flex-wrap gap-2 mb-3 pl-2">
+                    <div>
+                      <span className="text-xs font-bold text-white block uppercase">{acc.platform}</span>
+                      <span className="text-xs text-blue-400 block font-semibold">@{acc.handle}</span>
+                    </div>
+
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
+                      confidence >= 80 ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                      confidence >= 55 ? "bg-orange-500/10 text-orange-400 border-orange-500/20" :
+                      "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                    }`}>
+                      {acc.confidenceLevel} — {confidence}% MATCH
+                    </span>
                   </div>
 
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
-                    acc.overallConfidence >= 80 ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                    acc.overallConfidence >= 55 ? "bg-orange-500/10 text-orange-400 border-orange-500/20" :
-                    "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                  }`}>
-                    {acc.confidenceLevel} — {acc.overallConfidence}% MATCH
-                  </span>
-                </div>
-
-                <div className="pl-2 space-y-1.5 mt-2">
-                  <div className="w-full bg-slate-950 h-1 rounded-full overflow-hidden border border-slate-900">
-                    <div 
-                      className={`h-full rounded-full`}
-                      style={{ 
-                        width: `${acc.overallConfidence}%`,
-                        backgroundColor: acc.overallConfidence >= 80 ? "#ef4444" : acc.overallConfidence >= 55 ? "#f97316" : "#3b82f6"
-                      }}
-                    ></div>
+                  <div className="pl-2 space-y-1.5 mt-2">
+                    <div className="w-full bg-slate-950 h-1 rounded-full overflow-hidden border border-slate-900">
+                      <div 
+                        className={`h-full rounded-full`}
+                        style={{ 
+                          width: `${confidence}%`,
+                          backgroundColor: confidence >= 80 ? "#ef4444" : confidence >= 55 ? "#f97316" : "#3b82f6"
+                        }}
+                      ></div>
+                    </div>
+                    <span className="text-[10px] text-slate-500">Heuristics matching threshold score</span>
                   </div>
-                  <span className="text-[10px] text-slate-500">Heuristics matching threshold score</span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

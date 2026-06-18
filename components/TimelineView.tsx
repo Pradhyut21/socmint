@@ -13,8 +13,10 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
   const [filterRisk, setFilterRisk] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  const formatTimestamp = (isoString: string) => {
+  const formatTimestamp = (isoString?: string) => {
+    if (!isoString) return "Unknown Date";
     const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return "Unknown Date";
     return d.toLocaleString("en-IN", { timeZone: "IST", dateStyle: "medium", timeStyle: "short" }) + " IST";
   };
 
@@ -42,8 +44,8 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
     }
   };
 
-  const getRiskBadge = (level: string) => {
-    switch (level) {
+  const getRiskBadge = (level?: string) => {
+    switch (level || "NORMAL") {
       case "NORMAL":
         return (
           <span className="flex items-center gap-1 text-[10px] font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded">
@@ -168,7 +170,7 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
-                      {formatTimestamp(post.postedAt)}
+                      {formatTimestamp(post.postedAt || post.timestamp)}
                     </span>
                   </div>
 

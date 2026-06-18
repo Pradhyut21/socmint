@@ -162,7 +162,8 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
             ctx.lineWidth = isRelatedToHover ? 2.5 : 1.0;
           } else {
             ctx.strokeStyle = link.type === "CO_ACCUSED" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.25)";
-            ctx.lineWidth = Math.min(4, link.weight * 1.2);
+            const weight = link.weight || (link.strength ? link.strength * 5 : 1);
+            ctx.lineWidth = Math.min(4, weight * 1.2);
           }
           ctx.stroke();
         }
@@ -184,7 +185,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
         ctx.globalAlpha = isDimmed ? 0.25 : 1.0;
 
         // Visual properties based on node types
-        let size = node.val * 0.75;
+        let size = (node.val || node.size || 16) * 0.75;
         let color = "#3b82f6"; // default blue
         let ringColor = "rgba(59, 130, 246, 0.2)";
         let isBridgeNode = node.label.includes("Bridge");
@@ -261,7 +262,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
     // Detect if clicking on a node
     const clicked = nodes.find((node) => {
       const dist = Math.sqrt((node.x - x) ** 2 + (node.y - y) ** 2);
-      const size = node.val * 0.75;
+      const size = (node.val || node.size || 16) * 0.75;
       return dist <= size + 10;
     });
 
@@ -288,7 +289,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
       // Hover detection
       const hovered = nodes.find((node) => {
         const dist = Math.sqrt((node.x - x) ** 2 + (node.y - y) ** 2);
-        const size = node.val * 0.75;
+        const size = (node.val || node.size || 16) * 0.75;
         return dist <= size + 10;
       });
       setHoveredNode(hovered || null);
@@ -428,7 +429,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
                 <span className="text-blue-400 uppercase font-semibold block mb-4">{selectedNode.group}</span>
 
                 <span className="text-slate-500 text-[10px] uppercase block mb-1">Influence Weight</span>
-                <span className="text-white block mb-4">{(selectedNode.val / 3).toFixed(1)} Centrality Coefficient</span>
+                <span className="text-white block mb-4">{((selectedNode.val || selectedNode.size || 16) / 3).toFixed(1)} Centrality Coefficient</span>
 
                 <span className="text-slate-500 text-[10px] uppercase block mb-1">Role Detail</span>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
