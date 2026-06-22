@@ -257,49 +257,51 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
     <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 py-8">
       {/* Visual Identity Logo */}
       <div className="flex items-center gap-3 mb-6 animate-pulse-fast">
-        <div className="p-3 bg-blue-600/20 border border-blue-500/30 rounded-2xl glow-blue">
-          <ShieldAlert className="w-10 h-10 text-blue-500" />
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl glow-blue">
+          <ShieldAlert className="w-10 h-10 text-blue-600" />
         </div>
         <div className="flex flex-col">
-          <span className="text-3xl font-bold tracking-tight text-white font-mono">
-            SOCMINT<span className="text-blue-500">SHIELD</span>
+          <span className="text-3xl font-bold tracking-tight text-ink font-mono">
+            SOCMINT<span className="text-blue-600">SHIELD</span>
           </span>
-          <span className="text-xs tracking-wider uppercase text-blue-400 font-semibold">
+          <span className="text-xs tracking-wider uppercase text-blue-750 font-bold">
             Suspect Intelligence & Profiling Engine
           </span>
         </div>
       </div>
 
-      <div className="w-full max-w-3xl glass-panel p-8 rounded-2xl border border-blue-500/20 shadow-2xl relative overflow-hidden">
+      <div className="w-full max-w-3xl glass-panel p-8 rounded-2xl border border-slate-200 bg-white shadow-2xl relative overflow-hidden">
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full filter blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/5 rounded-full filter blur-3xl pointer-events-none"></div>
 
         {!isSearching ? (
           <>
-            <h2 className="text-xl font-semibold text-center text-white mb-4 font-mono">
+            <h2 className="text-xl font-semibold text-center text-ink mb-4 font-mono font-bold">
               Start Tactical Open-Source Profile Sweep
             </h2>
 
             {/* Mode Toggle */}
             <div className="flex items-center justify-center gap-2 mb-6">
               <button
+                type="button"
                 onClick={() => setSearchMode("dossier")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all border ${
                   searchMode === "dossier"
-                    ? "bg-gradient-to-r from-blue-600/20 to-cyan-600/20 text-blue-300 border-blue-500/30 shadow-lg"
-                    : "text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700"
+                    ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-transparent shadow-lg shadow-blue-500/10"
+                    : "text-slate-650 border-slate-200 hover:text-ink hover:border-slate-350 bg-white"
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
                 Full Dossier
               </button>
               <button
+                type="button"
                 onClick={() => setSearchMode("quick")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all border ${
                   searchMode === "quick"
-                    ? "bg-gradient-to-r from-blue-600/20 to-cyan-600/20 text-blue-300 border-blue-500/30 shadow-lg"
-                    : "text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700"
+                    ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-transparent shadow-lg shadow-blue-500/10"
+                    : "text-slate-650 border-slate-200 hover:text-ink hover:border-slate-350 bg-white"
                 }`}
               >
                 <Zap className="w-3.5 h-3.5" />
@@ -312,15 +314,15 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
               <form onSubmit={handleDossierSubmit} className="space-y-4">
                 {/* Field count badge */}
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">
+                  <span className="text-[10px] text-slate-655 font-bold font-mono uppercase tracking-wider">
                     Provide all known suspect identifiers
                   </span>
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
                     filledFieldCount >= 3
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-250 font-bold"
                       : filledFieldCount >= 1
-                        ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                        : "bg-slate-900 text-slate-600 border-slate-800"
+                        ? "bg-blue-50 text-blue-800 border-blue-250 font-bold"
+                        : "bg-slate-100 text-slate-700 border-slate-200 font-bold"
                   }`}>
                     {filledFieldCount}/5 fields
                   </span>
@@ -328,10 +330,10 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
 
                 {/* Usernames */}
                 <div className="space-y-2">
-                  <label className="text-[10px] text-slate-400 block uppercase font-mono tracking-wider flex items-center gap-1.5">
-                    <Search className="w-3 h-3 text-blue-500" />
+                  <label className="text-[10px] text-slate-750 font-bold block uppercase font-mono tracking-wider flex items-center gap-1.5">
+                    <Search className="w-3 h-3 text-blue-650" />
                     Usernames / Handles
-                    <span className="text-slate-600">(add all known handles across platforms)</span>
+                    <span className="text-slate-500 font-semibold font-mono">(add all known handles across platforms)</span>
                   </label>
                   {dossierUsernames.map((username, index) => (
                     <div key={index} className="flex gap-2 items-center">
@@ -342,14 +344,14 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                           value={username}
                           onChange={(e) => updateUsername(index, e.target.value)}
                           placeholder={index === 0 ? "e.g. pradd.18 (Instagram)" : index === 1 ? "e.g. pradhyut21 (GitHub)" : `Handle ${index + 1}...`}
-                          className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none text-white text-sm font-mono placeholder:text-slate-600 transition-all"
+                          className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-250 focus:border-blue-300 focus:ring-1 focus:ring-blue-300 outline-none text-ink text-sm font-mono placeholder:text-slate-550 transition-all font-semibold shadow-inner"
                         />
                       </div>
                       {dossierUsernames.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeUsernameField(index)}
-                          className="p-2 rounded-lg text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                          className="p-2 rounded-lg text-slate-600 hover:text-rose-700 hover:bg-rose-50 transition-all"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -360,7 +362,7 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                     <button
                       type="button"
                       onClick={addUsernameField}
-                      className="flex items-center gap-1.5 text-[10px] text-blue-500 hover:text-blue-400 font-mono uppercase tracking-wider transition-colors"
+                      className="flex items-center gap-1.5 text-[10px] text-blue-700 hover:text-blue-800 font-bold font-mono uppercase tracking-wider transition-colors"
                     >
                       <Plus className="w-3 h-3" /> Add another handle
                     </button>
@@ -370,8 +372,8 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                 {/* Real Name + Email row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
-                      <User className="w-3 h-3 text-cyan-500" />
+                    <label className="text-[10px] text-slate-750 font-bold block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-cyan-600" />
                       Real Name
                     </label>
                     <input
@@ -379,12 +381,12 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                       value={dossierRealName}
                       onChange={(e) => setDossierRealName(e.target.value)}
                       placeholder="e.g. K M Pradhyut"
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 outline-none text-white text-sm font-mono placeholder:text-slate-600 transition-all"
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-55 border border-slate-250 focus:border-cyan-300 focus:ring-1 focus:ring-cyan-300 outline-none text-ink text-sm font-mono placeholder:text-slate-500 transition-all font-semibold shadow-inner"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
-                      <Mail className="w-3 h-3 text-violet-500" />
+                    <label className="text-[10px] text-slate-750 font-bold block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
+                      <Mail className="w-3 h-3 text-violet-600" />
                       Email Address
                     </label>
                     <input
@@ -392,15 +394,15 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                       value={dossierEmail}
                       onChange={(e) => setDossierEmail(e.target.value)}
                       placeholder="e.g. suspect@proton.me"
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/50 outline-none text-white text-sm font-mono placeholder:text-slate-600 transition-all"
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-55 border border-slate-250 focus:border-violet-300 focus:ring-1 focus:ring-violet-300 outline-none text-ink text-sm font-mono placeholder:text-slate-500 transition-all font-semibold shadow-inner"
                     />
                   </div>
                 </div>
 
                 {/* Phone */}
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
-                    <Phone className="w-3 h-3 text-amber-500" />
+                  <label className="text-[10px] text-slate-750 font-bold block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
+                    <Phone className="w-3 h-3 text-amber-600" />
                     Phone Number
                   </label>
                   <input
@@ -408,16 +410,16 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                     value={dossierPhone}
                     onChange={(e) => setDossierPhone(e.target.value)}
                     placeholder="e.g. +91 98765 43210"
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 outline-none text-white text-sm font-mono placeholder:text-slate-600 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-55 border border-slate-250 focus:border-amber-300 focus:ring-1 focus:ring-amber-300 outline-none text-ink text-sm font-mono placeholder:text-slate-500 transition-all font-semibold shadow-inner"
                   />
                 </div>
 
                 {/* Face Photo (compact) */}
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
-                    <ImageIcon className="w-3 h-3 text-rose-500" />
+                  <label className="text-[10px] text-slate-750 font-bold block mb-1.5 uppercase font-mono tracking-wider flex items-center gap-1.5">
+                    <ImageIcon className="w-3 h-3 text-rose-600" />
                     Face Photo
-                    <span className="text-slate-600">(optional — for face scan analysis)</span>
+                    <span className="text-slate-500 font-semibold font-mono">(optional — for face scan analysis)</span>
                   </label>
                   <input
                     type="file"
@@ -428,7 +430,7 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                   />
 
                   {useDossierCamera && !dossierFaceData && (
-                    <div className="flex flex-col items-center justify-center bg-slate-950/60 p-4 border border-slate-900 rounded-xl relative overflow-hidden w-full max-w-xs mx-auto mb-2">
+                    <div className="flex flex-col items-center justify-center bg-slate-50 p-4 border border-slate-200 rounded-xl relative overflow-hidden w-full max-w-xs mx-auto mb-2 shadow-sm">
                       <div className="relative w-40 h-40 bg-black rounded-xl overflow-hidden mb-3 border border-blue-500/30">
                         <video
                           ref={dossierVideoRef}
@@ -448,10 +450,10 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button type="button" onClick={stopCamera} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-850 rounded-lg text-[10px] font-mono transition-all">
+                        <button type="button" onClick={stopCamera} className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-lg text-[10px] font-bold font-mono transition-all shadow-sm">
                           Cancel
                         </button>
-                        <button type="button" onClick={() => capturePhoto(true)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold font-mono tracking-wider glow-blue transition-all">
+                        <button type="button" onClick={() => capturePhoto(true)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold font-mono tracking-wider shadow-md glow-blue transition-all">
                           Capture
                         </button>
                       </div>
@@ -459,15 +461,15 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                   )}
 
                   {dossierFaceData ? (
-                    <div className="flex items-center gap-3 p-2 bg-slate-950/60 border border-slate-800 rounded-xl">
-                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-blue-500/20 flex-shrink-0">
+                    <div className="flex items-center gap-3 p-2 bg-slate-55 border border-slate-205 rounded-xl shadow-sm">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
                         <img src={dossierFaceData} alt="Face" className="w-full h-full object-cover" />
                       </div>
-                      <span className="text-[10px] text-emerald-400 font-mono flex-1">Face photo attached ✓</span>
+                      <span className="text-[10px] text-emerald-800 font-mono font-bold flex-1">Face photo attached ✓</span>
                       <button
                         type="button"
                         onClick={() => { setDossierFaceData(""); setUseDossierCamera(false); }}
-                        className="text-slate-600 hover:text-rose-400 transition-colors"
+                        className="text-slate-600 hover:text-rose-700 transition-colors"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -477,16 +479,16 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                       <button
                         type="button"
                         onClick={() => dossierFileInputRef.current?.click()}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-800 hover:border-blue-500/40 hover:bg-slate-950/20 transition-all rounded-xl text-[10px] text-slate-500 hover:text-slate-300 font-mono cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-250 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/20 transition-all rounded-xl text-[10px] text-slate-705 font-bold hover:text-blue-700 font-mono cursor-pointer shadow-sm animate-pulse-none"
                       >
-                        <ImageIcon className="w-3 h-3" /> Upload Photo
+                        <ImageIcon className="w-3 h-3 text-slate-500" /> Upload Photo
                       </button>
                       <button
                         type="button"
                         onClick={() => startCamera(true)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-800 hover:border-blue-500/40 hover:bg-slate-950/20 transition-all rounded-xl text-[10px] text-slate-500 hover:text-slate-300 font-mono cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-250 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/20 transition-all rounded-xl text-[10px] text-slate-705 font-bold hover:text-blue-700 font-mono cursor-pointer shadow-sm animate-pulse-none"
                       >
-                        <Camera className="w-3 h-3" /> Live Camera
+                        <Camera className="w-3 h-3 text-slate-500" /> Live Camera
                       </button>
                     </div>
                   )}
@@ -496,16 +498,16 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                 <button
                   type="submit"
                   disabled={filledFieldCount === 0}
-                  className={`w-full py-3.5 rounded-xl font-mono font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full py-3.5 rounded-xl font-mono font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
                     filledFieldCount > 0
-                      ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg glow-blue hover:from-blue-700 hover:to-cyan-700"
-                      : "bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800"
+                      ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 cursor-pointer"
+                      : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                   }`}
                 >
                   <Layers className="w-4 h-4" />
                   Build Intelligence Dossier
                   {filledFieldCount > 1 && (
-                    <span className="text-[9px] opacity-70 ml-1">({filledFieldCount} identity vectors)</span>
+                    <span className="text-[9px] opacity-80 ml-1">({filledFieldCount} identity vectors)</span>
                   )}
                 </button>
               </form>
@@ -513,17 +515,18 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
               /* ═══════════ QUICK SCAN FORM ═══════════ */
               <>
                 {/* Input Type Selector Tabs */}
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6 p-1 bg-slate-950/60 rounded-xl border border-slate-800">
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6 p-1 bg-slate-50 rounded-xl border border-slate-200 shadow-inner">
                   {searchOptions.map((opt) => {
                     const Icon = opt.icon;
                     return (
                       <button
                         key={opt.id}
+                        type="button"
                         onClick={() => setSearchType(opt.id)}
-                        className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg text-xs font-medium transition-all ${
+                        className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg text-xs font-bold transition-all ${
                           searchType === opt.id
-                            ? "bg-blue-600 text-white shadow-lg glow-blue"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+                            ? "bg-blue-600 text-white shadow-md"
+                            : "text-slate-600 hover:text-ink hover:bg-white border border-transparent hover:border-slate-200 shadow-sm"
                         }`}
                       >
                         <Icon className="w-4 h-4 mb-1" />
@@ -541,19 +544,17 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileChange}
-                        accept="image/*"
                         className="hidden"
+                        accept="image/*"
                       />
-                      
-                      {/* Mode Selector */}
-                      <div className="flex gap-2 justify-center mb-2 border-b border-slate-900/60 pb-3">
+                      <div className="flex gap-2 justify-center mb-2 border-b border-slate-205 pb-3">
                         <button
                           type="button"
                           onClick={() => { stopCamera(); setUploadedImage(null); setUseCamera(false); }}
                           className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-all border ${
                             !useCamera && !uploadedImage
-                              ? "bg-blue-600/10 text-blue-400 border-blue-500/20"
-                              : "text-slate-500 border-transparent hover:text-slate-350"
+                              ? "bg-blue-50 text-blue-800 border-blue-200 shadow-sm"
+                              : "text-slate-600 border-transparent hover:text-ink hover:border-slate-200 bg-white"
                           }`}
                         >
                           Upload File
@@ -563,8 +564,8 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                           onClick={() => startCamera(false)}
                           className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-all border ${
                             useCamera
-                              ? "bg-blue-600/10 text-blue-400 border-blue-500/20"
-                              : "text-slate-500 border-transparent hover:text-slate-350"
+                              ? "bg-blue-50 text-blue-800 border-blue-200 shadow-sm"
+                              : "text-slate-600 border-transparent hover:text-ink hover:border-slate-200 bg-white"
                           }`}
                         >
                           Live Camera Scan
@@ -572,8 +573,8 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                       </div>
                       
                       {useCamera && !uploadedImage && (
-                        <div className="flex flex-col items-center justify-center bg-slate-950/60 p-6 border border-slate-900 rounded-2xl relative overflow-hidden w-full max-w-sm mx-auto">
-                          <div className="relative w-56 h-56 bg-black rounded-xl overflow-hidden mb-4 border border-blue-500/30">
+                        <div className="flex flex-col items-center justify-center bg-slate-50 p-6 border border-slate-200 rounded-2xl relative overflow-hidden w-full max-w-sm mx-auto shadow-sm">
+                          <div className="relative w-56 h-56 bg-black rounded-xl overflow-hidden mb-4 border border-blue-250 shadow-inner">
                             <video
                               ref={videoRef}
                               autoPlay
@@ -593,7 +594,7 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                             <div className="absolute top-[40%] left-[58%] w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping delay-300"></div>
                             <div className="absolute top-[52%] left-[48%] w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping delay-150"></div>
                             <div className="absolute top-[65%] left-[42%] w-6 h-1.5 bg-emerald-500/30 border border-emerald-500 rounded-full animate-pulse"></div>
-
+ 
                             <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-rose-600/90 text-white font-mono font-bold text-[7px] px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
                               <span className="w-1 h-1 bg-white rounded-full"></span>
                               Webcam Active
@@ -604,14 +605,14 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                             <button
                               type="button"
                               onClick={stopCamera}
-                              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-850 rounded-xl text-xs font-mono transition-all"
+                              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-mono transition-all shadow-sm font-semibold"
                             >
                               Cancel
                             </button>
                             <button
                               type="button"
                               onClick={() => capturePhoto(false)}
-                              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono tracking-wider flex items-center gap-1 shadow-lg glow-blue transition-all"
+                              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono tracking-wider flex items-center gap-1 shadow-lg shadow-blue-500/15 transition-all"
                             >
                               Capture Face
                             </button>
@@ -622,17 +623,17 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                       {!useCamera && !uploadedImage && (
                         <div 
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex flex-col items-center justify-center border-2 border-dashed border-slate-800 hover:border-blue-500/40 hover:bg-slate-950/20 transition-all rounded-2xl p-10 bg-slate-950/30 cursor-pointer group"
+                          className="flex flex-col items-center justify-center border-2 border-dashed border-slate-250 hover:border-blue-300 hover:bg-blue-50/20 transition-all rounded-2xl p-10 bg-slate-50 cursor-pointer group shadow-sm"
                         >
-                          <ImageIcon className="w-12 h-12 text-slate-600 mb-3 group-hover:text-blue-500 transition-colors animate-pulse" />
-                          <p className="text-sm font-semibold text-slate-350">Select Suspect Reference Photo</p>
-                          <p className="text-[10px] text-slate-500 mt-1 font-mono">Supports PNG, JPEG, or WEBP. Max file size: 5MB.</p>
+                          <ImageIcon className="w-12 h-12 text-slate-500 mb-3 group-hover:text-blue-600 transition-colors animate-pulse" />
+                          <p className="text-sm font-bold text-slate-700">Select Suspect Reference Photo</p>
+                          <p className="text-[10px] text-slate-500 mt-1 font-mono font-semibold">Supports PNG, JPEG, or WEBP. Max file size: 5MB.</p>
                         </div>
                       )}
 
                       {uploadedImage && (
-                        <div className="flex flex-col items-center p-6 bg-slate-950/40 border border-slate-900 rounded-2xl">
-                          <div className="relative w-40 h-40 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mb-4">
+                        <div className="flex flex-col items-center p-6 bg-slate-50 border border-slate-200 rounded-2xl shadow-sm">
+                          <div className="relative w-40 h-40 bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden mb-4">
                             <img 
                               src={uploadedImage} 
                               alt="Face Preview" 
@@ -643,13 +644,13 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
 
                           <div className="w-full max-w-md space-y-4">
                             <div>
-                              <label className="text-[9px] text-slate-500 block mb-1 uppercase font-mono tracking-wider">
+                              <label className="text-[9px] text-slate-750 font-bold block mb-1 uppercase font-mono tracking-wider">
                                 Cross-Reference Target Matcher
                               </label>
                               <select 
                                 value={matchSuspect} 
                                 onChange={(e) => setMatchSuspect(e.target.value)}
-                                className="w-full p-2.5 bg-slate-950 border border-slate-850 rounded-xl text-xs text-white outline-none focus:border-blue-500/40 font-mono"
+                                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs text-ink outline-none focus:border-blue-300 font-mono font-semibold shadow-sm"
                               >
                                 <option value="new_suspect">Generate New Suspect Dossier (Forensic Mode)</option>
                                 <option value="shadowtrader99">Match & Overwrite Vikram Rathore (shadowtrader99)</option>
@@ -661,14 +662,14 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                               <button
                                 type="button"
                                 onClick={() => { setUploadedImage(null); setUseCamera(false); }}
-                                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-405 border border-slate-850 rounded-xl text-xs font-mono transition-all"
+                                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-mono transition-all shadow-sm font-semibold"
                               >
                                 Clear Photo
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onSearch(`${matchSuspect}|||${uploadedImage}`, "face")}
-                                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono tracking-wider flex items-center gap-1 shadow-lg glow-blue transition-all"
+                                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono tracking-wider flex items-center gap-1 shadow-lg shadow-blue-500/15 transition-all"
                               >
                                 Execute Forensic Sweep
                               </button>
@@ -684,10 +685,10 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder={getPlaceholder()}
-                        className="w-full pl-5 pr-24 py-4 rounded-xl bg-slate-950/80 border border-slate-800 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none text-white text-base font-mono shadow-inner placeholder:text-slate-500"
+                        className="w-full pl-5 pr-24 py-4 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-300 focus:ring-1 focus:ring-blue-300 outline-none text-ink text-base font-mono shadow-inner placeholder:text-slate-500 font-semibold"
                         autoFocus
                       />
-                      <div className="absolute right-14 px-2 py-1 rounded text-[10px] font-mono text-slate-500 bg-slate-900 border border-slate-800 pointer-events-none select-none">
+                      <div className="absolute right-14 px-2 py-1 rounded text-[10px] font-mono text-slate-600 font-semibold bg-slate-100 border border-slate-200 pointer-events-none select-none">
                         Ctrl+K
                       </div>
                       <button

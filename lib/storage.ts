@@ -23,6 +23,10 @@ export const storage = {
     list.unshift(p);
     localStorage.setItem(KEYS.recent, JSON.stringify(list.slice(0, 24)));
   },
+  setRecent(list: SuspectProfile[]) {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(KEYS.recent, JSON.stringify(list));
+  },
   clearRecent() { if (typeof window !== "undefined") localStorage.removeItem(KEYS.recent); },
 
   getAlerts(): AlertItem[] {

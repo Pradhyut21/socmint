@@ -74,73 +74,73 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
       <div className="lg:col-span-2 flex flex-col gap-6">
         
         {/* Certificate Display */}
-        <div className="glass-panel p-6 rounded-2xl border border-emerald-500/20 bg-emerald-950/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-2xl"></div>
+        <div className="glass-panel p-6 rounded-2xl border border-emerald-250 bg-emerald-50/50 relative overflow-hidden shadow-sm">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full filter blur-2xl"></div>
           
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-emerald-600/10 border border-emerald-500/30 rounded-xl text-emerald-400">
+            <div className="p-2 bg-emerald-600/10 border border-emerald-500/30 rounded-xl text-emerald-700">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-white font-mono uppercase tracking-wider">
+              <h4 className="text-sm font-semibold text-ink font-mono uppercase tracking-wider">
                 Section 65B Evidence Certificate
               </h4>
-              <span className="text-[10px] text-emerald-400 font-mono">Status: Cryptographically Certified & Signed</span>
+              <span className="text-[10px] text-emerald-800 font-semibold font-mono">Status: Cryptographically Certified & Signed</span>
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-300 font-mono leading-relaxed mb-6">
+          <p className="text-[11px] text-slate-750 font-medium font-mono leading-relaxed mb-6">
             In compliance with Section 65B of the Indian Evidence Act, 2000, this report serves as secondary electronic record evidence. The metadata, timestamps, and target data content of this dossier have been digitally signed and registered on the local auditing vault immediately upon collection.
           </p>
 
           {/* Cryptographic hash */}
-          <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-4 flex flex-col gap-2 relative">
-            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2 relative shadow-sm">
+            <div className="flex items-center justify-between text-[10px] font-semibold font-mono text-slate-600">
               <span>SHA-256 DIGITAL INTEGRITY HASH</span>
               <button 
                 onClick={handleCopyHash}
-                className="text-blue-500 hover:text-blue-400 flex items-center gap-1 font-mono uppercase text-[9px]"
+                className="text-blue-600 hover:text-blue-750 flex items-center gap-1 font-bold font-mono uppercase text-[9px]"
               >
                 <Clipboard className="w-3.5 h-3.5" /> {copiedHash ? "Copied" : "Copy"}
               </button>
             </div>
-            <div className="font-mono text-xs font-semibold text-emerald-400 break-all select-all pr-12">
+            <div className="font-mono text-xs font-bold text-emerald-850 break-all select-all pr-12">
               {sha256Hash}
             </div>
           </div>
         </div>
 
         {/* Chain of Custody Auditing */}
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800">
-          <h4 className="text-sm font-semibold text-white font-mono uppercase tracking-wider mb-4">
+        <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <h4 className="text-sm font-semibold text-ink font-mono uppercase tracking-wider mb-4">
             Digital Chain of Custody Audit
           </h4>
 
           <div className="space-y-4 font-mono text-xs">
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5"></div>
+              <div className="w-2 h-2 rounded-full bg-blue-650 mt-1.5"></div>
               <div>
-                <span className="text-slate-400 font-semibold block">Record Acquisition Captured</span>
-                <span className="text-slate-500 text-[10px]">Date: {new Date().toLocaleDateString("en-IN")} at {new Date().toLocaleTimeString("en-IN")} IST</span>
-                <p className="text-slate-400 text-[10px] mt-0.5">Discovered platforms swept: Telegram API query, Twitter crawler check-ins.</p>
+                <span className="text-slate-800 font-bold block">Record Acquisition Captured</span>
+                <span className="text-slate-500 font-semibold text-[10px]">Date: {new Date().toLocaleDateString("en-IN")} at {new Date().toLocaleTimeString("en-IN")} IST</span>
+                <p className="text-slate-700 font-medium text-[10px] mt-0.5">Discovered platforms swept: Telegram API query, Twitter crawler check-ins.</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5"></div>
+              <div className="w-2 h-2 rounded-full bg-blue-650 mt-1.5"></div>
               <div>
-                <span className="text-slate-400 font-semibold block">Cryptographic Signing Registered</span>
-                <span className="text-slate-500 text-[10px]">Hashing block completed instantly</span>
-                <p className="text-slate-400 text-[10px] mt-0.5">Signature key assigned to officer certificate token.</p>
+                <span className="text-slate-800 font-bold block">Cryptographic Signing Registered</span>
+                <span className="text-slate-500 font-semibold text-[10px]">Hashing block completed instantly</span>
+                <p className="text-slate-700 font-medium text-[10px] mt-0.5">Signature key assigned to officer certificate token.</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5"></div>
+              <div className="w-2 h-2 rounded-full bg-emerald-600 mt-1.5"></div>
               <div>
-                <span className="text-emerald-400 font-semibold block">DPDP Act Compliance Verified</span>
-                <span className="text-slate-500 text-[10px]">Audit complete</span>
-                <p className="text-slate-400 text-[10px] mt-0.5">Verified no private networks accessed. Public indicators only.</p>
+                <span className="text-emerald-800 font-bold block">DPDP Act Compliance Verified</span>
+                <span className="text-slate-500 font-semibold text-[10px]">Audit complete</span>
+                <p className="text-slate-700 font-medium text-[10px] mt-0.5">Verified no private networks accessed. Public indicators only.</p>
               </div>
             </div>
           </div>
@@ -150,38 +150,38 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
 
       {/* Right Column: Case Actions & Share */}
       <div className="lg:col-span-1">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 h-full flex flex-col justify-between min-h-[300px]">
+        <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white shadow-sm h-full flex flex-col justify-between min-h-[300px]">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Lock className="w-5 h-5 text-blue-500" />
-              <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+              <Lock className="w-5 h-5 text-blue-600" />
+              <h4 className="text-sm font-semibold text-ink font-mono tracking-wider uppercase">
                 Case Security & Share
               </h4>
             </div>
 
-            <p className="text-[11px] text-slate-400 font-mono leading-relaxed mb-6">
+            <p className="text-[11px] text-slate-700 font-medium font-mono leading-relaxed mb-6">
               Only supervisor level officers are authorized to share case links with other state crime cells. All shares are recorded in the central compliance audit trail.
             </p>
 
             {shareLink && (
-              <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-3 mb-6 relative">
-                <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 mb-1.5">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 relative shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)]">
+                <div className="flex items-center justify-between text-[9px] font-semibold font-mono text-slate-600 mb-1.5">
                   <span>ENCRYPTED CASE SHARE LINK (EXPIRES IN 48H)</span>
                   <button 
                     onClick={handleCopyLink}
-                    className="text-blue-500 hover:text-blue-400 flex items-center gap-0.5"
+                    className="text-blue-600 hover:text-blue-750 font-bold flex items-center gap-0.5"
                   >
                     {copiedLink ? "Copied" : "Copy"}
                   </button>
                 </div>
-                <div className="font-mono text-[10px] text-slate-300 break-all select-all">
+                <div className="font-mono text-[10px] text-slate-800 font-semibold break-all select-all">
                   {shareLink}
                 </div>
               </div>
             )}
           </div>
 
-          <div className="space-y-3 pt-4 border-t border-slate-900">
+          <div className="space-y-3 pt-4 border-t border-slate-200">
             <button
               onClick={handlePrintDossier}
               className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-1.5 shadow-lg glow-blue transition-all"
@@ -192,12 +192,12 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
             {!shareLink ? (
               <button
                 onClick={handleGenerateShare}
-                className="w-full py-2 bg-slate-950 hover:bg-slate-900 text-slate-400 border border-slate-900 hover:border-slate-800 rounded-xl text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                className="w-full py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition-all"
               >
                 <Share2 className="w-4 h-4" /> Share Inter-State Link
               </button>
             ) : (
-              <div className="text-[9px] text-center text-slate-500 font-mono">
+              <div className="text-[9px] text-center text-slate-600 font-bold font-mono">
                 Share link registered in auditing log.
               </div>
             )}

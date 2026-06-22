@@ -123,6 +123,7 @@ export function detectAliases(primaryUsername: string, accounts: PlatformAccount
         evasionReason: evasionPattern
           ? `Account creation is ${dayGap} day(s) from the primary account timeline; verify complaint/report dates before treating this as evasion.`
           : undefined,
+        createdAt: account.creationDate,
       };
     })
     .filter((result) => result.isAlias);

@@ -46,12 +46,7 @@ export function SuspectTabs({ profile, onTabChange }: { profile: SuspectProfile;
     { id: "overview", label: "Overview", icon: Users, render: (p) => <OverviewTab p={p} /> },
     { id: "accounts", label: "Linked Accounts", icon: Share2, render: (p) => <AccountsTab p={p} /> },
     { id: "timeline", label: "Post Timeline", icon: MessageSquare, render: (p) => <TimelineView suspect={p} /> },
-    { id: "wikidata", label: "Wikidata Registry", icon: Globe, render: (p) => <WikidataCard suspect={p} /> },
-    { id: "nlp", label: "NLP Analysis", icon: Brain, render: (p) => <NLPAnalyzer suspect={p} /> },
     { id: "face", label: "Face Scan", icon: ScanFace, render: (p) => <FaceScanCard suspect={p} /> },
-    { id: "shadow", label: "Shadow Profiles", icon: EyeOff,
-      badge: profile.shadowAccounts && profile.shadowAccounts.length > 0 ? { tone: "stamp", text: String(profile.shadowAccounts.length) } : undefined,
-      render: (p) => <ShadowAccounts suspect={p} /> },
     { id: "crypto", label: "Crypto Trace", icon: Bitcoin,
       badge: profile.cryptoTrace ? { tone: "warn", text: String(profile.cryptoTrace.transactions?.length || 0) } : undefined,
       render: (p) => <CryptoTraceCard suspect={p} /> },
@@ -62,7 +57,7 @@ export function SuspectTabs({ profile, onTabChange }: { profile: SuspectProfile;
           ? { tone: "stamp" as const, text: String(profile.financialFootprint.ncrp.length) }
           : undefined,
       render: (p) => <FinancialTab p={p} /> },
-    { id: "dark", label: "Dark Web Logs", icon: AlertTriangle, render: (p) => <DarkWebMonitor suspect={p} /> },
+    { id: "darkweb", label: "Dark Web & Leaks", icon: AlertTriangle, render: (p) => <DarkWebMonitor suspect={p} /> },
     { id: "legal", label: "Legal & Public Records", icon: Gavel, render: (p) => <LegalRecords suspect={p} /> },
     { id: "network", label: "Network Graph", icon: GitBranch, render: (p) => <NetworkGraph suspect={p} /> },
     { id: "geo", label: "Geotag Trail", icon: MapPin, render: (p) => <LocationMap suspect={p} /> },
@@ -138,6 +133,59 @@ export function SuspectTabs({ profile, onTabChange }: { profile: SuspectProfile;
 function OverviewTab({ p }: { p: SuspectProfile }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      {p.nexusAnalysis && (
+        <Card className="lg:col-span-3 border-l-4 border-l-blue-600 bg-blue-50/20 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+              <Sparkle /> AI Executive Briefing & Action Plan
+            </CardTitle>
+            <CardDescription className="text-slate-600 font-mono text-[10px]">Cross-signal forensic synthesis completed automatically.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm font-mono">
+            <div className="p-3 bg-white border border-blue-200 rounded-xl shadow-sm">
+              <div className="text-[10px] font-bold text-blue-800 uppercase mb-1">Key Finding Summary</div>
+              <div className="text-ink font-semibold leading-relaxed">{p.nexusAnalysis.key_finding}</div>
+            </div>
+            
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <div className="mb-2 text-[10px] font-bold text-slate-700 uppercase">Correlated Signals</div>
+                <ul className="space-y-2">
+                  {p.nexusAnalysis.connected_signals.map((c, i) => (
+                    <li key={i} className="rounded-xl border border-slate-200 p-2.5 bg-white shadow-sm">
+                      <div className="text-[10px] text-ink font-bold">{c.signal1} <span className="text-slate-500">↔</span> {c.signal2}</div>
+                      <div className="mt-1 text-[10px] text-slate-700 font-medium leading-relaxed">{c.connection}</div>
+                    </li>
+                  ))}
+                  {p.nexusAnalysis.connected_signals.length === 0 && (
+                    <li className="text-[10px] text-slate-500 italic p-1">No multi-platform signals cross-referenced.</li>
+                  )}
+                </ul>
+              </div>
+              <div>
+                <div className="mb-2 text-[10px] font-bold text-slate-700 uppercase">Operational Anomalies</div>
+                <ul className="space-y-2">
+                  {p.nexusAnalysis.anomalies.map((a, i) => (
+                    <li key={i} className="flex items-start justify-between gap-2 rounded-xl border border-slate-200 p-2.5 bg-white shadow-sm">
+                      <span className="text-[10px] text-ink font-semibold leading-relaxed">{a.description}</span>
+                      <Badge className={riskColor(a.severity as RiskLevel) + " font-mono text-[9px] shrink-0 uppercase py-0.5 px-1.5"}>{a.severity}</Badge>
+                    </li>
+                  ))}
+                  {p.nexusAnalysis.anomalies.length === 0 && (
+                    <li className="text-[10px] text-slate-500 italic p-1">No anomalies flagged.</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+            
+            <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl">
+              <div className="text-[10px] font-bold text-amber-900 uppercase mb-1">Recommended Next Steps</div>
+              <div className="text-ink font-semibold leading-relaxed">{p.nexusAnalysis.investigator_priority}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center justify-between font-display">
@@ -150,18 +198,18 @@ function OverviewTab({ p }: { p: SuspectProfile }) {
           {Object.entries(p.riskSubscores).map(([k, v]) => (
             <div key={k} className="space-y-1.5">
               <div className="flex justify-between text-xs font-mono uppercase tracking-wider">
-                <span className="text-muted-foreground">{k}</span>
-                <span className="font-semibold">{v}</span>
+                <span className="text-slate-600 font-bold">{k}</span>
+                <span className="font-bold text-ink">{v}</span>
               </div>
               <Progress value={v} className="h-1.5" />
             </div>
           ))}
           <Separator />
           <div>
-            <div className="mb-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">Risk signals</div>
+            <div className="mb-2 font-mono text-xs uppercase tracking-wider text-slate-700 font-bold">Risk signals</div>
             <ul className="space-y-2 text-sm">
               {(p.riskSignals || []).map((s, i) => (
-                <li key={i} className="flex gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-stamp" /><span>{s}</span></li>
+                <li key={i} className="flex gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-stamp" /><span className="text-ink font-medium">{s}</span></li>
               ))}
             </ul>
           </div>
@@ -171,7 +219,7 @@ function OverviewTab({ p }: { p: SuspectProfile }) {
         <CardHeader><CardTitle className="font-display">Identity</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="overflow-hidden rounded-md border border-border">
-            <img src={p.photoUrl} alt={p.realName} className="aspect-square w-full bg-muted object-cover animate-pulse-fast" />
+            <img src={p.photoUrl} alt={p.realName} className="aspect-square w-full bg-muted object-cover" />
           </div>
           <Field label="Real name" value={p.realName} />
           <Field label="Primary handle" value={p.username.startsWith("@") ? p.username : "@" + p.username} mono />
@@ -180,46 +228,54 @@ function OverviewTab({ p }: { p: SuspectProfile }) {
           <Field label="Case reference" value={p.caseReference} mono />
         </CardContent>
       </Card>
-      {p.nexusAnalysis && (
-        <Card className="lg:col-span-3 border-stamp/40">
+      
+      {p.education && p.education.length > 0 && (
+        <Card className="lg:col-span-3 border-l-4 border-l-cyan-600 bg-slate-50/10 shadow-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-display">
-              <Sparkle /> NEXUS Auto-analysis
+            <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+              <Sparkle /> Education & Professional Background (Sourced from LinkedIn)
             </CardTitle>
-            <CardDescription>Cross-signal AI synthesis fired automatically after sweep.</CardDescription>
+            <CardDescription className="text-slate-600 font-mono text-[10px]">
+              LinkedIn public profile data parsed.
+              {p.resumeUrl && (
+                <a href={p.resumeUrl} target="_blank" rel="noreferrer" className="ml-2 text-blue-600 hover:underline font-bold font-sans">
+                  [View LinkedIn Resume]
+                </a>
+              )}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="rounded-md border-l-4 border-stamp bg-stamp/5 p-3">
-              <div className="font-mono text-xs uppercase tracking-wider text-stamp">Key finding</div>
-              <div className="mt-1">{p.nexusAnalysis.key_finding}</div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <div className="mb-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">Connected signals</div>
-                <ul className="space-y-2">
-                  {p.nexusAnalysis.connected_signals.map((c, i) => (
-                    <li key={i} className="rounded-md border border-border p-2">
-                      <div className="font-mono text-xs">{c.signal1} <span className="text-muted-foreground">↔</span> {c.signal2}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{c.connection}</div>
-                    </li>
+                <h5 className="mb-2 font-mono text-[11px] uppercase tracking-wider text-slate-700 font-bold">Education Details (College & School)</h5>
+                <div className="space-y-3 font-mono text-xs">
+                  {p.education.map((edu, idx) => (
+                    <div key={idx} className="rounded-xl border border-slate-200 p-3 bg-white shadow-sm">
+                      <div className="flex justify-between text-ink font-bold">
+                        <span className="text-[11px]">{edu.institution}</span>
+                        <span className="text-[9px] text-slate-500 font-normal">{edu.period}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-600 mt-1 font-semibold">{edu.degree}</div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
+              
               <div>
-                <div className="mb-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">Anomalies</div>
-                <ul className="space-y-2">
-                  {p.nexusAnalysis.anomalies.map((a, i) => (
-                    <li key={i} className="flex items-start justify-between gap-2 rounded-md border border-border p-2">
-                      <span>{a.description}</span>
-                      <Badge className={riskColor(a.severity as RiskLevel) + " font-mono text-[10px] shrink-0"}>{a.severity}</Badge>
-                    </li>
+                <h5 className="mb-2 font-mono text-[11px] uppercase tracking-wider text-slate-700 font-bold">Professional Experience</h5>
+                <div className="space-y-3 font-mono text-xs">
+                  {p.experience?.map((exp, idx) => (
+                    <div key={idx} className="rounded-xl border border-slate-200 p-3 bg-white shadow-sm">
+                      <div className="flex justify-between text-ink font-bold">
+                        <span className="text-[11px]">{exp.role}</span>
+                        <span className="text-[9px] text-slate-500 font-normal">{exp.period}</span>
+                      </div>
+                      <div className="text-[10px] text-blue-700 font-bold">{exp.company}</div>
+                      <p className="text-[10px] text-slate-655 mt-1.5 leading-relaxed font-medium">{exp.details}</p>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
-            </div>
-            <div className="rounded-md border border-evidence/30 bg-evidence/5 p-3">
-              <div className="font-mono text-xs uppercase tracking-wider text-evidence">Investigator priority</div>
-              <div className="mt-1">{p.nexusAnalysis.investigator_priority}</div>
             </div>
           </CardContent>
         </Card>
@@ -234,31 +290,37 @@ function Sparkle() {
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-border/60 pb-2 last:border-0 last:pb-0">
-      <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{label}</span>
-      <span className={mono ? "font-mono text-xs" : "text-sm"}>{value}</span>
+    <div className="flex justify-between gap-3 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+      <span className="text-xs font-mono uppercase tracking-wider text-slate-600 font-bold">{label}</span>
+      <span className={`${mono ? "font-mono text-xs" : "text-sm"} font-semibold text-ink`}>{value}</span>
     </div>
   );
 }
 
 function AccountsTab({ p }: { p: SuspectProfile }) {
+  if (!p.accounts || p.accounts.length === 0) {
+    return <Placeholder text="No linked public platform accounts confirmed for this subject." />;
+  }
+
   return (
     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
       {p.accounts.map((a, idx) => (
-        <Card key={idx} className="card-3d sheen-sweep">
+        <Card key={idx} className="card-3d sheen-sweep bg-white border-slate-200 shadow-sm">
           <CardContent className="space-y-2 p-4">
             <div className="flex items-start justify-between">
-              <div className="font-mono text-[10px] uppercase tracking-wider text-stamp">{a.platform}</div>
-              {(a.confidence === "CONFIRMED" || (a as any).verified) && <Badge variant="outline" className="text-[10px]">verified</Badge>}
+              <div className="font-mono text-[10px] uppercase tracking-wider text-rose-800 font-bold">{a.platform}</div>
+              {(a.confidence === "CONFIRMED" || (a as any).verified) && <Badge variant="outline" className="text-[10px] border-slate-300 font-semibold text-slate-700">verified</Badge>}
             </div>
-            <div className="font-mono text-sm font-semibold">{a.username.startsWith("@") ? a.username : "@" + a.username}</div>
-            {a.bio && <p className="text-xs text-muted-foreground line-clamp-2">{a.bio}</p>}
-            <div className="flex justify-between border-t border-border pt-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            <div className="font-mono text-sm font-semibold text-ink">
+              {a.username ? (a.username.startsWith("@") ? a.username : "@" + a.username) : "—"}
+            </div>
+            {a.bio && <p className="text-xs text-slate-700 font-medium line-clamp-2">{a.bio}</p>}
+            <div className="flex justify-between border-t border-slate-200 pt-2 font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
               <span>{a.followers?.toLocaleString() ?? "—"} followers</span>
               <span>Last: {a.creationDate || (a as any).lastActive || "—"}</span>
             </div>
             <div className="pt-2 text-right">
-              <a href={a.profileUrl} target="_blank" rel="noreferrer" className="text-xs text-evidence hover:underline inline-flex items-center gap-1">
+              <a href={a.profileUrl} target="_blank" rel="noreferrer" className="text-xs text-cyan-800 font-bold hover:underline inline-flex items-center gap-1">
                 Inspect Source <ChevronRight className="w-3 h-3" />
               </a>
             </div>
@@ -277,8 +339,8 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
   if (!u && !f) return <Placeholder text="No Indian financial footprint recorded for this subject." />;
 
   const statusTone = (s: string) =>
-    s === "OPEN" || s === "FOUND_PUBLIC_MENTION" ? "bg-stamp text-primary-foreground" :
-    s === "UNDER_INVESTIGATION" ? "bg-warn text-ink" : "bg-muted text-foreground";
+    s === "OPEN" || s === "FOUND_PUBLIC_MENTION" ? "bg-stamp text-primary-foreground font-bold" :
+    s === "UNDER_INVESTIGATION" ? "bg-warn text-ink font-bold" : "bg-slate-100 text-slate-700 font-bold";
 
   // If we have real upiFootprint data from backend
   if (u) {
@@ -286,57 +348,57 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
     return (
       <div className="space-y-4">
         <div className="grid gap-3 md:grid-cols-3">
-          <Card>
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
                 <IndianRupee className="h-4 w-4 text-stamp" /> UPI handles
               </CardTitle>
               <CardDescription>Probable VPAs across Payment Service Providers</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {u.probableUpiIds.map((handle: any, i: number) => (
-                <div key={i} className="flex items-center justify-between rounded-md border border-border px-3 py-2 font-mono text-xs">
+                <div key={i} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-ink font-semibold">
                   <span>{handle.id}</span>
-                  <Badge variant="outline" className="text-[10px]">{handle.source}</Badge>
+                  <Badge variant="outline" className="text-[10px] border-slate-350">{handle.source}</Badge>
                 </div>
               ))}
               {u.probableUpiIds.length === 0 && (
-                <p className="text-xs text-muted-foreground font-mono">No inferred UPI handles identified.</p>
+                <p className="text-xs text-slate-600 font-mono font-medium">No inferred UPI handles identified.</p>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
                 <PhoneCall className="h-4 w-4 text-stamp" /> Truecaller
               </CardTitle>
               <CardDescription>Carrier intelligence and community signals</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 text-ink">
               {u.truecaller.status === "PUBLIC_DATA_UNAVAILABLE" || !u.truecaller.name ? (
-                <p className="text-xs text-muted-foreground font-mono">Truecaller public details unavailable.</p>
+                <p className="text-xs text-slate-655 font-mono font-medium">Truecaller public details unavailable.</p>
               ) : (
                 <>
                   <div>
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Display name</div>
-                    <div className="font-semibold">{u.truecaller.name}</div>
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">Display name</div>
+                    <div className="font-bold text-sm text-ink">{u.truecaller.name}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="font-mono text-[10px] uppercase text-muted-foreground">Carrier</span>
-                      <div className="font-mono">{u.truecaller.carrier || "Unknown"}</div>
+                      <span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Carrier</span>
+                      <div className="font-mono font-semibold text-slate-800">{u.truecaller.carrier || "Unknown"}</div>
                     </div>
                     <div>
-                      <span className="font-mono text-[10px] uppercase text-muted-foreground">Circle</span>
-                      <div className="font-mono">{u.truecaller.telecomCircle || "Unknown"}</div>
+                      <span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Circle</span>
+                      <div className="font-mono font-semibold text-slate-800">{u.truecaller.telecomCircle || "Unknown"}</div>
                     </div>
                   </div>
                   {u.truecaller.spamScore !== undefined && (
                     <div>
-                      <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider">
-                        <span className="text-muted-foreground">Spam score</span>
-                        <span className="font-semibold text-stamp">{u.truecaller.spamScore}/100</span>
+                      <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+                        <span>Spam score</span>
+                        <span className="font-bold text-rose-800">{u.truecaller.spamScore}/100</span>
                       </div>
                       <Progress value={u.truecaller.spamScore} className="mt-1 h-1.5" />
                     </div>
@@ -346,23 +408,23 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
                 <ShieldX className="h-4 w-4 text-stamp" /> NCRP summary
               </CardTitle>
               <CardDescription>National Cyber Crime Reporting Portal hits</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-2 text-sm text-ink">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
+                <span className="text-slate-600 font-semibold">Status</span>
                 <Badge className={statusTone(u.ncrp.status) + " font-mono text-[10px]"}>{u.ncrp.status.replace(/_/g, " ")}</Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Complaint Hits</span>
-                <span className="font-mono font-semibold">{totalComplaints}</span>
+                <span className="text-slate-600 font-semibold">Complaint Hits</span>
+                <span className="font-mono font-bold text-rose-800">{totalComplaints}</span>
               </div>
-              <p className="text-[10px] text-muted-foreground font-mono mt-2 leading-relaxed border-t border-border/40 pt-2">{u.ncrp.note}</p>
+              <p className="text-[10px] text-slate-700 font-medium font-mono mt-2 leading-relaxed border-t border-slate-200 pt-2">{u.ncrp.note}</p>
             </CardContent>
           </Card>
         </div>
@@ -375,82 +437,82 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
     return (
       <div className="space-y-4">
         <div className="grid gap-3 md:grid-cols-3">
-          <Card>
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
                 <IndianRupee className="h-4 w-4 text-stamp" /> UPI handles
               </CardTitle>
               <CardDescription>Probable VPAs across PSPs · last seen {f.upi.lastSeen}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {f.upi.handles.map((h) => (
-                <div key={h} className="flex items-center justify-between rounded-md border border-border px-3 py-2 font-mono text-xs">
+                <div key={h} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-ink font-semibold">
                   <span>{h}</span>
-                  <Badge variant="outline" className="text-[10px]">{h.split("@")[1]}</Badge>
+                  <Badge variant="outline" className="text-[10px] border-slate-350">{h.split("@")[1]}</Badge>
                 </div>
               ))}
-              <div className="pt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="pt-1 font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
                 Banks linked: {f.upi.banks.join(" · ")}
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
                 <PhoneCall className="h-4 w-4 text-stamp" /> Truecaller
               </CardTitle>
               <CardDescription>Carrier intelligence & community spam signals</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 text-ink">
               <div>
-                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Display name</div>
-                <div className="font-semibold">{f.truecaller.name}</div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">Display name</div>
+                <div className="font-bold text-sm text-ink">{f.truecaller.name}</div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="font-mono text-[10px] uppercase text-muted-foreground">Carrier</span><div className="font-mono">{f.truecaller.carrier}</div></div>
-                <div><span className="font-mono text-[10px] uppercase text-muted-foreground">Circle</span><div className="font-mono">{f.truecaller.circle}</div></div>
+                <div><span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Carrier</span><div className="font-mono font-semibold text-slate-800">{f.truecaller.carrier}</div></div>
+                <div><span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Circle</span><div className="font-mono font-semibold text-slate-800">{f.truecaller.circle}</div></div>
               </div>
               <div>
-                <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider">
-                  <span className="text-muted-foreground">Spam score</span>
-                  <span className="font-semibold text-stamp">{f.truecaller.spamScore}/100 · {f.truecaller.spamReports} reports</span>
+                <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+                  <span>Spam score</span>
+                  <span className="font-bold text-rose-800">{f.truecaller.spamScore}/100 · {f.truecaller.spamReports} reports</span>
                 </div>
                 <Progress value={f.truecaller.spamScore} className="mt-1 h-1.5" />
               </div>
               <div className="flex flex-wrap gap-1">
                 {f.truecaller.tags.map((t) => (
-                  <Badge key={t} className="bg-stamp/10 text-stamp text-[10px] font-mono">{t}</Badge>
+                  <Badge key={t} className="bg-stamp/10 text-stamp text-[10px] font-mono border-transparent">{t}</Badge>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
                 <ShieldX className="h-4 w-4 text-stamp" /> NCRP summary
               </CardTitle>
               <CardDescription>National Cyber Crime Reporting Portal hits</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Total complaints</span><span className="font-mono font-semibold">{f.ncrp.length}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Open / Investigating</span><span className="font-mono font-semibold text-stamp">{f.ncrp.filter(c => c.status !== "CLOSED").length}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Total amount alleged</span><span className="font-mono font-semibold">₹ {f.ncrp.reduce((s,c) => s + (c.amountInr ?? 0), 0).toLocaleString("en-IN")}</span></div>
+            <CardContent className="space-y-2 text-sm text-ink">
+              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total complaints</span><span className="font-mono font-bold text-rose-800">{f.ncrp.length}</span></div>
+              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Open / Investigating</span><span className="font-mono font-bold text-stamp">{f.ncrp.filter(c => c.status !== "CLOSED").length}</span></div>
+              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total amount alleged</span><span className="font-mono font-bold">₹ {f.ncrp.reduce((s,c) => s + (c.amountInr ?? 0), 0).toLocaleString("en-IN")}</span></div>
             </CardContent>
           </Card>
         </div>
 
-        <Card>
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="font-display">NCRP complaint history</CardTitle>
+            <CardTitle className="font-display text-ink">NCRP complaint history</CardTitle>
             <CardDescription>Live mirror from cybercrime.gov.in (mock)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-slate-200 text-left font-mono text-[10px] uppercase tracking-wider text-slate-700 font-bold">
                     <th className="py-2 pr-3">Complaint ID</th>
                     <th className="py-2 pr-3">Date</th>
                     <th className="py-2 pr-3">Category</th>
@@ -461,13 +523,13 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
                 </thead>
                 <tbody>
                   {f.ncrp.map((c) => (
-                    <tr key={c.id} className="border-b border-border/60 last:border-0">
-                      <td className="py-2 pr-3 font-mono text-xs">{c.id}</td>
+                    <tr key={c.id} className="border-b border-slate-150 last:border-0 text-slate-800 font-medium">
+                      <td className="py-2 pr-3 font-mono text-xs text-ink font-semibold">{c.id}</td>
                       <td className="py-2 pr-3 font-mono text-xs">{c.date}</td>
                       <td className="py-2 pr-3">{c.category}</td>
-                      <td className="py-2 pr-3 text-xs text-muted-foreground">{c.jurisdiction}</td>
-                      <td className="py-2 pr-3 text-right font-mono">{c.amountInr ? `₹ ${c.amountInr.toLocaleString("en-IN")}` : "—"}</td>
-                      <td className="py-2 pr-3"><Badge className={statusTone(c.status) + " font-mono text-[10px]"}>{c.status.replace("_", " ")}</Badge></td>
+                      <td className="py-2 pr-3 text-xs text-slate-600">{c.jurisdiction}</td>
+                      <td className="py-2 pr-3 text-right font-mono font-bold text-ink">{c.amountInr ? `₹ ${c.amountInr.toLocaleString("en-IN")}` : "—"}</td>
+                      <td className="py-2 pr-3"><Badge className={statusTone(c.status) + " font-mono text-[10px] border-transparent"}>{c.status.replace("_", " ")}</Badge></td>
                     </tr>
                   ))}
                 </tbody>
@@ -477,16 +539,16 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
         </Card>
 
         {f.bankAccounts && (
-          <Card>
-            <CardHeader><CardTitle className="font-display">Linked bank accounts</CardTitle></CardHeader>
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader><CardTitle className="font-display text-ink">Linked bank accounts</CardTitle></CardHeader>
             <CardContent className="grid gap-2 md:grid-cols-2">
               {f.bankAccounts.map((b) => (
-                <div key={b.accountMasked} className="flex items-center justify-between rounded-md border border-border p-3">
+                <div key={b.accountMasked} className="flex items-center justify-between rounded-md border border-slate-200 p-3 bg-slate-50 shadow-sm">
                   <div>
-                    <div className="font-semibold">{b.bank}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{b.ifsc} · {b.accountMasked}</div>
+                    <div className="font-bold text-ink">{b.bank}</div>
+                    <div className="font-mono text-xs text-slate-600 font-semibold">{b.ifsc} · {b.accountMasked}</div>
                   </div>
-                  {b.flagged && <Badge className="bg-stamp text-primary-foreground text-[10px]">FLAGGED</Badge>}
+                  {b.flagged && <Badge className="bg-stamp text-primary-foreground text-[10px] font-bold border-transparent">FLAGGED</Badge>}
                 </div>
               ))}
             </CardContent>
@@ -500,5 +562,5 @@ function FinancialTab({ p }: { p: SuspectProfile }) {
 }
 
 function Placeholder({ text }: { text: string }) {
-  return <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{text}</div>;
+  return <div className="rounded-md border border-dashed border-slate-250 p-6 text-center text-sm text-slate-650 font-bold bg-slate-50">{text}</div>;
 }

@@ -90,17 +90,17 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
     <div className="flex flex-col gap-6">
       
       {/* Filters & Search Header */}
-      <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex flex-wrap gap-4 items-center justify-between">
+      <div className="glass-panel p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
         
         {/* Search bar inside timeline */}
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search keywords or geotags in timeline..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-900 focus:border-blue-500/40 focus:ring-0 outline-none text-white font-mono placeholder:text-slate-500"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:border-blue-500/40 focus:ring-0 outline-none text-ink font-mono placeholder:text-slate-400"
           />
         </div>
 
@@ -109,11 +109,11 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
           
           <div className="flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-slate-500" />
-            <span className="text-[11px] font-mono text-slate-400">Platform</span>
+            <span className="text-[11px] font-mono text-slate-600">Platform</span>
             <select
               value={filterPlatform}
               onChange={(e) => setFilterPlatform(e.target.value)}
-              className="bg-slate-950 border border-slate-900 rounded-lg text-[11px] font-mono text-slate-300 py-1.5 px-3 focus:outline-none focus:border-blue-500/40"
+              className="bg-white border border-slate-200 rounded-lg text-[11px] font-mono text-ink py-1.5 px-3 focus:outline-none focus:border-blue-500/40"
             >
               <option value="all">All Platforms</option>
               {getUniquePlatforms().map((p) => (
@@ -123,11 +123,11 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-slate-400">Risk Severity</span>
+            <span className="text-[11px] font-mono text-slate-600">Risk Severity</span>
             <select
               value={filterRisk}
               onChange={(e) => setFilterRisk(e.target.value)}
-              className="bg-slate-950 border border-slate-900 rounded-lg text-[11px] font-mono text-slate-300 py-1.5 px-3 focus:outline-none focus:border-blue-500/40"
+              className="bg-white border border-slate-200 rounded-lg text-[11px] font-mono text-ink py-1.5 px-3 focus:outline-none focus:border-blue-500/40"
             >
               <option value="all">All Risk Levels</option>
               <option value="NORMAL">Normal</option>
@@ -142,25 +142,25 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
 
       {/* Timeline List */}
       {(suspect.posts || []).length === 0 ? (
-        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
-          <Clock className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">No public posts registered for this suspect profile.</p>
+        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-200 shadow-sm font-mono">
+          <Clock className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+          <p className="text-sm text-slate-700">No public posts registered for this suspect profile.</p>
         </div>
       ) : filteredPosts.length === 0 ? (
-        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono">
-          <Clock className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">No public posts matched the active filters.</p>
+        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-200 shadow-sm font-mono">
+          <Clock className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+          <p className="text-sm text-slate-700">No public posts matched the active filters.</p>
         </div>
       ) : (
-        <div className="relative border-l-2 border-slate-900 pl-6 ml-4 space-y-6">
+        <div className="relative border-l-2 border-slate-200 pl-6 ml-4 space-y-6">
           {filteredPosts.map((post) => (
             <div key={post.id} className="relative group">
               
               {/* Timeline marker node dot */}
-              <div className="absolute -left-[33px] top-1.5 w-4 h-4 rounded-full bg-slate-950 border-2 border-blue-500 flex items-center justify-center shadow-lg group-hover:border-cyan-400 transition-colors"></div>
+              <div className="absolute -left-[33px] top-1.5 w-4 h-4 rounded-full bg-white border-2 border-blue-600 flex items-center justify-center shadow-md group-hover:border-cyan-500 transition-colors"></div>
 
               {/* Timeline content card */}
-              <div className="glass-panel p-5 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all">
+              <div className="glass-panel p-5 rounded-2xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all">
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                   
                   {/* Platform & timestamp */}
@@ -168,7 +168,7 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide ${getPlatformColor(post.platform)}`}>
                       {getPlatformIcon(post.platform)} {post.platform.toUpperCase()}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600 font-mono flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatTimestamp(post.postedAt || post.timestamp)}
                     </span>
@@ -180,16 +180,16 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
                 </div>
 
                 {/* Post content */}
-                <p className="text-xs text-slate-200 leading-relaxed font-mono whitespace-pre-wrap select-all">
+                <p className="text-xs text-ink font-semibold leading-relaxed font-mono whitespace-pre-wrap select-all">
                   {post.content}
                 </p>
 
                 {/* Location tagging details */}
                 {post.locationName && (
-                  <div className="mt-3 flex items-center gap-1 text-[10px] font-semibold font-mono text-cyan-400 bg-cyan-950/30 border border-cyan-500/20 px-2.5 py-1 rounded w-max">
-                    <MapPin className="w-3.5 h-3.5 text-cyan-500" />
+                  <div className="mt-3 flex items-center gap-1 text-[10px] font-semibold font-mono text-cyan-800 bg-cyan-50 border border-cyan-200 px-2.5 py-1 rounded w-max">
+                    <MapPin className="w-3.5 h-3.5 text-cyan-600" />
                     <span>Geotag: {post.locationName}</span>
-                    <span className="text-slate-500">({post.geolat?.toFixed(4)}, {post.geolng?.toFixed(4)})</span>
+                    <span className="text-slate-600">({post.geolat?.toFixed(4)}, {post.geolng?.toFixed(4)})</span>
                   </div>
                 )}
 
@@ -197,16 +197,16 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
                 {post.flagReason && (
                   <div className={`mt-4 p-3 rounded-xl border text-[10px] font-mono leading-relaxed ${
                     post.flagLevel === "HIGH_RISK" 
-                      ? "bg-rose-500/5 border-rose-500/25 text-rose-300"
-                      : "bg-amber-500/5 border-amber-500/25 text-amber-300"
+                      ? "bg-rose-50 border-rose-200 text-rose-800"
+                      : "bg-amber-50 border border-amber-200 text-amber-800"
                   }`}>
                     <span className="font-bold uppercase mr-1">AI Risk Reasoning:</span>
                     {post.flagReason}
                   </div>
                 )}
 
-                <div className="mt-4 pt-3 border-t border-slate-900 text-right">
-                  <span className="text-[9px] text-slate-600 font-mono">
+                <div className="mt-4 pt-3 border-t border-slate-100 text-right">
+                  <span className="text-[9px] text-slate-500 font-mono">
                     Captured at {new Date(post.capturedAt || suspect.capturedAt).toLocaleTimeString("en-IN")} IST from public source
                   </span>
                 </div>

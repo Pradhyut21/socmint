@@ -10,12 +10,30 @@ import { PlatformAccount, Post, LegalRecord, SuspectProfile } from "../types";
 
 // ── Demo user detection ───────────────────────────────────────────────
 
+function isPradhyutVariant(str: string): boolean {
+  const lower = str.toLowerCase();
+  return (
+    lower.includes("pradhyut21") ||
+    lower.includes("pradhh.18") ||
+    lower.includes("pradhyuth-kuruvadi")
+  );
+}
+
+function isMeghanaVariant(str: string): boolean {
+  const lower = str.toLowerCase();
+  return (
+    lower.includes("meghana_kuruvadi")
+  );
+}
+
 export function isDemoUser(username: string): boolean {
   const lower = username.toLowerCase();
   return (
     lower.includes("shadowtrader99") ||
     lower.includes("sneha_fintech") ||
-    lower.includes("kulkarni_sneha")
+    lower.includes("kulkarni_sneha") ||
+    isPradhyutVariant(lower) ||
+    isMeghanaVariant(lower)
   );
 }
 
@@ -69,6 +87,71 @@ export function getDemoProbeResult(
     }
   }
 
+  if (isPradhyutVariant(lowercaseUrl)) {
+    if (lowercaseUrl.includes("github")) {
+      if (lowercaseUrl.includes("pradhyut21")) {
+        return {
+          ok: true,
+          status: 200,
+          title: "pradhyut21 (K M Pradhyut) · GitHub",
+          description:
+            "Full stack developer. Hackathon participant. Instagram: @pradhh.18. LinkedIn: Pradhyuth Kuruvadi.",
+        };
+      }
+      return null;
+    }
+    if (lowercaseUrl.includes("linkedin")) {
+      if (lowercaseUrl.includes("pradhyuth-kuruvadi")) {
+        return {
+          ok: true,
+          status: 200,
+          title: "Pradhyuth Kuruvadi | LinkedIn",
+          description:
+            "Software Engineer. Full stack development, hackathons, and open source.",
+        };
+      }
+      return null;
+    }
+    if (lowercaseUrl.includes("instagram")) {
+      if (lowercaseUrl.includes("pradhh.18") || lowercaseUrl.includes("pradhh18") || lowercaseUrl.includes("pradhh_18")) {
+        return {
+          ok: true,
+          status: 200,
+          title: "pradhh.18 (@pradhh.18) · Instagram",
+          description: "Bengaluru • Developer",
+        };
+      }
+      return null;
+    }
+  }
+
+  if (isMeghanaVariant(lowercaseUrl)) {
+    if (lowercaseUrl.includes("github")) {
+      return {
+        ok: true,
+        status: 200,
+        title: "meghana_kuruvadi (K M Meghana) · GitHub",
+        description: "Information Science student & web developer. Exploring open source contributions.",
+      };
+    }
+    if (lowercaseUrl.includes("linkedin")) {
+      return {
+        ok: true,
+        status: 200,
+        title: "K M Meghana | LinkedIn",
+        description: "Information Science Student at BMS College of Engineering, Bengaluru. Software engineering enthusiast.",
+      };
+    }
+    if (lowercaseUrl.includes("instagram")) {
+      return {
+        ok: true,
+        status: 200,
+        title: "meghana_kuruvadi (@meghana_kuruvadi) · Instagram",
+        description: "BMSCE • Bengaluru",
+      };
+    }
+  }
+
   return null; // not a demo URL
 }
 
@@ -76,8 +159,61 @@ export function getDemoProbeResult(
 
 export function getDemoGithubData(
   username: string
-): { account: Partial<PlatformAccount>; posts: Post[] } | null {
+): { account: Partial<PlatformAccount>; posts: Post[]; resolvedUsername?: string } | null {
   const lower = username.toLowerCase();
+  if (isMeghanaVariant(lower)) {
+    return {
+      account: {
+        displayName: "K M Meghana",
+        bio: "Information Science student & web developer. Exploring open source contributions. Instagram: @meghana_kuruvadi. LinkedIn: K M Meghana.",
+        profilePicUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200",
+        followers: 45,
+        creationDate: "2024-05-10",
+      },
+      posts: [
+        {
+          id: "github-meg-1",
+          platform: "github",
+          content: "Pushed 2 commits to repository 'bmsce-web-portal': 'optimize database indexing for query speed'",
+          postedAt: "2025-11-20T11:45:00Z",
+          flagLevel: "NORMAL",
+          capturedAt: new Date().toISOString(),
+        },
+      ],
+      resolvedUsername: "Meghana-Kuruvadi",
+    };
+  }
+
+  if (isPradhyutVariant(lower)) {
+    return {
+      account: {
+        displayName: "K M Pradhyut",
+        bio: "Full stack developer. Hackathon participant. Instagram: @pradhh.18. LinkedIn: Pradhyuth Kuruvadi.",
+        profilePicUrl: "https://api.dicebear.com/9.x/initials/svg?seed=K%20M%20Pradhyut",
+        followers: 152,
+        creationDate: "2023-07-12",
+      },
+      posts: [
+        {
+          id: "github-pr-1",
+          platform: "github",
+          content: "Pushed 3 commits to repository 'socmint-shield': 'fix signature verification issue' and 'update API routes'",
+          postedAt: "2025-11-12T14:20:00Z",
+          flagLevel: "NORMAL",
+          capturedAt: new Date().toISOString(),
+        },
+        {
+          id: "github-pr-2",
+          platform: "github",
+          content: "Pushed 1 commit to repository 'finance-tracker': 'integrate UPI payment gateway sandbox'",
+          postedAt: "2025-10-08T10:00:00Z",
+          flagLevel: "NORMAL",
+          capturedAt: new Date().toISOString(),
+        },
+      ],
+      resolvedUsername: "pradhyut21",
+    };
+  }
 
   if (lower.includes("shadowtrader99")) {
     return {
@@ -93,7 +229,7 @@ export function getDemoGithubData(
           id: "github-sh-1",
           platform: "github",
           content:
-            "Had an amazing time at EthIndia Bengaluru (Dec 2025) working on decentralized liquidity pools! #ETH #DeFi",
+            "Pushed 4 commits to repository 'defi-liquidity-pools': 'implement multi-sig bypass fix' and 'optimize gas cost'",
           postedAt: "2025-12-05T18:30:00Z",
           flagLevel: "NORMAL",
           capturedAt: new Date().toISOString(),
@@ -102,7 +238,7 @@ export function getDemoGithubData(
           id: "github-sh-2",
           platform: "github",
           content:
-            "Participating in HackMIT next week! Super excited to build on campus in Boston.",
+            "Pushed 2 commits to repository 'mixer-audit': 'drafting zero knowledge mixer proof validation'",
           postedAt: "2025-09-08T10:00:00Z",
           flagLevel: "NORMAL",
           capturedAt: new Date().toISOString(),
@@ -111,7 +247,7 @@ export function getDemoGithubData(
           id: "github-sh-3",
           platform: "github",
           content:
-            "Got accepted to EthGlobal London! Can't wait to travel to the UK in March.",
+            "Pushed 1 commit to repository 'eth-global-london': 'initial repo structure and smart contract boilerplates'",
           postedAt: "2025-03-02T15:45:00Z",
           flagLevel: "NORMAL",
           capturedAt: new Date().toISOString(),
@@ -134,7 +270,7 @@ export function getDemoGithubData(
           id: "github-sn-1",
           platform: "github",
           content:
-            "Proud to win Smart India Hackathon Pune in Nov 2025! Built a secure transaction monitoring tool.",
+            "Pushed 5 commits to repository 'transaction-monitor': 'add secure signature validation filter'",
           postedAt: "2025-11-12T14:20:00Z",
           flagLevel: "NORMAL",
           capturedAt: new Date().toISOString(),
@@ -142,7 +278,8 @@ export function getDemoGithubData(
         {
           id: "github-sn-2",
           platform: "github",
-          content: "Excited to be mentoring at a security hackathon in Berlin next spring!",
+          content:
+            "Pushed 1 commit to repository 'security-workshop-berlin': 'setup presentation slides and code templates'",
           postedAt: "2025-04-18T09:15:00Z",
           flagLevel: "NORMAL",
           capturedAt: new Date().toISOString(),
@@ -152,6 +289,165 @@ export function getDemoGithubData(
   }
 
   return null;
+}
+
+// ── Demo extra accounts (cross-platform accounts for a demo user) ─────
+// Returns additional PlatformAccount entries that cannot be discovered
+// via standard HTTP probes (e.g. different usernames on other platforms).
+
+export function getDemoExtraAccounts(
+  username: string,
+  capturedAt: string
+): PlatformAccount[] {
+  const lower = username.toLowerCase();
+  if (isMeghanaVariant(lower)) {
+    const allMeghanaAccounts = [
+      {
+        id: "github-meghana_kuruvadi",
+        platform: "github",
+        tier: 1 as const,
+        username: "meghana_kuruvadi",
+        profileUrl: "https://github.com/meghana_kuruvadi",
+        displayName: "K M Meghana",
+        bio: "Information Science student & web developer. Exploring open source contributions. Instagram: @meghana_kuruvadi. LinkedIn: K M Meghana.",
+        profilePicUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200",
+        followers: 45,
+        creationDate: "2024-05-10",
+        confidence: "CONFIRMED" as const,
+        reason: "Cross-referenced from other public developer registries.",
+        capturedAt,
+      },
+      {
+        id: "instagram-meghana_kuruvadi",
+        platform: "instagram",
+        tier: 2 as const,
+        username: "meghana_kuruvadi",
+        profileUrl: "https://www.instagram.com/meghana_kuruvadi",
+        displayName: "K M Meghana",
+        bio: "BMSCE • Bengaluru",
+        followers: 425,
+        creationDate: "2022-05-14",
+        confidence: "CONFIRMED" as const,
+        reason: "Cross-referenced from GitHub bio: 'Instagram: @meghana_kuruvadi'.",
+        profilePicUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200",
+        capturedAt,
+      },
+      {
+        id: "linkedin-meghana-kuruvadi",
+        platform: "linkedin",
+        tier: 2 as const,
+        username: "meghana-kuruvadi",
+        profileUrl: "https://www.linkedin.com/in/meghana-kuruvadi",
+        displayName: "K M Meghana",
+        bio: "Information Science Student at BMS College of Engineering, Bengaluru. Software engineering enthusiast.",
+        followers: 320,
+        creationDate: "2021-09-10",
+        confidence: "CONFIRMED" as const,
+        reason: "Cross-referenced from GitHub bio: 'LinkedIn: K M Meghana'.",
+        profilePicUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200",
+        capturedAt,
+      },
+    ];
+
+    return allMeghanaAccounts.filter(acc => {
+      const accUsernameLower = acc.username.toLowerCase();
+      return accUsernameLower !== lower && lower !== "meghana-kuruvadi";
+    });
+  }
+
+  if (isPradhyutVariant(lower)) {
+    const allPradhyutAccounts = [
+      {
+        id: "github-pradhyut21",
+        platform: "github",
+        tier: 1 as const,
+        username: "pradhyut21",
+        profileUrl: "https://github.com/pradhyut21",
+        displayName: "K M Pradhyut",
+        bio: "Full stack developer. Hackathon participant. Instagram: @pradhh.18. LinkedIn: Pradhyuth Kuruvadi.",
+        profilePicUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200",
+        followers: 152,
+        creationDate: "2023-07-12",
+        confidence: "CONFIRMED" as const,
+        reason: "Cross-referenced from other public developer registries.",
+        capturedAt,
+      },
+      {
+        id: "instagram-pradhh18",
+        platform: "instagram",
+        tier: 2 as const,
+        username: "pradhh.18",
+        profileUrl: "https://www.instagram.com/pradhh.18",
+        displayName: "K M Pradhyut",
+        bio: "Bengaluru • Developer",
+        followers: 284,
+        creationDate: "2022-03-10",
+        confidence: "CONFIRMED" as const,
+        reason: "Cross-referenced from GitHub bio: 'Instagram: @pradhh.18'.",
+        profilePicUrl: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200&h=200",
+        capturedAt,
+      },
+      {
+        id: "linkedin-pradhyuth-kuruvadi",
+        platform: "linkedin",
+        tier: 2 as const,
+        username: "pradhyuth-kuruvadi",
+        profileUrl: "https://www.linkedin.com/in/pradhyuth-kuruvadi",
+        displayName: "Pradhyuth Kuruvadi",
+        bio: "Software Engineer. Full stack development, hackathons, and open source.",
+        followers: 500,
+        creationDate: "2021-08-15",
+        confidence: "CONFIRMED" as const,
+        reason: "Cross-referenced from GitHub bio: 'LinkedIn: Pradhyuth Kuruvadi'.",
+        profilePicUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200",
+        capturedAt,
+      },
+    ];
+
+    return allPradhyutAccounts.filter(acc => {
+      const accUsernameLower = acc.username.toLowerCase();
+      return accUsernameLower !== lower && lower !== "pradhyuth-kuruvadi";
+    });
+  }
+
+  return [];
+}
+
+// ── Demo UPI footprint (specific per-user override) ───────────────────
+// Returns a structured UPI footprint for demo users so the generic phone-based
+// generator is not used, avoiding hallucinated handles.
+
+export function getDemoUpiFootprint(username: string): any | undefined {
+  const lower = username.toLowerCase();
+
+  if (isPradhyutVariant(lower)) {
+    return {
+      phone: "Not provided",
+      probableUpiIds: [
+        {
+          id: "pradhyut21@okhdfc",
+          confidence: "INFERRED",
+          source: "Derived from GitHub username pattern with common bank handles.",
+        },
+        {
+          id: "pradhyut21@oksbi",
+          confidence: "INFERRED",
+          source: "Derived from GitHub username pattern with common bank handles.",
+        },
+      ],
+      ncrp: {
+        status: "NOT_PUBLICLY_QUERYABLE",
+        note: "NCRP complaint databases are not publicly searchable without authorized government access.",
+        sourceUrl: "https://cybercrime.gov.in",
+      },
+      truecaller: {
+        status: "PUBLIC_DATA_UNAVAILABLE",
+        note: "Truecaller data not available without an approved API key.",
+      },
+    };
+  }
+
+  return undefined;
 }
 
 // ── Demo legal records ────────────────────────────────────────────────
@@ -279,7 +575,7 @@ export function getDemoNewSuspectProfile(
     {
       id: "post-rk-1",
       platform: "github",
-      content: "Committed secure multi-sig contract revisions for local liquidity project in Bengaluru.",
+      content: "Pushed 3 commits to repository 'liquidity-engine': 'secure multi-sig contract revisions'",
       postedAt: "2026-05-24T10:15:00Z",
       flagLevel: "NORMAL",
       capturedAt,
@@ -370,4 +666,87 @@ export function getDemoNewSuspectProfile(
     ],
     capturedAt,
   };
+}
+
+export function getDemoEducationAndExperience(username: string): {
+  resumeUrl?: string;
+  education?: { institution: string; degree: string; period: string }[];
+  experience?: { role: string; company: string; period: string; details: string }[];
+} {
+  const lower = username.toLowerCase();
+  if (isPradhyutVariant(lower) || lower.includes("pradhyuth-kuruvadi")) {
+    return {
+      resumeUrl: "https://www.linkedin.com/in/pradhyuth-kuruvadi/resume-pdf",
+      education: [
+        {
+          institution: "RV College of Engineering, Bengaluru",
+          degree: "B.E. in Computer Science & Engineering",
+          period: "2022 - 2026",
+        },
+        {
+          institution: "National Public School, Bengaluru",
+          degree: "All India Senior School Certificate Examination (AISSCE)",
+          period: "2020 - 2022",
+        },
+      ],
+      experience: [
+        {
+          role: "Full Stack Developer Intern",
+          company: "Razorpay",
+          period: "May 2025 - July 2025",
+          details: "Designed and implemented secure sandbox UPI payment flows. Optimized React client rendering and next/router states, increasing client load efficiency by 35%.",
+        },
+        {
+          role: "Software Contributor",
+          company: "GitHub Open Source Ecosystem",
+          period: "2023 - Present",
+          details: "Maintained active repositories for security visualization tools, UPI footprint scrapers, and Zero-Knowledge mixer trace proofs.",
+        },
+      ],
+    };
+  }
+
+  if (lower.includes("shadowtrader99") || lower.includes("vikram")) {
+    return {
+      resumeUrl: "https://www.linkedin.com/in/vikram-rathore/resume-pdf",
+      education: [
+        {
+          institution: "Indian Institute of Technology (IIT) Delhi",
+          degree: "B.Tech in Computer Science & Engineering",
+          period: "2020 - 2024",
+        },
+      ],
+      experience: [
+        {
+          role: "Lead Blockchain Researcher",
+          company: "DeFi Labs Delhi",
+          period: "June 2024 - Present",
+          details: "Audited multi-sig smart contracts, gas optimization scripts, and decentralized liquidity pools. Designed proof-of-concept for Zero-Knowledge Mixer systems.",
+        },
+      ],
+    };
+  }
+
+  if (lower.includes("sneha") || lower.includes("kulkarni")) {
+    return {
+      resumeUrl: "https://www.linkedin.com/in/sneha-kulkarni/resume-pdf",
+      education: [
+        {
+          institution: "Pune Institute of Computer Technology (PICT)",
+          degree: "B.E. in Information Technology",
+          period: "2021 - 2025",
+        },
+      ],
+      experience: [
+        {
+          role: "Cyber Security Analyst Intern",
+          company: "Maharashtra Police Cyber Forensic Division",
+          period: "Jan 2025 - Present",
+          details: "Assisted in tracking UPI money-mule accounts and phishing networks. Generated credibility score metrics for online records.",
+        },
+      ],
+    };
+  }
+
+  return {};
 }

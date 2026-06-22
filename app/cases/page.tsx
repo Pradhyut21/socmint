@@ -34,6 +34,16 @@ export default function CasesPage() {
     storage.pushAudit("HISTORY_CLEARED");
   };
 
+  const deleteCase = (ref: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof window !== "undefined" && !window.confirm("Remove this case from history?")) return;
+    const updated = list.filter((x) => x.caseReference !== ref);
+    storage.setRecent(updated);
+    setList(updated);
+    storage.pushAudit("CASE_DELETED", ref);
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10">
       <div className="mb-6 flex items-end justify-between gap-3">
@@ -73,12 +83,22 @@ export default function CasesPage() {
                       <img src={p.photoUrl} alt={p.realName} className="h-12 w-12 rounded-md border border-border bg-muted object-cover" />
                       <div className="min-w-0 flex-1">
                         <div className="font-display text-base font-semibold leading-tight">{p.realName}</div>
-                        <div className="font-mono text-xs text-muted-foreground">@{p.username.replace(/^@/, "")}</div>
+                        <div className="font-mono text-xs text-muted-foreground">@{p.username ? p.username.replace(/^@/, "") : ""}</div>
                       </div>
-                      <Badge className={riskColor(p.riskLevel) + " font-mono text-[10px] uppercase"}>{p.riskLevel}</Badge>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <Badge className={riskColor(p.riskLevel) + " font-mono text-[10px] uppercase animate-pulse"}>{p.riskLevel}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => deleteCase(p.caseReference, e)}
+                          className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between border-t border-border pt-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                      <span>{p.accounts.length} accounts</span>
+                      <span>{p.accounts?.length || 0} accounts</span>
                       <span>Risk <span className="font-semibold text-foreground">{p.riskScore}</span></span>
                     </div>
                     <div className="font-mono text-[10px] text-muted-foreground">{p.caseReference} · {new Date(p.capturedAt).toLocaleDateString("en-IN")}</div>

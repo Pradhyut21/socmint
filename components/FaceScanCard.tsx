@@ -100,42 +100,42 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs text-ink">
       
       {/* Visual Landmarks Inspector */}
       <div className="lg:col-span-2 space-y-4">
-        <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
+        <div className="glass-panel p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-ink uppercase tracking-wider">
             Facial Landmark & Perceptual Matching
           </h4>
-          <span className="text-[10px] text-slate-500">GPU-Accelerated Scan</span>
+          <span className="text-[10px] text-slate-600 font-semibold">GPU-Accelerated Scan</span>
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-slate-850 flex flex-col md:flex-row gap-6 items-center">
+        <div className="glass-panel p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-6 items-center">
           
           {/* Mock Upload Image Box with Detection Overlay */}
-          <div className="relative w-56 h-56 bg-slate-950 border border-slate-900 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center">
+          <div className="relative w-56 h-56 bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center">
             {analyzing ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 z-20">
-                <Cpu className="w-8 h-8 text-blue-500 animate-spin mb-2" />
-                <span className="text-[10px] text-blue-400">Scanning landmarks...</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-20">
+                <Cpu className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+                <span className="text-[10px] text-blue-700 font-bold">Scanning landmarks...</span>
               </div>
             ) : (
               <>
                 <img 
                   src={photoUrl} 
                   alt="Suspect face" 
-                  className="w-full h-full object-cover opacity-80"
+                  className="w-full h-full object-cover opacity-90"
                 />
                 
                 {/* Horizontal Sweeper Line */}
-                <div className="absolute left-0 right-0 h-0.5 bg-cyan-400 shadow-[0_0_10px_#06b6d4] animate-bounce top-1/2"></div>
+                <div className="absolute left-0 right-0 h-0.5 bg-cyan-500 shadow-[0_0_10px_#06b6d4] animate-bounce top-1/2"></div>
                 
                 {/* Landmarks Boxes */}
                 {landmarks.map((lm: any, idx: number) => (
                   <div 
                     key={idx}
-                    className="absolute border border-cyan-400 bg-cyan-500/10 flex items-center justify-center group"
+                    className="absolute border border-cyan-500 bg-cyan-500/20 flex items-center justify-center group"
                     style={{
                       left: `${lm.x}%`,
                       top: `${lm.y}%`,
@@ -143,7 +143,7 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
                       height: `${lm.height}%`
                     }}
                   >
-                    <span className="hidden group-hover:block absolute bottom-full bg-slate-950 text-[7px] text-cyan-300 px-1 rounded border border-cyan-500/30 whitespace-nowrap mb-1">
+                    <span className="hidden group-hover:block absolute bottom-full bg-slate-900 text-[7px] text-cyan-300 px-1 rounded border border-cyan-500/30 whitespace-nowrap mb-1">
                       {lm.name}
                     </span>
                   </div>
@@ -159,8 +159,8 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
           <div className="flex-1 space-y-4">
             <div>
               <span className="text-slate-500 text-[10px] uppercase block mb-1">Target Real Name</span>
-              <span className="text-white font-bold text-sm block mb-1">{suspect.realName}</span>
-              <span className="text-[10px] text-slate-400">Avatar matched from public registries.</span>
+              <span className="text-ink font-bold text-sm block mb-1">{suspect.realName}</span>
+              <span className="text-[10px] text-slate-600">Avatar matched from public registries.</span>
             </div>
 
             <div className="flex flex-wrap gap-2 pt-2">
@@ -180,10 +180,10 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
       <div className="lg:col-span-1 space-y-6">
         
         {/* EXIF Metadata Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800">
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-900">
-            <Camera className="w-5 h-5 text-blue-500" />
-            <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
+        <div className="glass-panel p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-200">
+            <Camera className="w-5 h-5 text-blue-600" />
+            <h4 className="text-sm font-semibold text-ink uppercase tracking-wider">
               EXIF Metadata Extractor
             </h4>
           </div>
@@ -191,43 +191,43 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
           <div className="space-y-3 font-mono text-[11px]">
             <div className="flex justify-between">
               <span className="text-slate-500">Camera Model</span>
-              <span className="text-slate-200">{exifData.camera}</span>
+              <span className="text-ink font-semibold">{exifData.camera}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Lens / Aperture</span>
-              <span className="text-slate-200">{exifData.lens}</span>
+              <span className="text-ink font-semibold">{exifData.lens}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Software Tag</span>
-              <span className="text-slate-200">{exifData.software}</span>
+              <span className="text-ink font-semibold">{exifData.software}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Creation Date</span>
-              <span className="text-slate-200">{exifData.created}</span>
+              <span className="text-ink font-semibold">{exifData.created}</span>
             </div>
             
-            <div className="pt-2 border-t border-slate-900 mt-2 space-y-2">
+            <div className="pt-2 border-t border-slate-200 mt-2 space-y-2">
               <div className="flex justify-between">
                 <span className="text-slate-500">Dimensions</span>
-                <span className="text-slate-200 font-semibold">{dimensions}</span>
+                <span className="text-ink font-bold">{dimensions}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">File Size</span>
-                <span className="text-slate-200 font-semibold">{fileSize}</span>
+                <span className="text-ink font-bold">{fileSize}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Mime Format</span>
-                <span className="text-slate-200 font-semibold">{fileFormat}</span>
+                <span className="text-ink font-bold">{fileFormat}</span>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-900 mt-2 space-y-1">
+            <div className="pt-2 border-t border-slate-200 mt-2 space-y-1">
               <span className="text-slate-500 block text-[9px] uppercase">GPS Coordinates Tagged</span>
-              <div className="flex items-start gap-1.5 text-blue-400">
+              <div className="flex items-start gap-1.5 text-blue-700">
                 <MapPin className="w-3.5 h-3.5 mt-0.5" />
                 <div>
                   <span className="font-bold block">{exifData.gps.place}</span>
-                  <span className="text-[10px] text-slate-500 block">({exifData.gps.lat}, {exifData.gps.lng})</span>
+                  <span className="text-[10px] text-slate-600 block">({exifData.gps.lat}, {exifData.gps.lng})</span>
                 </div>
               </div>
             </div>
@@ -235,36 +235,36 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
         </div>
 
         {/* Deepfake Analyzer Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-rose-500/20 bg-rose-950/5">
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-rose-950/30 text-rose-400">
+        <div className="glass-panel p-6 rounded-2xl border border-rose-200 bg-rose-50/40 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-rose-200 text-rose-800">
             <ShieldAlert className="w-5 h-5" />
-            <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
+            <h4 className="text-sm font-semibold text-ink uppercase tracking-wider">
               AI Deepfake Classification
             </h4>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-400">Synthetic Confidence</span>
-              <span className="text-rose-400 font-extrabold">{deepfakeAnalysis.score}%</span>
+              <span className="text-slate-600">Synthetic Confidence</span>
+              <span className="text-rose-700 font-extrabold">{deepfakeAnalysis.score}%</span>
             </div>
 
-            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-900">
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200">
               <div 
                 className="h-full rounded-full bg-rose-500 glow-red"
                 style={{ width: `${deepfakeAnalysis.score}%` }}
               ></div>
             </div>
 
-            <p className="text-[10px] text-slate-400 leading-relaxed font-mono">
+            <p className="text-[10px] text-slate-700 leading-relaxed font-mono font-medium">
               {deepfakeAnalysis.note}
             </p>
 
-            <div className="space-y-2 pt-2 border-t border-rose-950/20 text-[9px] text-slate-500">
+            <div className="space-y-2 pt-2 border-t border-rose-200 text-[9px] text-slate-600">
               {deepfakeAnalysis.factors.map((f: any, i: number) => (
                 <div key={i} className="flex justify-between">
                   <span>{f.name}</span>
-                  <span className="text-rose-400/80 font-bold">{f.score}% match</span>
+                  <span className="text-rose-700 font-bold">{f.score}% match</span>
                 </div>
               ))}
             </div>

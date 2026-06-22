@@ -172,37 +172,37 @@ export default function LocationMap({ suspect }: LocationMapProps) {
       <div className="lg:col-span-2 flex flex-col gap-4">
         
         {/* Map Header */}
-        <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div className="glass-panel p-4 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-blue-500" />
-            <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+            <MapPin className="w-5 h-5 text-blue-600" />
+            <h4 className="text-sm font-semibold text-ink font-mono tracking-wider uppercase">
               Location Geotag Timeline & Routing
             </h4>
           </div>
-          <span className="text-[10px] text-slate-500 font-mono">Dynamic OSINT coordinates mapping</span>
+          <span className="text-[10px] text-slate-650 font-bold font-mono">Dynamic OSINT coordinates mapping</span>
         </div>
 
         {/* Map and timeline layout or empty state */}
         {(suspect.locations || []).length === 0 ? (
-          <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono flex-1 flex flex-col items-center justify-center min-h-[300px]">
-            <MapPin className="w-8 h-8 text-slate-600 mb-3 animate-pulse" />
-            <p className="text-sm text-slate-400">No public geotag locations discovered for this profile.</p>
+          <div className="glass-panel p-12 text-center rounded-2xl border border-slate-200 bg-white shadow-sm font-mono flex-1 flex flex-col items-center justify-center min-h-[300px]">
+            <MapPin className="w-8 h-8 text-slate-500 mb-3 animate-pulse" />
+            <p className="text-sm text-slate-600 font-medium">No public geotag locations discovered for this profile.</p>
           </div>
         ) : (
           <>
             {/* Map Node element */}
-            <div className="w-full h-[380px] rounded-2xl border border-slate-900 bg-slate-950 overflow-hidden relative">
+            <div className="w-full h-[380px] rounded-2xl border border-slate-250 bg-slate-50 overflow-hidden relative shadow-inner">
               <div ref={mapContainerRef} className="w-full h-full z-10" />
               {!mapLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20 font-mono text-xs text-slate-500">
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-100/90 z-20 font-mono text-xs text-slate-650 font-bold">
                   Initializing spatial mapping data...
                 </div>
               )}
             </div>
 
             {/* Location Trace Timeline list */}
-            <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-              <h5 className="text-xs font-bold text-white font-mono uppercase mb-4 tracking-wider">
+            <div className="glass-panel p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <h5 className="text-xs font-bold text-ink font-mono uppercase mb-4 tracking-wider">
                 Chronological Geotag Trace
               </h5>
               <div className="space-y-4">
@@ -211,38 +211,38 @@ export default function LocationMap({ suspect }: LocationMapProps) {
                   return (
                     <div 
                       key={idx}
-                      className={`flex items-start gap-4 p-3 bg-slate-950/30 border rounded-xl transition-all ${
-                        isAlert ? "border-rose-500/20 bg-rose-950/5 hover:border-rose-500/30" : "border-slate-900 hover:border-slate-850"
+                      className={`flex items-start gap-4 p-3 bg-slate-50 border rounded-xl transition-all shadow-sm ${
+                        isAlert ? "border-rose-250 bg-rose-50 hover:border-rose-350" : "border-slate-200 hover:border-slate-350 hover:bg-white"
                       }`}
                     >
                       <div className={`p-2 rounded-lg ${
-                        isAlert ? "bg-rose-600/10 border border-rose-500/20 text-rose-400" : "bg-blue-600/10 border border-blue-500/20 text-blue-400"
+                        isAlert ? "bg-rose-50 border border-rose-200 text-rose-700" : "bg-blue-50 border border-blue-200 text-blue-700"
                       }`}>
                         <MapPin className="w-4 h-4" />
                       </div>
                       <div className="flex-1 font-mono text-xs">
                         <div className="flex items-center justify-between mb-1 flex-wrap">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-white text-xs">{loc.locationName}</span>
+                            <span className="font-bold text-ink text-xs">{loc.locationName}</span>
                             {isAlert && (
-                              <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider uppercase">
+                              <span className="bg-rose-50 text-rose-800 border border-rose-200 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider uppercase">
                                 Crime Proximity Correlation
                               </span>
                             )}
                           </div>
-                          <span className="text-slate-500 text-[10px] flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5" /> {loc.date}
+                          <span className="text-slate-650 font-bold text-[10px] flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-slate-500" /> {loc.date}
                           </span>
                         </div>
-                        <p className="text-slate-400 text-[11px] mb-1">{loc.details}</p>
+                        <p className="text-slate-700 font-medium text-[11px] mb-1">{loc.details}</p>
                         {isAlert && (
-                          <div className="bg-rose-950/20 border border-rose-900/30 p-2.5 rounded-lg mb-2 text-rose-300 text-[10px] leading-relaxed">
-                            <span className="font-bold block mb-0.5">⚠️ Nearby Crime Scene Match:</span>
+                          <div className="bg-rose-50 border border-rose-200 p-2.5 rounded-lg mb-2 text-rose-900 text-[10px] leading-relaxed font-semibold">
+                            <span className="font-bold block mb-0.5 text-rose-800">⚠️ Nearby Crime Scene Match:</span>
                             {loc.crimeMatched?.title} (FIR Date: {loc.crimeMatched?.date})
                           </div>
                         )}
-                        <div className="flex items-center gap-4 text-[10px] text-slate-500">
-                          <span>Source: <span className="text-blue-400">{loc.source.toUpperCase()}</span></span>
+                        <div className="flex items-center gap-4 text-[10px] text-slate-600 font-semibold">
+                          <span>Source: <span className="text-blue-700 font-bold">{loc.source.toUpperCase()}</span></span>
                           <span>Coordinates: {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
                         </div>
                       </div>
@@ -257,64 +257,64 @@ export default function LocationMap({ suspect }: LocationMapProps) {
 
       {/* Right Column: Private Records Request Generator */}
       <div className="lg:col-span-1">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 h-full flex flex-col justify-between">
+        <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white shadow-sm h-full flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-blue-500" />
-              <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <h4 className="text-sm font-semibold text-ink font-mono tracking-wider uppercase">
                 Section 91 CrPC Request
               </h4>
             </div>
 
-            <p className="text-[11px] text-slate-400 font-mono leading-relaxed mb-6">
+            <p className="text-[11px] text-slate-700 font-medium font-mono leading-relaxed mb-6">
               Private data manifests (flight passengers, train reservations, FASTag tolls) are not open-source. Use this module to auto-generate the statutory CrPC Section 91 data request letter to served organizations.
             </p>
 
             {/* Config fields */}
             <div className="space-y-4 font-mono text-xs">
               <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Served Service Authority</label>
+                <label className="text-[10px] text-slate-750 font-bold block mb-1">Served Service Authority</label>
                 <input
                   type="text"
                   value={authorityName}
                   onChange={(e) => setAuthorityName(e.target.value)}
-                  className="w-full p-2 bg-slate-950 border border-slate-900 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/40"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-ink focus:outline-none focus:border-blue-300 shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)] font-semibold"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Requesting Officer Name</label>
+                <label className="text-[10px] text-slate-750 font-bold block mb-1">Requesting Officer Name</label>
                 <input
                   type="text"
                   value={officerName}
                   onChange={(e) => setOfficerName(e.target.value)}
-                  className="w-full p-2 bg-slate-950 border border-slate-900 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/40"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-ink focus:outline-none focus:border-blue-300 shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)] font-semibold"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Badge & Registry ID</label>
+                <label className="text-[10px] text-slate-750 font-bold block mb-1">Badge & Registry ID</label>
                 <input
                   type="text"
                   value={badgeNumber}
                   onChange={(e) => setBadgeNumber(e.target.value)}
-                  className="w-full p-2 bg-slate-950 border border-slate-900 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/40"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-ink focus:outline-none focus:border-blue-300 shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)] font-semibold"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Assigned Station Cell</label>
+                <label className="text-[10px] text-slate-750 font-bold block mb-1">Assigned Station Cell</label>
                 <input
                   type="text"
                   value={stationName}
                   onChange={(e) => setStationName(e.target.value)}
-                  className="w-full p-2 bg-slate-950 border border-slate-900 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/40"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-ink focus:outline-none focus:border-blue-300 shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)] font-semibold"
                 />
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-900 flex flex-col gap-2">
+          <div className="mt-6 pt-4 border-t border-slate-200 flex flex-col gap-2">
             <button
               onClick={() => setShowLetterPreview(true)}
               className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-1.5 shadow-lg glow-blue transition-all"

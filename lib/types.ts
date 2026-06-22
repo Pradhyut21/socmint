@@ -10,6 +10,7 @@ export interface AliasResult {
   evasionReason?: string;
   alias?: string;
   source?: string;
+  createdAt?: string;
 }
 
 export interface UpiFootprint {
@@ -266,6 +267,27 @@ export interface SuspectProfile {
   }[];
   caseReference: string;
   capturedAt: string;
+  resumeUrl?: string;
+  education?: {
+    institution: string;
+    degree: string;
+    period: string;
+  }[];
+  experience?: {
+    role: string;
+    company: string;
+    period: string;
+    details: string;
+  }[];
+  darkWebPastes?: {
+    id: string;
+    platform: string;
+    title: string;
+    snippet: string;
+    url: string;
+    postedAt: string;
+    riskTag: string;
+  }[];
 }
 
 export interface DossierInput {

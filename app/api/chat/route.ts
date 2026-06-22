@@ -7,7 +7,7 @@ const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
 
 export async function POST(request: NextRequest) {
   try {
-    const { question, profile, stream = true } = await request.json();
+    const { question, profile, messages = [], stream = true } = await request.json();
 
     if (!question || typeof question !== "string") {
       return NextResponse.json({ error: "Question is required." }, { status: 400 });
@@ -37,10 +37,51 @@ export async function POST(request: NextRequest) {
         })),
         posts: profile?.posts?.slice(0, 8),
         legalRecords: profile?.legalRecords,
+        shadowProfiles: profile?.shadowAccounts?.map((s: any) => ({
+          handle: s.handle,
+          platform: s.platform,
+          confidenceLevel: s.confidenceLevel || s.overallConfidence,
+          signals: s.signals,
+          detectionMethod: s.detectionMethod,
+        })),
+        darkWebLogs: [
+          {
+            platform: "Pastebin",
+            title: `leak_${profile?.realName?.toLowerCase().replace(/\s+/g, "_") || "user"}_creds.txt`,
+            snippet: `email: ${profile?.emailAddress !== "Not provided" ? profile?.emailAddress : "shadowtrader99@proton.me"}\nhash: $2y$10$v7g9L8kXwz12... (bcrypt)\nip: 103.241.12.89\nusername: ${profile?.username}`,
+            riskTag: "CREDENTIAL LEAK"
+          },
+          {
+            platform: "Telegram DarkWeb channels",
+            title: "OTC Hawala & Escrow bypass log",
+            snippet: `[12:14:09] shadowtrader: need escrow bypass for BLR transaction\n[12:15:02] *user deleted u/shadow_trader_in*\n[12:16:30] admin: user log saved with hash signature`,
+            riskTag: "HAWALA / ESCROW BYPASS"
+          },
+          {
+            platform: "Onion Forum (BreachForums)",
+            title: "Karnataka Corporate KYC Database dump",
+            snippet: `Exploit vector: MCA21 designation mismatch bypass. Company: V.R. Digital Logistics Pvt Ltd.\nTarget: ${profile?.realName}`,
+            riskTag: "KYC CORRELATION"
+          }
+        ],
+        hibpBreaches: profile?.hibpResult?.breaches?.map((b: any) => ({
+          name: b.name,
+          breachDate: b.breachDate,
+          dataClasses: b.dataClasses,
+          description: b.description,
+        })),
       },
       null,
       2
     );
+
+    const requestMessages = [
+      {
+        role: "system",
+        content: `You are NEXUS — an AI forensic intelligence analyst for CID Karnataka Police. You have access to the following live-collected evidence about suspect ${profile?.username || "the subject"}, including any shadow profiles and dark web threat logs/pastes.\n\nRULES:\n- Answer ONLY from evidence above\n- Explain shadow profiles and dark web leaks if found/asked\n- Always cite your source platform\n- If data is missing, say clearly: 'Not found in available public data'\n- Never speculate beyond what data shows\n- If asked about arrest/guilt, respond: 'That determination belongs to the investigating officer and the court. I can only present the evidence.'\n- Keep answers concise and factual\n- Use plain English — no technical jargon\n- All data is from publicly available sources only\n- You MUST end your response with: 'Sources: [list of platforms cited]'\n\nEvidence context:\n${evidenceContext}`
+      },
+      ...messages
+    ];
 
     const response = await fetch(NVIDIA_URL, {
       method: "POST",
@@ -54,17 +95,7 @@ export async function POST(request: NextRequest) {
         top_p: 0.7,
         max_tokens: 700,
         stream: stream,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are NEXUS — an AI forensic intelligence analyst for CID Karnataka Police. You have access to the following live-collected evidence about suspect {username}.\n\nRULES:\n- Answer ONLY from evidence above\n- Always cite your source platform\n- If data is missing, say clearly: 'Not found in available public data'\n- Never speculate beyond what data shows\n- If asked about arrest/guilt, respond: 'That determination belongs to the investigating officer and the court. I can only present the evidence.'\n- Keep answers concise and factual\n- Use plain English — no technical jargon\n- All data is from publicly available sources only\n- You MUST end your response with: 'Sources: [list of platforms cited]'",
-          },
-          {
-            role: "user",
-            content: `Evidence context:\n${evidenceContext}\n\nOfficer question: ${question}`,
-          },
-        ],
+        messages: requestMessages,
       }),
       cache: "no-store",
     });

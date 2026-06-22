@@ -230,7 +230,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
 
         // Label details text
         ctx.shadowBlur = 0;
-        ctx.fillStyle = isHovered || isSelected ? "#ffffff" : "#94a3b8";
+        ctx.fillStyle = isHovered || isSelected ? "#0f172a" : "#334155";
         ctx.font = isHovered || isSelected ? "bold 10px 'JetBrains Mono', monospace" : "9px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
         
@@ -334,9 +334,9 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
 
   if (!hasNetworkData) {
     return (
-      <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 font-mono max-w-2xl mx-auto my-6 flex flex-col items-center justify-center min-h-[300px]">
-        <Share2 className="w-8 h-8 text-slate-600 mb-3 animate-pulse" />
-        <p className="text-sm text-slate-400">No network link or relational graph data found for this suspect.</p>
+      <div className="glass-panel p-12 text-center rounded-2xl border border-slate-200 bg-white font-mono max-w-2xl mx-auto my-6 flex flex-col items-center justify-center min-h-[300px] shadow-sm">
+        <Share2 className="w-8 h-8 text-slate-500 mb-3 animate-pulse" />
+        <p className="text-sm text-slate-650 font-medium">No network link or relational graph data found for this suspect.</p>
       </div>
     );
   }
@@ -348,10 +348,10 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
       <div className="lg:col-span-3 flex flex-col gap-4">
         
         {/* Controls header */}
-        <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div className="glass-panel p-4 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Share2 className="w-5 h-5 text-blue-500" />
-            <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+            <Share2 className="w-5 h-5 text-blue-650" />
+            <h4 className="text-sm font-semibold text-ink font-mono tracking-wider uppercase">
               Suspect Network Graph Mapping
             </h4>
           </div>
@@ -359,7 +359,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
           <div className="flex items-center gap-2">
             <button 
               onClick={handleReset}
-              className="px-2.5 py-1.5 bg-slate-950 border border-slate-900 rounded-lg text-xs font-mono text-slate-400 hover:text-slate-200 hover:bg-slate-900 flex items-center gap-1 transition-all"
+              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700 hover:text-ink hover:border-slate-350 shadow-sm transition-all"
             >
               <RotateCcw className="w-3.5 h-3.5" /> Reset Layout
             </button>
@@ -369,7 +369,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
         {/* Canvas Render Container */}
         <div 
           ref={containerRef}
-          className="relative w-full rounded-2xl bg-slate-950/40 border border-slate-900 overflow-hidden h-[450px] cursor-grab active:cursor-grabbing"
+          className="relative w-full rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden h-[450px] cursor-grab active:cursor-grabbing shadow-inner"
         >
           <canvas
             ref={canvasRef}
@@ -383,26 +383,26 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
           />
 
           {/* Map legend bottom left */}
-          <div className="absolute bottom-4 left-4 p-3 bg-[#0d1324]/90 border border-slate-850 rounded-xl flex flex-col gap-2 font-mono text-[9px] shadow-lg pointer-events-none">
+          <div className="absolute bottom-4 left-4 p-3 bg-white/95 border border-slate-200 rounded-xl flex flex-col gap-2 font-mono text-[9px] shadow-md pointer-events-none">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-              <span className="text-slate-400">Suspect Target</span>
+              <span className="text-slate-750 font-semibold">Suspect Target</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              <span className="text-slate-400">Owned Platform Profile</span>
+              <span className="text-slate-750 font-semibold">Owned Platform Profile</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              <span className="text-slate-400">Mule Account Holder</span>
+              <span className="text-slate-750 font-semibold">Mule Account Holder</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span className="text-slate-400">Moderated Chat Group</span>
+              <span className="text-slate-750 font-semibold">Moderated Chat Group</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 border border-slate-800"></span>
-              <span className="text-slate-400">Bridge Associate (Central Node)</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 border border-slate-205"></span>
+              <span className="text-slate-750 font-semibold">Bridge Associate (Central Node)</span>
             </div>
           </div>
         </div>
@@ -411,10 +411,10 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
 
       {/* Network analysis detail sidebar */}
       <div className="lg:col-span-1">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 h-full flex flex-col min-h-[300px]">
+        <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white shadow-sm h-full flex flex-col min-h-[300px]">
           <div className="flex items-center gap-2 mb-4">
-            <Info className="w-5 h-5 text-blue-500" />
-            <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+            <Info className="w-5 h-5 text-blue-650" />
+            <h4 className="text-sm font-semibold text-ink font-mono tracking-wider uppercase">
               Network Intelligence
             </h4>
           </div>
@@ -422,17 +422,17 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
           {selectedNode ? (
             <div className="space-y-4 font-mono text-xs flex-1 flex flex-col justify-between">
               <div>
-                <span className="text-slate-500 text-[10px] uppercase block mb-1">Entity Name</span>
-                <span className="text-white font-bold text-sm block mb-4">{selectedNode.label.split("\n")[0]}</span>
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Entity Name</span>
+                <span className="text-ink font-bold text-sm block mb-4">{selectedNode.label.split("\n")[0]}</span>
 
-                <span className="text-slate-500 text-[10px] uppercase block mb-1">Network Classification</span>
-                <span className="text-blue-400 uppercase font-semibold block mb-4">{selectedNode.group}</span>
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Network Classification</span>
+                <span className="text-blue-750 uppercase font-bold block mb-4">{selectedNode.group}</span>
 
-                <span className="text-slate-500 text-[10px] uppercase block mb-1">Influence Weight</span>
-                <span className="text-white block mb-4">{((selectedNode.val || selectedNode.size || 16) / 3).toFixed(1)} Centrality Coefficient</span>
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Influence Weight</span>
+                <span className="text-ink font-semibold block mb-4">{((selectedNode.val || selectedNode.size || 16) / 3).toFixed(1)} Centrality Coefficient</span>
 
-                <span className="text-slate-500 text-[10px] uppercase block mb-1">Role Detail</span>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Role Detail</span>
+                <p className="text-[11px] text-slate-700 font-medium leading-relaxed">
                   {selectedNode.group === "suspect" && "Primary profile target under investigation."}
                   {selectedNode.group === "mule" && "Identity linked to receiving and withdrawing illicit funds generated via investment schemes."}
                   {selectedNode.group === "group" && "Shared chat platform used for coordination, OTC rates posting, or Hawala drops."}
@@ -442,7 +442,7 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
               </div>
 
               {selectedNode.group === "person" && selectedNode.id === "sol_dev_99" && (
-                <div className="p-3 bg-cyan-950/20 border border-cyan-500/20 rounded-xl text-[10px] text-cyan-300 leading-relaxed mt-4">
+                <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-[10px] text-cyan-900 font-bold shadow-sm mt-4">
                   <span className="font-bold block uppercase mb-1">Bridge Node Warning:</span>
                   This node acts as a gateway linking multiple financial mule identities. Investigating this target may unmask the direct laundering chain.
                 </div>
@@ -450,8 +450,8 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 font-mono text-xs">
-              <Share2 className="w-8 h-8 text-slate-700 mb-3 animate-pulse" />
-              <p className="text-slate-500 leading-relaxed">
+              <Share2 className="w-8 h-8 text-slate-500 mb-3 animate-pulse" />
+              <p className="text-slate-650 font-medium leading-relaxed">
                 Click any coordinate node in the map graph to inspect relational intelligence details and centrality calculations.
               </p>
             </div>

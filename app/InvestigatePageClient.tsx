@@ -66,6 +66,16 @@ export default function InvestigatePage() {
   const [stage, setStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("overview");
+
+  // Lifted Search Form States (so they are preserved when user clicks Modify query)
+  const [advanced, setAdvanced] = useState(true);
+  const [type, setType] = useState<(typeof SEARCH_TYPES)[number]["value"]>("username");
+  const [query, setQuery] = useState("");
+  const [dossierUsernames, setDossierUsernames] = useState<string[]>([""]);
+  const [dossierRealName, setDossierRealName] = useState("");
+  const [dossierEmail, setDossierEmail] = useState("");
+  const [dossierPhone, setDossierPhone] = useState("");
+  const [dossierFaceData, setDossierFaceData] = useState("");
   
   const searchParams = useSearchParams();
   const caseRef = searchParams.get("case");
@@ -84,14 +94,14 @@ export default function InvestigatePage() {
   }, [caseRef]);
 
   // Execute real API investigation
-  const runSweep = async (query: string, type: string, dossier?: DossierInput) => {
+  const runSweep = async (queryVal: string, typeVal: string, dossier?: DossierInput) => {
     setError(null);
     setLoading(true);
     setStage(0);
 
-    const label = type === "dossier" && dossier 
+    const label = typeVal === "dossier" && dossier 
       ? [dossier.usernames[0], dossier.realName, dossier.email].filter(Boolean).join(", ")
-      : query;
+      : queryVal;
     storage.pushAudit("INVESTIGATE", label);
 
     // Cycle scanning stages
@@ -100,8 +110,8 @@ export default function InvestigatePage() {
     }, 1200);
 
     try {
-      const requestBody: Record<string, any> = { query, type };
-      if (type === "dossier" && dossier) {
+      const requestBody: Record<string, any> = { query: queryVal, type: typeVal };
+      if (typeVal === "dossier" && dossier) {
         requestBody.dossier = dossier;
       }
 
@@ -167,7 +177,27 @@ export default function InvestigatePage() {
           </motion.div>
         ) : !suspect ? (
           <motion.div key="hero" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
-            <SearchForm onSearch={runSweep} error={error} onDismissError={() => setError(null)} />
+            <SearchForm 
+              onSearch={runSweep} 
+              error={error} 
+              onDismissError={() => setError(null)}
+              advanced={advanced}
+              setAdvanced={setAdvanced}
+              type={type}
+              setType={setType}
+              query={query}
+              setQuery={setQuery}
+              dossierUsernames={dossierUsernames}
+              setDossierUsernames={setDossierUsernames}
+              dossierRealName={dossierRealName}
+              setDossierRealName={setDossierRealName}
+              dossierEmail={dossierEmail}
+              setDossierEmail={setDossierEmail}
+              dossierPhone={dossierPhone}
+              setDossierPhone={setDossierPhone}
+              dossierFaceData={dossierFaceData}
+              setDossierFaceData={setDossierFaceData}
+            />
           </motion.div>
         ) : (
           <motion.div
@@ -182,7 +212,19 @@ export default function InvestigatePage() {
             <SuspectHeader
               suspect={suspect}
               orbTheme={TAB_THEME[activeTab] ?? RISK_THEME[suspect.riskLevel] ?? "default"}
-              onNew={() => { setSuspect(null); setError(null); setActiveTab("overview"); }}
+              onNew={() => { 
+                setSuspect(null); 
+                setError(null); 
+                setActiveTab("overview"); 
+                // Clear the form fields for a completely new search
+                setQuery("");
+                setDossierUsernames([""]);
+                setDossierRealName("");
+                setDossierEmail("");
+                setDossierPhone("");
+                setDossierFaceData("");
+              }}
+              onModify={() => { setSuspect(null); setError(null); }}
               onPrint={() => { storage.pushAudit("EXPORT_REPORT", suspect.caseReference); window.print(); }}
             />
             <SuspectTabs profile={suspect} onTabChange={setActiveTab} />
@@ -196,21 +238,35 @@ export default function InvestigatePage() {
 // Search form wrapper supporting quick and full dossier inputs
 function SearchForm({
   onSearch, error, onDismissError,
+  advanced, setAdvanced,
+  type, setType,
+  query, setQuery,
+  dossierUsernames, setDossierUsernames,
+  dossierRealName, setDossierRealName,
+  dossierEmail, setDossierEmail,
+  dossierPhone, setDossierPhone,
+  dossierFaceData, setDossierFaceData,
 }: {
   onSearch: (query: string, type: string, dossier?: DossierInput) => void;
   error: string | null;
   onDismissError: () => void;
+  advanced: boolean;
+  setAdvanced: React.Dispatch<React.SetStateAction<boolean>>;
+  type: (typeof SEARCH_TYPES)[number]["value"];
+  setType: React.Dispatch<React.SetStateAction<(typeof SEARCH_TYPES)[number]["value"]>>;
+  query: string;
+  setQuery: React.Dispatch<React.SetStateAction<string>>;
+  dossierUsernames: string[];
+  setDossierUsernames: React.Dispatch<React.SetStateAction<string[]>>;
+  dossierRealName: string;
+  setDossierRealName: React.Dispatch<React.SetStateAction<string>>;
+  dossierEmail: string;
+  setDossierEmail: React.Dispatch<React.SetStateAction<string>>;
+  dossierPhone: string;
+  setDossierPhone: React.Dispatch<React.SetStateAction<string>>;
+  dossierFaceData: string;
+  setDossierFaceData: React.Dispatch<React.SetStateAction<string>>;
 }) {
-  const [advanced, setAdvanced] = useState(true); // Dossier mode by default
-  const [type, setType] = useState<(typeof SEARCH_TYPES)[number]["value"]>("username");
-  const [query, setQuery] = useState("");
-
-  // Composite dossier mode fields
-  const [dossierUsernames, setDossierUsernames] = useState<string[]>([""]);
-  const [dossierRealName, setDossierRealName] = useState("");
-  const [dossierEmail, setDossierEmail] = useState("");
-  const [dossierPhone, setDossierPhone] = useState("");
-  const [dossierFaceData, setDossierFaceData] = useState("");
 
   // Face webcam state
   const [useCamera, setUseCamera] = useState(false);
@@ -672,9 +728,9 @@ function SweepSkeleton({ stageText }: { stageText: string }) {
 }
 
 function SuspectHeader({
-  suspect, orbTheme, onNew, onPrint
+  suspect, orbTheme, onNew, onModify, onPrint
 }: {
-  suspect: SuspectProfile; orbTheme: import("@/components/visual/ShieldOrb").OrbTheme; onNew: () => void; onPrint: () => void
+  suspect: SuspectProfile; orbTheme: import("@/components/visual/ShieldOrb").OrbTheme; onNew: () => void; onModify: () => void; onPrint: () => void
 }) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -705,6 +761,7 @@ function SuspectHeader({
             <ShieldOrb className="h-20 w-20" theme={orbTheme} />
           </div>
           <div className="flex flex-wrap gap-2 no-print">
+            <Button variant="outline" onClick={onModify} className="border-blue-200 text-blue-600 hover:text-blue-700 bg-blue-50/50"><SlidersHorizontal className="mr-2 h-4 w-4" /> Modify query</Button>
             <Button variant="outline" onClick={onNew}><Search className="mr-2 h-4 w-4" /> New search</Button>
             <Button onClick={onPrint}><Printer className="mr-2 h-4 w-4" /> Export report</Button>
           </div>

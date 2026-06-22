@@ -80,12 +80,12 @@ export default function PlatformStatus() {
   };
 
   return (
-    <div className="glass-panel p-4 rounded-2xl border border-slate-900 mt-6 bg-[#080d19]/20">
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-900">
-        <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-400">
+    <div className="glass-panel p-4 rounded-2xl border border-slate-200 mt-6 bg-white shadow-sm">
+      <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-200">
+        <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-700">
           OSINT Engine Connection Matrix (20-Platforms)
         </span>
-        <div className="flex gap-3 text-[9px] font-mono text-slate-500">
+        <div className="flex gap-3 text-[9px] font-mono text-slate-650 font-bold">
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Live
           </span>
@@ -102,10 +102,10 @@ export default function PlatformStatus() {
         {platforms.map((platform) => (
           <div 
             key={platform.id}
-            className="flex items-center justify-between px-2.5 py-1.5 bg-[#050912]/50 border border-slate-950 rounded-xl hover:border-slate-800 transition-colors group cursor-help"
+            className="flex items-center justify-between px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-350 hover:bg-white transition-colors group cursor-help shadow-sm"
             title={`${platform.label}: ${getStatusText(platform.status)}`}
           >
-            <span className="text-[10px] font-mono text-slate-400 group-hover:text-slate-200 transition-colors">
+            <span className="text-[10px] font-mono text-slate-750 font-semibold group-hover:text-ink transition-colors">
               {platform.label}
             </span>
             {getStatusDot(platform.status)}
