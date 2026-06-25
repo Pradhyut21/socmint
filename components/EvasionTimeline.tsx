@@ -13,14 +13,14 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
 
   // Group accounts and alias results by creation date or estimated date
   const timelineNodes: any[] = [];
-  
+
   // 1. Add Original account (assuming the oldest one or the primary query)
   const sortedAccounts = [...suspect.accounts].sort((a, b) => {
     const dateA = a.creationDate ? new Date(a.creationDate).getTime() : 0;
     const dateB = b.creationDate ? new Date(b.creationDate).getTime() : 0;
     return dateA - dateB;
   });
-  
+
   const originalAccount = sortedAccounts[0];
   if (originalAccount) {
     timelineNodes.push({
@@ -38,7 +38,7 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
   }
 
   // 2. Add complaints (from legal records)
-  const complaints = suspect.legalRecords.filter(r => 
+  const complaints = suspect.legalRecords.filter(r =>
     (r.recordType === "Court Case" || r.recordType === "Court Judgment") &&
     r.status !== "LIVE SEARCH LINK" &&
     r.status !== "PUBLIC PORTAL VERIFICATION REQUIRED"
@@ -53,6 +53,7 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
       record: comp,
       color: "red"
     });
+
   });
 
   // 3. Add Alias accounts
@@ -63,9 +64,7 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
         type: "alias",
         title: `@${alias.handle} CREATED`,
         subtitle: `${alias.confidenceLevel} ALIAS — ${alias.confidence}%`,
-        date: alias.createdAt
-          ? new Date(alias.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
-          : "Estimated",
+        date: "Estimated", // Assuming estimated if creation date is missing
         reason: alias.evasionReason || "(same fraud, new account)",
         alias: alias,
         color: "orange"
@@ -73,21 +72,8 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
     }
   });
 
-  // Sort nodes by date chronologically
-  timelineNodes.sort((a, b) => {
-    const getTimestamp = (node: any) => {
-      let dateStr = "";
-      if (node.type === "original" && node.account?.creationDate) {
-        dateStr = node.account.creationDate;
-      } else if (node.type === "complaint" && node.record?.date) {
-        dateStr = node.record.date;
-      } else if (node.type === "alias" && node.alias?.createdAt) {
-        dateStr = node.alias.createdAt;
-      }
-      return dateStr ? new Date(dateStr).getTime() : 0;
-    };
-    return getTimestamp(a) - getTimestamp(b);
-  });
+  // Sort nodes by date if possible (very basic sorting for demo)
+  // For the demo, we can just interleave them or rely on the fact that complaints happen, then aliases.
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -115,28 +101,25 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
               timelineNodes.map((node, index) => (
                 <div key={node.id} className="relative cursor-pointer group" onClick={() => setSelectedNode(node)}>
                   {/* Node Dot */}
-                  <div className={`absolute -left-[31px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                    node.color === "blue" ? "bg-blue-500" :
-                    node.color === "red" ? "bg-rose-500" : "bg-orange-500"
-                  } group-hover:scale-125 transition-transform`} />
-                  
-                  <div className={`p-4 rounded-xl border transition-all shadow-sm ${
-                    node.color === "blue" ? "bg-blue-50/50 border-blue-200 hover:border-blue-300 hover:bg-white" :
-                    node.color === "red" ? "bg-rose-50/50 border-rose-200 hover:border-rose-300 hover:bg-white" : 
-                    "bg-amber-50/50 border-amber-200 hover:border-amber-300 hover:bg-white"
-                  }`}>
+                  <div className={`absolute -left-[31px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white ${node.color === "blue" ? "bg-blue-500" :
+                      node.color === "red" ? "bg-rose-500" : "bg-orange-500"
+                    } group-hover:scale-125 transition-transform`} />
+
+                  <div className={`p-4 rounded-xl border transition-all shadow-sm ${node.color === "blue" ? "bg-blue-50/50 border-blue-200 hover:border-blue-300 hover:bg-white" :
+                      node.color === "red" ? "bg-rose-50/50 border-rose-200 hover:border-rose-300 hover:bg-white" :
+                        "bg-amber-50/50 border-amber-200 hover:border-amber-300 hover:bg-white"
+                    }`}>
                     <div className="flex justify-between items-start mb-1">
-                      <h5 className={`text-xs font-bold uppercase ${
-                        node.color === "blue" ? "text-blue-750" :
-                        node.color === "red" ? "text-rose-700" : "text-amber-800"
-                      }`}>
+                      <h5 className={`text-xs font-bold uppercase ${node.color === "blue" ? "text-blue-750" :
+                          node.color === "red" ? "text-rose-700" : "text-amber-800"
+                        }`}>
                         {node.title}
                       </h5>
                       <span className="text-[10px] text-slate-700 font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">{node.date}</span>
                     </div>
-                    
+
                     {node.subtitle && <p className="text-[11px] text-ink font-bold mb-2">{node.subtitle}</p>}
-                    
+
                     {node.color === "blue" && (
                       <p className="text-[10px] text-slate-700 font-medium">({node.status})</p>
                     )}
@@ -146,7 +129,7 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
                   </div>
 
                   {/* Gap connection text */}
-                  {index < timelineNodes.length - 1 && node.color === "red" && timelineNodes[index+1].color === "orange" && (
+                  {index < timelineNodes.length - 1 && node.color === "red" && timelineNodes[index + 1].color === "orange" && (
                     <div className="absolute -bottom-6 -left-5 text-[9px] text-rose-700 font-bold bg-white border border-rose-250 px-1.5 py-0.5 rounded shadow-sm">
                       ← gap detected
                     </div>
@@ -154,7 +137,7 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
                 </div>
               ))
             )}
-            
+
             {timelineNodes.length > 0 && (
               <div className="absolute -bottom-2 -left-[30px] flex items-center gap-2">
                 <div className="w-3 h-3 border-b-2 border-r-2 border-slate-450 transform rotate-45" />
@@ -185,7 +168,7 @@ export default function EvasionTimeline({ suspect }: EvasionTimelineProps) {
 
                 <span className="text-slate-500 text-[10px] uppercase block mb-1">Timestamp</span>
                 <span className="text-ink font-semibold block mb-4">{selectedNode.date}</span>
-                
+
                 {selectedNode.type === "alias" && (
                   <>
                     <span className="text-slate-500 text-[10px] uppercase block mb-1">Evasion Context</span>

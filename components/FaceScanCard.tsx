@@ -188,50 +188,73 @@ export default function FaceScanCard({ suspect }: FaceScanCardProps) {
             </h4>
           </div>
 
-          <div className="space-y-3 font-mono text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Camera Model</span>
-              <span className="text-ink font-semibold">{exifData.camera}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Lens / Aperture</span>
-              <span className="text-ink font-semibold">{exifData.lens}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Software Tag</span>
-              <span className="text-ink font-semibold">{exifData.software}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Creation Date</span>
-              <span className="text-ink font-semibold">{exifData.created}</span>
-            </div>
-            
-            <div className="pt-2 border-t border-slate-200 mt-2 space-y-2">
+          {exifData ? (
+            <div className="space-y-3 font-mono text-[11px]">
               <div className="flex justify-between">
-                <span className="text-slate-500">Dimensions</span>
-                <span className="text-ink font-bold">{dimensions}</span>
+                <span className="text-slate-500">Camera Model</span>
+                <span className="text-ink font-semibold">{exifData.camera}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">File Size</span>
-                <span className="text-ink font-bold">{fileSize}</span>
+                <span className="text-slate-500">Lens / Aperture</span>
+                <span className="text-ink font-semibold">{exifData.lens}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Mime Format</span>
-                <span className="text-ink font-bold">{fileFormat}</span>
+                <span className="text-slate-500">Software Tag</span>
+                <span className="text-ink font-semibold">{exifData.software}</span>
               </div>
-            </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Creation Date</span>
+                <span className="text-ink font-semibold">{exifData.created}</span>
+              </div>
+              
+              <div className="pt-2 border-t border-slate-200 mt-2 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Dimensions</span>
+                  <span className="text-ink font-bold">{dimensions}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">File Size</span>
+                  <span className="text-ink font-bold">{fileSize}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Mime Format</span>
+                  <span className="text-ink font-bold">{fileFormat}</span>
+                </div>
+              </div>
 
-            <div className="pt-2 border-t border-slate-200 mt-2 space-y-1">
-              <span className="text-slate-500 block text-[9px] uppercase">GPS Coordinates Tagged</span>
-              <div className="flex items-start gap-1.5 text-blue-700">
-                <MapPin className="w-3.5 h-3.5 mt-0.5" />
-                <div>
-                  <span className="font-bold block">{exifData.gps.place}</span>
-                  <span className="text-[10px] text-slate-600 block">({exifData.gps.lat}, {exifData.gps.lng})</span>
+              {exifData.gps && (
+                <div className="pt-2 border-t border-slate-200 mt-2 space-y-1">
+                  <span className="text-slate-500 block text-[9px] uppercase">GPS Coordinates Tagged</span>
+                  <div className="flex items-start gap-1.5 text-blue-700">
+                    <MapPin className="w-3.5 h-3.5 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">{exifData.gps.place}</span>
+                      <span className="text-[10px] text-slate-600 block">({exifData.gps.lat}, {exifData.gps.lng})</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3 font-mono text-[11px] text-slate-600 leading-relaxed text-[10px]">
+              <p>⚠️ No EXIF metadata detected in this profile image.</p>
+              <p className="text-slate-500">Most social media and hosting platforms strip camera metadata tags (EXIF) and GPS location stamps upon image upload to protect user privacy.</p>
+              <div className="pt-2 border-t border-slate-200 mt-2 space-y-2 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Dimensions</span>
+                  <span className="text-ink font-bold">{dimensions}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">File Size</span>
+                  <span className="text-ink font-bold">{fileSize}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Mime Format</span>
+                  <span className="text-ink font-bold">{fileFormat}</span>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Deepfake Analyzer Card */}

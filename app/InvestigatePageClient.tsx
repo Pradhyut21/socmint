@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Search, Loader2, Printer, FilePlus, ShieldAlert, Sparkles,
   AtSign, Phone, Mail, ScanFace, IdCard, SlidersHorizontal, X, AlertTriangle,
-  ArrowLeft, Clock, CheckCircle2, Lock, Camera, Coins, Shield, Plus,
+  ArrowLeft, Clock, CheckCircle2, Lock, Camera, Coins, Shield, Plus, Globe, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -19,8 +19,11 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { storage } from "@/lib/storage";
 import { riskColor } from "@/lib/mock-data";
-import type { SuspectProfile, DossierInput } from "@/lib/types";
+import type { SuspectProfile, DossierInput, EvidenceArtifact, ContentRiskResult } from "@/lib/types";
 import { SuspectTabs } from "@/components/suspect/SuspectTabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { getAllArtifacts, removeArtifact, pinEvidence } from "@/lib/evidence/evidenceCaptureService";
 
 // Dynamically import WebGL ShieldOrb to prevent server-side compile errors
 const ShieldOrb = dynamic(
@@ -35,6 +38,8 @@ const SEARCH_TYPES = [
   { value: "phone", label: "Phone", icon: Phone, placeholder: "+91 98765 43210" },
   { value: "face", label: "Face scan", icon: ScanFace, placeholder: "upload photo or use camera" },
   { value: "crypto", label: "Crypto wallet", icon: Coins, placeholder: "BTC, ETH, or LTC address" },
+  { value: "domain", label: "Domain / IP", icon: Globe, placeholder: "scam-site.xyz or 103.28.92.1" },
+  { value: "manual_post", label: "Manual post", icon: FilePlus, placeholder: "Search manually ingested captions or authors..." },
 ] as const;
 
 const SWEEP_STAGES = [
@@ -53,8 +58,9 @@ const TAB_THEME: Record<string, import("@/components/visual/ShieldOrb").OrbTheme
   accounts: "social", timeline: "social", wikidata: "legal",
   nlp: "network", face: "face", shadow: "leaks", crypto: "crypto", financial: "financial",
   dark: "leaks", legal: "legal", network: "network", geo: "geo", evasion: "leaks",
-  evidence: "evidence",
+  evidence: "evidence", "content-risk": "high", stylometry: "network", ingest: "evidence",
 };
+
 
 const RISK_THEME: Record<string, import("@/components/visual/ShieldOrb").OrbTheme> = {
   LOW: "low", MEDIUM: "medium", HIGH: "high", CRITICAL: "critical",
@@ -77,6 +83,27 @@ export default function InvestigatePage() {
   const [dossierPhone, setDossierPhone] = useState("");
   const [dossierFaceData, setDossierFaceData] = useState("");
   
+  // Standalone/unassociated manual post states
+  const [allManualPosts, setAllManualPosts] = useState<EvidenceArtifact[]>([]);
+  const [manualSearchResults, setManualSearchResults] = useState<EvidenceArtifact[]>([]);
+  const [hasRunManualSearch, setHasRunManualSearch] = useState(false);
+  const [showStandaloneIngest, setShowStandaloneIngest] = useState(false);
+
+  const refreshManualPosts = () => {
+    const all = getAllArtifacts().filter(a => a.provenance === "manual_ingest");
+    const recents = storage.getRecent();
+    const recentCaseRefs = new Set(recents.map(r => r.caseReference));
+    // Unassociated: caseReference is "STANDALONE" or query/caseReference is not matching any loaded suspect
+    const unassociated = all.filter(a => 
+      a.caseReference === "STANDALONE" || !recentCaseRefs.has(a.caseReference)
+    );
+    setAllManualPosts(unassociated);
+  };
+
+  useEffect(() => {
+    refreshManualPosts();
+  }, [suspect]);
+
   const searchParams = useSearchParams();
   const caseRef = searchParams.get("case");
   const headerRef = useRef<HTMLDivElement>(null);
@@ -103,6 +130,35 @@ export default function InvestigatePage() {
       ? [dossier.usernames[0], dossier.realName, dossier.email].filter(Boolean).join(", ")
       : queryVal;
     storage.pushAudit("INVESTIGATE", label);
+
+    if (typeVal === "manual_post") {
+      // Local search over manual posts
+      const stageTimer = setInterval(() => {
+        setStage((s) => Math.min(s + 1, SWEEP_STAGES.length - 1));
+      }, 150);
+
+      setTimeout(() => {
+        clearInterval(stageTimer);
+        setLoading(false);
+        const allEv = getAllArtifacts();
+        const matches = allEv.filter(art => {
+          if (art.provenance !== "manual_ingest") return false;
+          const queryLower = queryVal.toLowerCase();
+          const titleMatch = art.title.toLowerCase().includes(queryLower);
+          const textMatch = art.textSnapshot.toLowerCase().includes(queryLower);
+          const author = (art.metadataSnapshot?.authorHandle as string || "").toLowerCase();
+          const authorMatch = author.includes(queryLower);
+          const tagsMatch = art.tags.some(t => t.toLowerCase().includes(queryLower));
+          return titleMatch || textMatch || authorMatch || tagsMatch;
+        });
+        setManualSearchResults(matches);
+        setHasRunManualSearch(true);
+        toast.success("Manual post search complete", {
+          description: `Found ${matches.length} matching evidence item(s).`
+        });
+      }, 800);
+      return;
+    }
 
     // Cycle scanning stages
     const stageTimer = setInterval(() => {
@@ -176,28 +232,102 @@ export default function InvestigatePage() {
             <SweepSkeleton stageText={SWEEP_STAGES[stage]} />
           </motion.div>
         ) : !suspect ? (
-          <motion.div key="hero" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
-            <SearchForm 
-              onSearch={runSweep} 
-              error={error} 
-              onDismissError={() => setError(null)}
-              advanced={advanced}
-              setAdvanced={setAdvanced}
-              type={type}
-              setType={setType}
-              query={query}
-              setQuery={setQuery}
-              dossierUsernames={dossierUsernames}
-              setDossierUsernames={setDossierUsernames}
-              dossierRealName={dossierRealName}
-              setDossierRealName={setDossierRealName}
-              dossierEmail={dossierEmail}
-              setDossierEmail={setDossierEmail}
-              dossierPhone={dossierPhone}
-              setDossierPhone={setDossierPhone}
-              dossierFaceData={dossierFaceData}
-              setDossierFaceData={setDossierFaceData}
-            />
+          <motion.div key="hero" className="space-y-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
+            {hasRunManualSearch ? (
+              <Card className="border-border">
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                  <div>
+                    <CardTitle className="font-display text-xl flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-evidence animate-pulse" /> Manual Post Search Results
+                    </CardTitle>
+                    <CardDescription className="text-xs font-mono">Found {manualSearchResults.length} matching evidence item(s) in system storage.</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => { setHasRunManualSearch(false); setQuery(""); }}>
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Search
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {manualSearchResults.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 bg-slate-50 font-mono">
+                      No matching manual posts found. Try another query.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {manualSearchResults.map((art) => (
+                        <EvidenceArtifactCard key={art.id} artifact={art} onRemove={(id) => {
+                          removeArtifact(id);
+                          setManualSearchResults(prev => prev.filter(a => a.id !== id));
+                          setAllManualPosts(prev => prev.filter(a => a.id !== id));
+                          toast.info("Evidence artifact removed.");
+                        }} />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <SearchForm 
+                  onSearch={runSweep} 
+                  error={error} 
+                  onDismissError={() => setError(null)}
+                  advanced={advanced}
+                  setAdvanced={setAdvanced}
+                  type={type}
+                  setType={setType}
+                  query={query}
+                  setQuery={setQuery}
+                  dossierUsernames={dossierUsernames}
+                  setDossierUsernames={setDossierUsernames}
+                  dossierRealName={dossierRealName}
+                  setDossierRealName={setDossierRealName}
+                  dossierEmail={dossierEmail}
+                  setDossierEmail={setDossierEmail}
+                  dossierPhone={dossierPhone}
+                  setDossierPhone={setDossierPhone}
+                  dossierFaceData={dossierFaceData}
+                  setDossierFaceData={setDossierFaceData}
+                />
+
+                {/* Standalone / Unassociated Manual Posts */}
+                <Card className="border-border shadow-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-3">
+                    <div>
+                      <CardTitle className="font-display text-lg flex items-center gap-2">
+                        <FilePlus className="h-5 w-5 text-emerald-650" /> Standalone Manual Posts
+                      </CardTitle>
+                      <CardDescription className="text-xs font-mono">
+                        Active manual posts under analysis not associated with any active suspects.
+                      </CardDescription>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowStandaloneIngest(true)}
+                      className="gap-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+                    >
+                      <Plus className="h-4 w-4" /> Ingest Standalone Post
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    {allManualPosts.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 bg-slate-50/50 font-mono">
+                        No standalone manual posts. Click "Ingest Standalone Post" to analyze a standalone post.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {allManualPosts.map((art) => (
+                          <EvidenceArtifactCard key={art.id} artifact={art} onRemove={(id) => {
+                            removeArtifact(id);
+                            setAllManualPosts(prev => prev.filter(a => a.id !== id));
+                            toast.info("Evidence artifact removed.");
+                          }} />
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -231,6 +361,12 @@ export default function InvestigatePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <StandaloneIngestDialog 
+        open={showStandaloneIngest} 
+        onOpenChange={setShowStandaloneIngest} 
+        onIngestComplete={refreshManualPosts} 
+      />
     </div>
   );
 }
@@ -779,5 +915,295 @@ function ImageIcon(props: React.SVGProps<SVGSVGElement>) {
       <circle cx="9" cy="9" r="2"/>
       <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
     </svg>
+  );
+}
+
+function EvidenceArtifactCard({ artifact, onRemove }: { artifact: EvidenceArtifact; onRemove: (id: string) => void }) {
+  const riskResult = (artifact.metadataSnapshot?.contentRisk as ContentRiskResult | undefined);
+  const riskLevel = riskResult?.riskLevel || "LOW";
+  const riskColors: Record<string, string> = {
+    LOW: "border-emerald-200 bg-emerald-50/10",
+    MEDIUM: "border-amber-200 bg-amber-50/10",
+    HIGH: "border-orange-200 bg-orange-50/10",
+    CRITICAL: "border-red-200 bg-red-50/10",
+  };
+
+  const copyHash = (hash: string) => {
+    navigator.clipboard.writeText(hash);
+    toast.success("SHA-256 hash copied.");
+  };
+
+  return (
+    <Card className={`border shadow-sm ${riskColors[riskLevel] || ""}`}>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline" className="font-mono text-[9px] uppercase tracking-wider bg-slate-100/80">
+              {artifact.sourcePlatform}
+            </Badge>
+            {riskLevel !== "LOW" && (
+              <Badge className={`text-[9px] font-mono border ${
+                riskLevel === "CRITICAL" ? "bg-red-100 text-red-800 border-red-300" :
+                riskLevel === "HIGH" ? "bg-orange-100 text-orange-800 border-orange-300" :
+                "bg-amber-100 text-amber-800 border-amber-300"
+              }`}>
+                ⚠ {riskLevel}
+              </Badge>
+            )}
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => onRemove(artifact.id)}
+            className="h-6 w-6 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+            title="Remove after Analysis"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="font-semibold text-xs text-slate-800 font-mono truncate">{artifact.title}</div>
+          <p className="text-[11px] text-slate-600 font-mono line-clamp-3 leading-relaxed whitespace-pre-wrap">{artifact.textSnapshot}</p>
+        </div>
+
+        {artifact.screenshotPath && (
+          <div className="relative aspect-video w-full overflow-hidden rounded-md border border-slate-200 bg-muted">
+            <img src={artifact.screenshotPath} alt="Evidence Screenshot" className="h-full w-full object-cover" />
+          </div>
+        )}
+
+        <div className="border-t border-slate-200/60 pt-2 flex flex-col gap-1.5 font-mono text-[10px] text-slate-550">
+          <div className="flex justify-between items-center">
+            <span>Posted by: <span className="font-bold text-slate-700">@{artifact.query}</span></span>
+            <span>Captured: {new Date(artifact.retrievedAt).toLocaleDateString("en-IN")}</span>
+          </div>
+          {artifact.sourceUrl && (
+            <a href={artifact.sourceUrl} target="_blank" rel="noreferrer" className="text-cyan-700 hover:underline flex items-center gap-1">
+              Source Link
+            </a>
+          )}
+          <div className="flex items-center justify-between gap-2 border-t border-dashed border-slate-100 pt-1">
+            <span className="text-[9px] text-slate-400 truncate">SHA-256: {artifact.sha256.slice(0, 16)}…</span>
+            <button onClick={() => copyHash(artifact.sha256)} className="text-[9px] text-blue-600 hover:underline">Copy hash</button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StandaloneIngestDialog({
+  open,
+  onOpenChange,
+  onIngestComplete
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onIngestComplete: () => void;
+}) {
+  const [platform, setPlatform] = useState("instagram");
+  const [postUrl, setPostUrl] = useState("");
+  const [authorHandle, setAuthorHandle] = useState("");
+  const [captionText, setCaptionText] = useState("");
+  const [locationTag, setLocationTag] = useState("");
+  const [timestamp, setTimestamp] = useState("");
+  const [screenshotData, setScreenshotData] = useState("");
+  const [analystNotes, setAnalystNotes] = useState("");
+  const [tags, setTags] = useState("");
+  const [pinning, setPinning] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleScreenshot = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setScreenshotData(ev.target?.result as string || "");
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!captionText.trim()) {
+      toast.error("Caption content is required.");
+      return;
+    }
+    setPinning(true);
+
+    try {
+      // Run risk analysis
+      let riskResult: ContentRiskResult | undefined;
+      try {
+        const resp = await fetch("/api/content-risk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: [{ text: captionText, platform, authorHandle }],
+            useNim: false,
+          }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          riskResult = data.results?.[0];
+        }
+      } catch {}
+
+      const tagList = tags.split(",").map(t => t.trim()).filter(Boolean);
+
+      await pinEvidence({
+        caseReference: "STANDALONE",
+        sourcePlatform: platform,
+        sourceUrl: postUrl.trim() || null,
+        query: authorHandle.trim() || "standalone",
+        title: `Manual Ingest — ${platform.toUpperCase()} by ${authorHandle || "unknown"}`,
+        textSnapshot: captionText.trim(),
+        metadataSnapshot: {
+          platform,
+          postUrl: postUrl.trim() || null,
+          authorHandle: authorHandle.trim() || null,
+          locationTag: locationTag.trim() || null,
+          timestamp: timestamp || null,
+          contentRisk: riskResult,
+        },
+        screenshotPath: screenshotData || undefined,
+        analystNotes: analystNotes.trim() || undefined,
+        tags: tagList,
+        provenance: "manual_ingest",
+      });
+
+      toast.success("Standalone post ingested successfully");
+      
+      // Reset form
+      setPlatform("instagram");
+      setPostUrl("");
+      setAuthorHandle("");
+      setCaptionText("");
+      setLocationTag("");
+      setTimestamp("");
+      setScreenshotData("");
+      setAnalystNotes("");
+      setTags("");
+      
+      onIngestComplete();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error("Failed to ingest standalone evidence: " + String(err));
+    } finally {
+      setPinning(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg">Ingest Standalone Evidence</DialogTitle>
+          <DialogDescription className="font-mono text-[10px] text-slate-500">
+            Hashed evidence capture under case reference "STANDALONE" for unrelated posts.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono uppercase tracking-wider">Platform *</Label>
+            <select
+              value={platform}
+              onChange={e => setPlatform(e.target.value)}
+              className="w-full h-9 px-3 text-sm border border-slate-200 rounded-md bg-white font-mono"
+            >
+              {["instagram", "twitter", "x", "facebook", "telegram", "youtube", "tiktok", "whatsapp", "reddit", "linkedin", "other"].map(p => (
+                <option key={p} value={p}>{p.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono uppercase tracking-wider">Author Handle</Label>
+            <Input
+              value={authorHandle}
+              onChange={e => setAuthorHandle(e.target.value)}
+              placeholder="e.g. suspect_handle"
+              className="font-mono text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono uppercase tracking-wider">Post URL</Label>
+            <Input
+              value={postUrl}
+              onChange={e => setPostUrl(e.target.value)}
+              placeholder="https://..."
+              type="url"
+              className="font-mono text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono uppercase tracking-wider">Caption / Text Content *</Label>
+            <Textarea
+              value={captionText}
+              onChange={e => setCaptionText(e.target.value)}
+              placeholder="Paste content of the post..."
+              className="font-mono text-sm h-20"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] font-mono uppercase tracking-wider">Location Tag</Label>
+              <Input
+                value={locationTag}
+                onChange={e => setLocationTag(e.target.value)}
+                placeholder="Bengaluru"
+                className="font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-mono uppercase tracking-wider">Timestamp</Label>
+              <Input
+                value={timestamp}
+                onChange={e => setTimestamp(e.target.value)}
+                type="datetime-local"
+                className="font-mono text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono uppercase tracking-wider">Screenshot</Label>
+            <input type="file" ref={fileInputRef} onChange={handleScreenshot} accept="image/*" className="hidden" />
+            {screenshotData ? (
+              <div className="flex items-center gap-2 bg-slate-50 border p-2 rounded">
+                <img src={screenshotData} alt="Attached" className="w-10 h-10 object-cover rounded" />
+                <span className="text-xs text-emerald-700 font-mono flex-1">Screenshot attached ✓</span>
+                <Button type="button" variant="ghost" size="icon" onClick={() => setScreenshotData("")}><X className="h-4 w-4" /></Button>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" className="w-full h-9 font-mono text-xs gap-1.5" onClick={() => fileInputRef.current?.click()}>
+                <Camera className="h-3.5 w-3.5" /> Upload Screenshot
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono uppercase tracking-wider">Tags (comma-separated)</Label>
+            <Input
+              value={tags}
+              onChange={e => setTags(e.target.value)}
+              placeholder="e.g. fraud, scam"
+              className="font-mono text-sm"
+            />
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={pinning || !captionText.trim()}>
+              {pinning ? "Ingesting..." : "Pin Standalone Post"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

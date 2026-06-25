@@ -201,7 +201,7 @@ export interface CryptoTraceResult {
 
 export interface FaceScanMetadata {
   landmarks: { name: string; x: number; y: number; width: number; height: number }[];
-  exif: {
+  exif?: {
     camera: string;
     lens: string;
     software: string;
@@ -346,6 +346,147 @@ export interface DossierQuery {
   faceImage?: string;
 }
 
+// ─── New extension types (Phase 2) ────────────────────────────────────────
 
+/** Normalized evidence schema shared by all providers and modules */
+export interface NormalizedEvidence {
+  provider: string;
+  platform: string | null;
+  entity_type:
+    | "phone" | "email" | "username" | "domain" | "company" | "ip"
+    | "social_profile" | "channel" | "post" | "comment" | "upi_handle";
+  query: string;
+  title: string;
+  snippet: string;
+  url: string | null;
+  source_type:
+    | "official_site" | "public_social_profile" | "directory" | "forum"
+    | "scam_report" | "reputation_source" | "telecom_metadata" | "breach_summary"
+    | "geo_source" | "legal_source" | "upi_source" | "manual_ingest"
+    | "post_capture" | "other";
+  confidence: "high" | "medium" | "low";
+  metadata: Record<string, unknown>;
+}
 
+/** A pinned / captured evidence artifact (for chain-of-custody) */
+export interface EvidenceArtifact {
+  id: string;
+  caseReference: string;
+  sourcePlatform: string;
+  sourceUrl: string | null;
+  retrievedAt: string;           // ISO timestamp of capture
+  query: string;                 // investigation query that produced it
+  title: string;
+  textSnapshot: string;          // normalized text content captured
+  metadataSnapshot: Record<string, unknown>;
+  sha256: string;               // hex hash of textSnapshot
+  screenshotPath?: string;      // optional image path/data URL
+  analystNotes?: string;
+  tags: string[];
+  provenance: string;           // which module/provider retrieved it
+}
+
+/** Content risk analysis result for a public text post */
+export interface ContentRiskResult {
+  inputText: string;
+  platform: string | null;
+  authorHandle: string | null;
+  analysedAt: string;
+  scores: {
+    violence: number;       // 0-100
+    harassment: number;     // 0-100
+    scamFraud: number;      // 0-100
+    mobilisation: number;   // 0-100
+    hateSpeech: number;     // 0-100
+    overall: number;        // 0-100, weighted
+  };
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  confidence: "high" | "medium" | "low";
+  triggeringPhrases: string[];
+  explanation: string;
+  analystCaution: string;
+  nimEnhanced?: boolean;    // true if NIM LLM was used for deep analysis
+}
+
+/** Result of pairwise stylometric comparison */
+export interface StylometryPairResult {
+  sourceA: string;   // label for source A
+  sourceB: string;   // label for source B
+  similarity: number;   // 0-100
+  confidenceLabel: "exploratory" | "weak" | "moderate" | "strong";
+  features: {
+    vocabularyOverlap: number;
+    punctuationSimilarity: number;
+    capitalisationPattern: number;
+    emojiUsageSimilarity: number;
+    avgWordLength: number;
+    sentenceLengthSimilarity: number;
+    repeatedPhrases: string[];
+  };
+}
+
+/** Full stylometry analysis result for a corpus */
+export interface StylometryResult {
+  analysedAt: string;
+  sources: { label: string; text: string; platform?: string }[];
+  pairResults: StylometryPairResult[];
+  signaturePatterns: {
+    repeatedPhrases: string[];
+    emojiHabits: string[];
+    punctuationHabits: string[];
+    transliterationPattern: boolean;
+    codeMixingPattern: boolean;
+  };
+  analystCaution: string;
+}
+
+/** Domain / IP / company investigation result */
+export interface DomainIntelResult {
+  query: string;
+  queryType: "domain" | "ip" | "company";
+  analysedAt: string;
+  whois?: {
+    registrar?: string;
+    registrationDate?: string;
+    expiryDate?: string;
+    registrant?: string;
+    nameservers?: string[];
+    country?: string;
+  };
+  dns?: {
+    a?: string[];
+    mx?: string[];
+    ns?: string[];
+    txt?: string[];
+  };
+  reputation?: {
+    score: number;         // 0-100, higher = more risky
+    riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+    categories: string[];  // e.g. ["spam", "phishing", "malware"]
+    sources: string[];
+  };
+  scamSignals: string[];
+  publicReferences: NormalizedEvidence[];
+  confidence: "high" | "medium" | "low";
+  analystNote: string;
+}
+
+/** A manually ingested public post or evidence item */
+export interface IngestedPost {
+  id: string;
+  caseTag: string;
+  platform: string;
+  postUrl: string | null;
+  authorHandle: string | null;
+  captionText: string;
+  commentsText?: string;
+  locationTag?: string;
+  timestamp?: string;   // if known
+  ingestedAt: string;   // when analyst added it
+  screenshotDataUrl?: string;
+  contentRisk?: ContentRiskResult;
+  stylometryTag?: string;   // label used in stylometry corpus
+  evidenceId?: string;     // linked EvidenceArtifact id if pinned
+  tags?: string[];         // optional analyst-defined tags
+}
 

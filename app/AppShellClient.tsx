@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import { supabase } from "@/lib/supabaseClient";
 
 const NAV = [
   { href: "/", label: "Investigate Sweep", icon: Search, exact: true },
@@ -37,6 +38,45 @@ export function AppShellClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const [session, setSession] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Load session and listen for changes
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) {
+        setSession(data.session);
+        setAuthLoading(false);
+      }
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) {
+        setSession(session);
+        setAuthLoading(false);
+        // Clean up or redirect on sign out
+        if (!session) {
+          router.push("/auth");
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const isAuthPage = pathname === "/auth";
+
+  // Redirect client to auth if unauthenticated
+  useEffect(() => {
+    if (!authLoading && !session && !isAuthPage) {
+      router.push("/auth");
+    }
+  }, [session, authLoading, isAuthPage, router]);
+
   // Load analyst credentials from storage after mounting
   useEffect(() => {
     setAnalystState(storage.getAnalyst());
@@ -45,6 +85,30 @@ export function AppShellClient({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  if (isAuthPage) {
+    return (
+      <div className="min-h-screen flex w-full bg-background text-foreground">
+        {children}
+        <Toaster position="top-right" richColors />
+      </div>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-background paper-grain">
+        <div className="flex flex-col items-center gap-3 font-mono text-xs text-evidence">
+          <ShieldAlert className="h-8 w-8 animate-pulse text-stamp" />
+          <span>Verifying security credentials...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return null; // Page will redirect in useEffect
+  }
 
   return (
     <div className="min-h-screen flex w-full bg-background text-foreground">
@@ -203,9 +267,21 @@ function SettingsDialog({
           <div className="space-y-1.5"><Label>Badge number</Label><Input value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} className="font-mono" /></div>
           <div className="space-y-1.5"><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => { onSave(form); onOpenChange(false); }}>Save credentials</Button>
+        <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
+          <Button
+            variant="destructive"
+            className="sm:mr-auto rounded-none font-mono text-[10px] tracking-wider"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              onOpenChange(false);
+            }}
+          >
+            END SECURE SESSION
+          </Button>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={() => { onSave(form); onOpenChange(false); }}>Save credentials</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

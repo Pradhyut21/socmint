@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import {
   Users, MessageSquare, Globe, FileText, ScanFace, EyeOff, Bitcoin,
   AlertTriangle, Gavel, Share2, MapPin, GitBranch, Bot, FileCheck, Brain,
-  AlertCircle, Clock, Send, IndianRupee, PhoneCall, ShieldX,
+  AlertCircle, Clock, Send, IndianRupee, PhoneCall, ShieldX, FilePlus,
 } from "lucide-react";
+
 
 import type { SuspectProfile, RiskLevel } from "@/lib/types";
 import { riskColor } from "@/lib/mock-data";
@@ -32,6 +33,9 @@ import LocationMap from "@/components/LocationMap";
 import EvasionTimeline from "@/components/EvasionTimeline";
 import AiChat from "@/components/AiChat";
 import EvidencePackage from "@/components/EvidencePackage";
+import ContentRiskPanel from "@/components/ContentRiskPanel";
+import StylometryPanel from "@/components/StylometryPanel";
+import ManualIngestPanel from "@/components/ManualIngestPanel";
 
 interface TabDef {
   id: string;
@@ -64,6 +68,19 @@ export function SuspectTabs({ profile, onTabChange }: { profile: SuspectProfile;
     { id: "evasion", label: "Evasion Timeline", icon: Clock,
       badge: profile.aliasResults?.some(a => a.evasionPattern) ? { tone: "stamp", text: "!" } : undefined,
       render: (p) => <EvasionTimeline suspect={p} /> },
+    {
+      id: "content-risk",
+      label: "Content Risk",
+      icon: AlertTriangle,
+      badge: (() => {
+        const highRiskPosts = profile.posts.filter(post => post.flagLevel === "HIGH_RISK" || post.flagLevel === "SUSPICIOUS");
+        return highRiskPosts.length > 0 ? { tone: "stamp" as const, text: String(highRiskPosts.length) } : undefined;
+      })(),
+      render: (p) => <ContentRiskPanel suspect={p} />,
+    },
+
+    { id: "stylometry", label: "Language Analysis", icon: Brain, render: (p) => <StylometryPanel suspect={p} /> },
+    { id: "ingest", label: "Evidence Ingest", icon: FilePlus, render: (p) => <ManualIngestPanel suspect={p} /> },
     { id: "chat", label: "AI Chat", icon: Bot, render: (p) => <AiChat suspect={p} /> },
     { id: "evidence", label: "Court Certificate", icon: FileCheck, render: (p) => <EvidencePackage suspect={p} /> },
   ];

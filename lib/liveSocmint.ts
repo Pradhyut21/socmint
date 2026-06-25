@@ -214,7 +214,10 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
       }
       
       // Parse education/experience fields
-      const eduMatch = item.snippet.match(/Education:\s*([^·\n]+)/i);
+      const collegeKeywords = ["college", "university", "institute", "school", "bmsce", "rvce", "iiit", "iit", "pesit", "msrit", "bnmit"];
+      const workKeywords = ["intern", "engineer", "analyst", "developer", "manager", "designer", "consultant"];
+
+      const eduMatch = item.snippet.match(/Education:\s*([^·\n|]+)/i);
       if (eduMatch) {
         const institution = eduMatch[1].replace(/&middot;/g, '').trim();
         if (institution && institution.length > 2 && !education.some(e => e.institution.toLowerCase() === institution.toLowerCase())) {
@@ -226,7 +229,7 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
         }
       }
       
-      const expMatch = item.snippet.match(/Experience:\s*([^·\n]+)/i);
+      const expMatch = item.snippet.match(/Experience:\s*([^·\n|]+)/i);
       if (expMatch) {
         const company = expMatch[1].replace(/&middot;/g, '').trim();
         if (company && company.length > 2 && !experience.some(e => e.company.toLowerCase() === company.toLowerCase())) {
@@ -239,38 +242,34 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
         }
       }
 
-      const collegeKeywords = ["college", "university", "institute", "school", "bmsce", "rvce", "iiit", "iit", "pesit", "msrit", "bnmit"];
-      for (const cw of collegeKeywords) {
-        const idx = item.snippet.toLowerCase().indexOf(cw);
-        if (idx !== -1) {
-          const start = Math.max(0, idx - 30);
-          const end = Math.min(item.snippet.length, idx + 50);
-          const rawPhrase = item.snippet.slice(start, end).replace(/\s+/g, " ").trim();
-          const cleanPhrase = rawPhrase.replace(/^[,.\s\-]+|[,.\s\-]+$/g, "");
-          if (cleanPhrase && cleanPhrase.length > 8 && !education.some(edu => edu.institution.toLowerCase().includes(cleanPhrase.toLowerCase()))) {
+      // Parse by segments (splitting on common search snippet separators)
+      const segments = item.snippet.split(/\s*[\-|·|•|\|]\s*/);
+      for (const seg of segments) {
+        const cleanSeg = seg.trim();
+        const lowerSeg = cleanSeg.toLowerCase();
+        
+        // Clean up common prefix words
+        const cleanVal = cleanSeg
+          .replace(/^(?:student\s+at|studied\s+at|alumni\s+of|alumnus\s+of|pursuing\s+[a-zA-Z\s]+\s+at|education:\s*|profile\s+of\s+|working\s+as\s+a\s+|works\s+at\s+)/i, "")
+          .trim();
+
+        if (collegeKeywords.some(cw => lowerSeg.includes(cw))) {
+          if (cleanVal.length > 4 && !education.some(e => e.institution.toLowerCase().includes(cleanVal.toLowerCase()) || cleanVal.toLowerCase().includes(e.institution.toLowerCase()))) {
             education.push({
-              institution: cleanPhrase,
+              institution: cleanVal,
               degree: "Public Academic Record",
               period: "Sourced via Search Index"
             });
           }
         }
-      }
 
-      const workKeywords = ["intern", "engineer", "analyst", "developer", "manager", "designer", "consultant"];
-      for (const ww of workKeywords) {
-        const idx = item.snippet.toLowerCase().indexOf(ww);
-        if (idx !== -1) {
-          const start = Math.max(0, idx - 30);
-          const end = Math.min(item.snippet.length, idx + 50);
-          const rawPhrase = item.snippet.slice(start, end).replace(/\s+/g, " ").trim();
-          const cleanPhrase = rawPhrase.replace(/^[,.\s\-]+|[,.\s\-]+$/g, "");
-          if (cleanPhrase && cleanPhrase.length > 8 && !experience.some(exp => exp.role.toLowerCase().includes(cleanPhrase.toLowerCase()))) {
+        if (workKeywords.some(ww => lowerSeg.includes(ww)) && !lowerSeg.includes("student") && !lowerSeg.includes("education")) {
+          if (cleanVal.length > 4 && !experience.some(exp => exp.role.toLowerCase().includes(cleanVal.toLowerCase()) || cleanVal.toLowerCase().includes(exp.role.toLowerCase()))) {
             experience.push({
-              role: cleanPhrase,
+              role: cleanVal,
               company: "Public Professional Role",
               period: "Sourced via Search Index",
-              details: cleanPhrase
+              details: cleanVal
             });
           }
         }
@@ -293,6 +292,82 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
                        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200",
         capturedAt
       });
+    }
+
+    // Call NVIDIA NIM to clean up and extract precise resume details if API key is active
+    const apiKey = process.env.NVIDIA_API_KEY;
+    if (apiKey && resultsMap.size > 0) {
+      try {
+        const snippetsText = Array.from(resultsMap.values())
+          .slice(0, 5)
+          .map(r => `Title: ${r.title}\nSnippet: ${r.snippet}`)
+          .join("\n\n");
+        
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000);
+
+        const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct",
+            temperature: 0.1,
+            max_tokens: 300,
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: "You are a professional resume parser. Analyze search snippet results for a queried subject. Extract clean list of academic institutions and professional experience. Return ONLY a valid JSON object with format: { \"education\": [ { \"institution\": \"Clean Institution Name\", \"degree\": \"Degree or Public Record\", \"period\": \"Dates or Sourced\" } ], \"experience\": [ { \"role\": \"Job Title\", \"company\": \"Company Name\", \"period\": \"Dates or Sourced\", \"details\": \"Short description\" } ] }. If nothing is found, return empty arrays."
+              },
+              {
+                role: "user",
+                content: `Here are the search results:\n\n${snippetsText}`
+              }
+            ]
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const json = await response.json();
+          const content = json.choices?.[0]?.message?.content;
+          if (content) {
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed.education) && parsed.education.length > 0) {
+              education.length = 0;
+              parsed.education.forEach((edu: any) => {
+                if (edu.institution) {
+                  education.push({
+                    institution: edu.institution,
+                    degree: edu.degree || "Public Academic Record",
+                    period: edu.period || "Sourced via Search Index"
+                  });
+                }
+              });
+            }
+            if (Array.isArray(parsed.experience) && parsed.experience.length > 0) {
+              experience.length = 0;
+              parsed.experience.forEach((exp: any) => {
+                if (exp.role && exp.company) {
+                  experience.push({
+                    role: exp.role,
+                    company: exp.company,
+                    period: exp.period || "Sourced via Search Index",
+                    details: exp.details || `${exp.role} at ${exp.company}`
+                  });
+                }
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("NIM resume extraction failed, using heuristics fallback:", err);
+      }
     }
   } catch (err) {
     console.error("Dynamic web search crawler failed:", err);
@@ -319,8 +394,12 @@ async function fetchWithTimeout(url: string, timeoutMs = 5500): Promise<Response
     return await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "SOCMINT-Shield-Hackathon/1.0 Public-OSINT",
-        Accept: "text/html,application/xhtml+xml,application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
       },
       cache: "no-store",
     });
@@ -611,6 +690,16 @@ async function fetchLivePasteLeaks(query: string): Promise<any[]> {
       const snippetMatch = block.match(/<div[^>]*class="[^"]*compText[^"]*"[^>]*>([\s\S]*?)<\/div>/i) || 
                            block.match(/<p[^>]*class="[^"]*lh-16[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
       const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : 'Raw credentials paste snippet containing target reference.';
+
+      const lowerSnippet = snippet.toLowerCase();
+      const lowerTitle = title.toLowerCase();
+      const lowerUrl = decodedUrl.toLowerCase();
+      const lowerQuery = query.toLowerCase();
+
+      // Strict filter: query term must exist in title, snippet, or URL
+      if (!lowerSnippet.includes(lowerQuery) && !lowerTitle.includes(lowerQuery) && !lowerUrl.includes(lowerQuery)) {
+        continue;
+      }
 
       let platform = "Pastebin";
       if (decodedUrl.includes("justpaste.it")) platform = "JustPaste.it";
@@ -1090,6 +1179,20 @@ export function generateFaceScanResult(photoUrl: string, profileName: string): i
     ? "High probability of AI-generation (Stable Diffusion / Midjourney avatar indicators). Frequency domain analysis displays grid artifacts. Eye reflections are inconsistent."
     : "Low probability of synthetic manipulation. High fidelity capture matches standard camera sensor noise signatures. Lens aberrations and chromatic distribution are consistent with real physical lens elements.";
 
+  // Only return EXIF and GPS if this is the face scan upload demo (Rajesh Kumar) or if explicitly synthetic (from image upload)
+  const isUploadDemo = profileName.toLowerCase().includes("rajesh") || profileName.toLowerCase().includes("rk_crypto_dev") || photoUrl.startsWith("data:image/");
+  const exif = isUploadDemo ? {
+    camera: cameras[randomFactor],
+    lens: lenses[randomFactor],
+    software: software[randomFactor],
+    created: new Date(Date.now() - 1000 * 60 * 60 * 24 * (3 + randomFactor)).toISOString().replace("T", " ").slice(0, 19) + " IST",
+    gps: {
+      lat: "12.9716° N",
+      lng: "77.5946° E",
+      place: "Indiranagar, Bengaluru"
+    }
+  } : undefined;
+
   return {
     landmarks: [
       { name: "Left Eye", x: 38, y: 40, width: 8, height: 4 },
@@ -1097,17 +1200,7 @@ export function generateFaceScanResult(photoUrl: string, profileName: string): i
       { name: "Nose", x: 47, y: 47, width: 6, height: 12 },
       { name: "Mouth", x: 43, y: 65, width: 14, height: 6 }
     ],
-    exif: {
-      camera: cameras[randomFactor],
-      lens: lenses[randomFactor],
-      software: software[randomFactor],
-      created: new Date(Date.now() - 1000 * 60 * 60 * 24 * (3 + randomFactor)).toISOString().replace("T", " ").slice(0, 19) + " IST",
-      gps: {
-        lat: "12.9716° N",
-        lng: "77.5946° E",
-        place: "Indiranagar, Bengaluru"
-      }
-    },
+    exif,
     deepfake: {
       isSynthetic,
       score,
@@ -1607,42 +1700,59 @@ export async function investigatePublicSubject(query: string, type: string): Pro
   const linkedinAccounts = accounts.filter(a => a.platform === "linkedin");
   const instagramAccounts = accounts.filter(a => a.platform === "instagram");
 
-  const linkedinPosts: Post[] = linkedinAccounts.map((a, idx) => {
-    let content = "Excited to share my latest thoughts on technology, open source contributions, and software systems. Let's connect!";
+  const isPradhyut = (str: string) => {
+    const l = str.toLowerCase();
+    return l.includes("pradhyut21") || l.includes("pradhh.18") || l.includes("pradhyuth-kuruvadi");
+  };
+
+  const linkedinPosts: Post[] = linkedinAccounts.map((a, idx): Post | null => {
     const usernameLower = (a.username || "").toLowerCase();
     const displayNameLower = (a.displayName || "").toLowerCase();
-    if (usernameLower.includes("pradhyut") || displayNameLower.includes("pradhyut")) {
-      content = "Excited to share that I'm exploring new horizons in full-stack engineering and open-source contributions. Connect with me on GitHub! #softwareengineering #web3";
-    } else if (usernameLower.includes("shadowtrader") || displayNameLower.includes("rathore") || displayNameLower.includes("vikram")) {
-      content = "Just shared some insights on blockchain decentralized liquidity at EthIndia. DeFi scaling is the future! #DeFi #Ethereum";
-    } else if (usernameLower.includes("sneha") || displayNameLower.includes("kulkarni")) {
-      content = "Security is not an afterthought, especially in payment systems. Grateful to showcase our secure transactions model at Smart India Hackathon Pune. #cybersecurity #fintech";
-    }
-    return {
-      id: `linkedin-post-${a.username || "user"}-${idx}`,
-      platform: "linkedin",
-      content,
-      postedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), // 5 days ago
-      flagLevel: "NORMAL",
-      capturedAt,
-    };
-  });
+    
+    const isPradhyutVal = isPradhyut(usernameLower) || isPradhyut(displayNameLower);
+    const isMeghanaVal = usernameLower.includes("meghana") || displayNameLower.includes("meghana");
 
-  const instagramPosts: Post[] = instagramAccounts.map((a, idx) => {
-    let content = "Exploring new sights and coding away! 🌆☕️ #devlife #travel";
-    const usernameLower = (a.username || "").toLowerCase();
-    if (usernameLower.includes("pradh")) {
-      content = "Bengaluru weekend vibes. Coffee and code ☕️💻 #devlife #bengaluru";
+    // Only generate mock posts for verified demo accounts (exclude real user variants whose profiles are private)
+    if ((isDemoUser(a.username) || isDemoUser(displayNameLower)) && !isPradhyutVal && !isMeghanaVal) {
+      let content = "Excited to share my latest thoughts on technology, open source contributions, and software systems. Let's connect!";
+      if (usernameLower.includes("shadowtrader") || displayNameLower.includes("rathore") || displayNameLower.includes("vikram")) {
+        content = "Just shared some insights on blockchain decentralized liquidity at EthIndia. DeFi scaling is the future! #DeFi #Ethereum";
+      } else if (usernameLower.includes("sneha") || displayNameLower.includes("kulkarni")) {
+        content = "Security is not an afterthought, especially in payment systems. Grateful to showcase our secure transactions model at Smart India Hackathon Pune. #cybersecurity #fintech";
+      }
+      return {
+        id: `linkedin-post-${a.username || "user"}-${idx}`,
+        platform: "linkedin",
+        content,
+        postedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), // 5 days ago
+        flagLevel: "NORMAL" as const,
+        capturedAt,
+      };
     }
-    return {
-      id: `instagram-post-${a.username || "user"}-${idx}`,
-      platform: "instagram",
-      content,
-      postedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
-      flagLevel: "NORMAL",
-      capturedAt,
-    };
-  });
+    return null;
+  }).filter((p): p is Post => p !== null);
+
+  const instagramPosts: Post[] = instagramAccounts.map((a, idx): Post | null => {
+    const usernameLower = (a.username || "").toLowerCase();
+    const displayNameLower = (a.displayName || "").toLowerCase();
+    
+    const isPradhyutVal = isPradhyut(usernameLower) || isPradhyut(displayNameLower);
+    const isMeghanaVal = usernameLower.includes("meghana") || displayNameLower.includes("meghana");
+
+    // Only generate mock posts for verified demo accounts (exclude real user variants whose profiles are private)
+    if ((isDemoUser(a.username) || isDemoUser(displayNameLower)) && !isPradhyutVal && !isMeghanaVal) {
+      let content = "Exploring new sights and coding away! 🌆☕️ #devlife #travel";
+      return {
+        id: `instagram-post-${a.username || "user"}-${idx}`,
+        platform: "instagram",
+        content,
+        postedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
+        flagLevel: "NORMAL" as const,
+        capturedAt,
+      };
+    }
+    return null;
+  }).filter((p): p is Post => p !== null);
 
   // ── Phase 3: Build unified activity feed ───────────────────────────
   const posts: Post[] = [
@@ -2040,13 +2150,13 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     nodes.push({
       id: nodeId,
       label: `ALIAS\n@${alias.handle}`,
-      group: "person",
+      group: "alias",
       val: 16
     });
     links.push({
       source: realName,
       target: nodeId,
-      type: "CO_ACCUSED",
+      type: "ALIAS_OF",
       weight: Math.round(alias.confidence / 20) || 1
     });
   });

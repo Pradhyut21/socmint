@@ -49,6 +49,55 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── Domain / IP / Company investigation ─────────────────────────────────
+    if (type === "domain" || type === "ip" || type === "company") {
+      if (!query) {
+        return NextResponse.json({ error: "Query is required for domain/IP/company investigation." }, { status: 400 });
+      }
+      const { investigateDomainOrIp } = await import("../../../lib/providers/domain/domainProvider");
+      const domainResult = await investigateDomainOrIp(query);
+      const capturedAt = new Date().toISOString();
+
+      return NextResponse.json({
+        domainResult,
+        profile: {
+          username: query,
+          realName: query,
+          phoneNumber: "Not provided",
+          emailAddress: "Not provided",
+          photoUrl: `https://api.dicebear.com/9.x/identicon/svg?seed=${encodeURIComponent(query)}`,
+          riskScore: domainResult.reputation?.score ?? 0,
+          riskLevel: domainResult.reputation?.riskLevel ?? "LOW",
+          riskSubscores: { language: 0, behavioral: 0, network: domainResult.reputation?.score ?? 0, legal: 0 },
+          riskSignals: [...domainResult.scamSignals, domainResult.analystNote],
+          accounts: [],
+          posts: [],
+          legalRecords: domainResult.publicReferences.map((ref, idx) => ({
+            id: `domain-ref-${idx}`,
+            source: ref.provider,
+            recordType: "Reference" as const,
+            title: ref.title,
+            summary: ref.snippet,
+            status: "EXTERNAL LINK",
+            date: capturedAt.slice(0, 10),
+            url: ref.url ?? undefined,
+            sourceUrl: ref.url ?? undefined,
+            credibilityScore: 70,
+            credibilityLevel: "MEDIUM" as const,
+            capturedAt,
+          })),
+          aliasResults: [],
+          network: { nodes: [], links: [] },
+          locations: [],
+          caseReference: `DOMAIN-${capturedAt.slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          capturedAt,
+          domainIntel: domainResult,
+        },
+        acquiredAt: capturedAt,
+        mode: "domain-intel",
+      });
+    }
+
     // Standard single-field mode
     if (!query) {
       return NextResponse.json({ error: "Query is required." }, { status: 400 });

@@ -679,8 +679,8 @@ export function getDemoEducationAndExperience(username: string): {
       resumeUrl: "https://www.linkedin.com/in/pradhyuth-kuruvadi/resume-pdf",
       education: [
         {
-          institution: "RV College of Engineering, Bengaluru",
-          degree: "B.E. in Computer Science & Engineering",
+          institution: "PES University, Bengaluru",
+          degree: "B.Tech in Computer Science & Engineering",
           period: "2022 - 2026",
         },
         {
