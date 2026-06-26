@@ -2,7 +2,7 @@
 
 import React from "react";
 import { SuspectProfile, PlatformAccount } from "../lib/types";
-import { ShieldAlert, ShieldCheck, Mail, Phone, Calendar, ArrowUpRight, Award, Trash2 } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Mail, Phone, Calendar, ArrowUpRight, Award, Trash2, GraduationCap, Briefcase, Trophy, Globe, Building2 } from "lucide-react";
 
 interface ProfileOverviewProps {
   suspect: SuspectProfile;
@@ -395,6 +395,122 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
             {suspect.hibpResult.pasteCount > 0 && (
               <div className="mt-3 text-[10px] text-amber-400 font-mono bg-amber-500/5 border border-amber-500/20 px-3 py-2 rounded-lg">
                 ⚠️ Found in {suspect.hibpResult.pasteCount} public paste(s). Credentials may be publicly exposed.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── LinkedIn Intelligence: College / Work / Hackathons ──────── */}
+        {((suspect.education && suspect.education.length > 0) || (suspect.experience && suspect.experience.length > 0) || (suspect.hackathons && suspect.hackathons.length > 0)) && (
+          <div className="glass-panel p-6 rounded-2xl border border-blue-500/20 bg-blue-950/5 mt-6">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <span className="text-blue-400 font-bold text-[10px] font-mono">LI</span>
+              </div>
+              <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+                LinkedIn Intelligence — Profile Enrichment
+              </h4>
+              <span className="ml-auto text-[9px] font-bold font-mono px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                WEB ENRICHED
+              </span>
+            </div>
+
+            {/* Education / College */}
+            {suspect.education && suspect.education.length > 0 && (
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <GraduationCap className="w-4 h-4 text-violet-400" />
+                  <span className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider">Academic History</span>
+                </div>
+                <div className="space-y-2.5">
+                  {suspect.education.map((edu, idx) => (
+                    <div key={idx} className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl hover:border-violet-500/30 transition-all group">
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 bg-violet-500/10 border border-violet-500/20 rounded-lg mt-0.5 shrink-0">
+                          <Building2 className="w-3 h-3 text-violet-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-xs font-bold text-white font-mono">{edu.institution}</span>
+                            {edu.website && (
+                              <a href={edu.website} target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300 flex items-center gap-0.5 text-[9px] font-mono shrink-0">
+                                <Globe className="w-2.5 h-2.5" /> Website
+                              </a>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-violet-300 font-mono mt-0.5">{edu.degree}</div>
+                          {edu.description && (
+                            <p className="text-[9px] text-slate-400 mt-1 leading-relaxed line-clamp-2">{edu.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-[8px] text-slate-500 font-mono">{edu.period}</span>
+                            {edu.webEnriched && (
+                              <span className="text-[7px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1 py-0.5 rounded">WEB VERIFIED</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Work Experience */}
+            {suspect.experience && suspect.experience.length > 0 && (
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Briefcase className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider">Work Experience</span>
+                </div>
+                <div className="space-y-2.5">
+                  {suspect.experience.map((exp, idx) => (
+                    <div key={idx} className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl hover:border-amber-500/30 transition-all group">
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg mt-0.5 shrink-0">
+                          <Briefcase className="w-3 h-3 text-amber-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-bold text-white font-mono block">{exp.role}</span>
+                          <div className="text-[10px] text-amber-300 font-mono mt-0.5">{exp.company}</div>
+                          {exp.details && exp.details !== exp.role && (
+                            <p className="text-[9px] text-slate-400 mt-1 leading-relaxed line-clamp-2">{exp.details}</p>
+                          )}
+                          <span className="text-[8px] text-slate-500 font-mono mt-1 block">{exp.period}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Hackathons */}
+            {suspect.hackathons && suspect.hackathons.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider">Hackathon Participation</span>
+                </div>
+                <div className="space-y-2.5">
+                  {suspect.hackathons.map((hack, idx) => (
+                    <div key={idx} className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl hover:border-emerald-500/30 transition-all group">
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg mt-0.5 shrink-0">
+                          <Trophy className="w-3 h-3 text-emerald-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-bold text-white font-mono block">{hack.name}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-emerald-300 font-mono">{hack.result}</span>
+                            <span className="text-[8px] text-slate-500 font-mono">· {hack.year}</span>
+                          </div>
+                          <span className="text-[8px] text-slate-600 font-mono mt-1 block">Source: {hack.source}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

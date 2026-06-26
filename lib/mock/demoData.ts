@@ -22,7 +22,8 @@ function isPradhyutVariant(str: string): boolean {
 function isMeghanaVariant(str: string): boolean {
   const lower = str.toLowerCase();
   return (
-    lower.includes("meghana_kuruvadi")
+    lower.includes("meghana_kuruvadi") ||
+    lower.includes("meghana-kuruvadi")
   );
 }
 
@@ -743,6 +744,27 @@ export function getDemoEducationAndExperience(username: string): {
           company: "Maharashtra Police Cyber Forensic Division",
           period: "Jan 2025 - Present",
           details: "Assisted in tracking UPI money-mule accounts and phishing networks. Generated credibility score metrics for online records.",
+        },
+      ],
+    };
+  }
+
+  if (isMeghanaVariant(lower)) {
+    return {
+      resumeUrl: "https://www.linkedin.com/in/meghana-kuruvadi/resume-pdf",
+      education: [
+        {
+          institution: "BMS College of Engineering, Bengaluru",
+          degree: "B.E. in Information Science & Engineering",
+          period: "2022 - 2026",
+        },
+      ],
+      experience: [
+        {
+          role: "Web Development Intern",
+          company: "BMSCE Open Source Club",
+          period: "2023 - Present",
+          details: "Contributing to community web application development and organizing workshops on web standards.",
         },
       ],
     };

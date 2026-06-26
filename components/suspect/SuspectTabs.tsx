@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import {
   Users, MessageSquare, Globe, FileText, ScanFace, EyeOff, Bitcoin,
   AlertTriangle, Gavel, Share2, MapPin, GitBranch, Bot, FileCheck, Brain,
-  AlertCircle, Clock, Send, IndianRupee, PhoneCall, ShieldX, FilePlus,
+  AlertCircle, Clock, Send, IndianRupee, PhoneCall, ShieldX, FilePlus, ExternalLink,
 } from "lucide-react";
 
 
@@ -36,6 +36,7 @@ import EvidencePackage from "@/components/EvidencePackage";
 import ContentRiskPanel from "@/components/ContentRiskPanel";
 import StylometryPanel from "@/components/StylometryPanel";
 import ManualIngestPanel from "@/components/ManualIngestPanel";
+import SearchIntelPanel from "@/components/SearchIntelPanel";
 
 interface TabDef {
   id: string;
@@ -80,6 +81,7 @@ export function SuspectTabs({ profile, onTabChange }: { profile: SuspectProfile;
     },
 
     { id: "stylometry", label: "Language Analysis", icon: Brain, render: (p) => <StylometryPanel suspect={p} /> },
+    { id: "search-intel", label: "Search Intel", icon: Globe, render: (p) => <SearchIntelPanel suspect={p} key={p.caseReference} /> },
     { id: "ingest", label: "Evidence Ingest", icon: FilePlus, render: (p) => <ManualIngestPanel suspect={p} /> },
     { id: "chat", label: "AI Chat", icon: Bot, render: (p) => <AiChat suspect={p} /> },
     { id: "evidence", label: "Court Certificate", icon: FileCheck, render: (p) => <EvidencePackage suspect={p} /> },
@@ -245,6 +247,56 @@ function OverviewTab({ p }: { p: SuspectProfile }) {
           <Field label="Case reference" value={p.caseReference} mono />
         </CardContent>
       </Card>
+
+      {p.searchIntel?.results && p.searchIntel.results.length > 0 && (
+        <Card className="lg:col-span-3 border-l-4 border-l-purple-600 bg-purple-50/10 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+              <Globe className="w-5 h-5 text-purple-605" /> Search Intelligence Discovery Summary
+            </CardTitle>
+            <CardDescription className="text-slate-600 font-mono text-[10px]">
+              Top public web discoveries and dork hits matching suspect profile vectors.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="font-mono text-xs pb-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              {p.searchIntel.results.slice(0, 4).map((f) => (
+                <div key={f.id} className="p-2.5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between gap-1">
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge className="bg-ink text-paper text-[8px] uppercase tracking-wide px-1.5 py-0.5 rounded">
+                        {f.source}
+                      </Badge>
+                      {f.riskTags.slice(0, 2).map(tag => (
+                        <Badge key={tag} className="bg-red-500/10 text-red-500 border border-red-500/25 text-[8px] font-bold">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="font-bold text-[11px] text-ink mt-1 hover:underline truncate">
+                      {f.url ? (
+                        <a href={f.url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5">
+                          {f.title} <ExternalLink className="w-2.5 h-2.5 text-muted-foreground" />
+                        </a>
+                      ) : (
+                        f.title
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-700 font-medium leading-relaxed line-clamp-2 mt-0.5 font-sans">
+                      {f.snippet}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {p.searchIntel.results.length > 4 && (
+              <div className="text-right text-[10px] text-muted-foreground mt-2">
+                And {p.searchIntel.results.length - 4} more findings. View the "Search Intel" tab for the full list.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       
       {p.education && p.education.length > 0 && (
         <Card className="lg:col-span-3 border-l-4 border-l-cyan-600 bg-slate-50/10 shadow-sm">

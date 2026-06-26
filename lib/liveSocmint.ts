@@ -4,12 +4,16 @@ import { detectShadowAccounts } from "./analysis/shadowAccountProber";
 import { fetchIndianKanoon, fetchMcaCompanySearch } from "./fetchers/indianKanoon";
 import { fetchUpiFootprint } from "./fetchers/upiFootprint";
 import { isDemoUser, getDemoProbeResult, getDemoGithubData, getDemoLegalRecords, getDemoNewSuspectProfile, getDemoExtraAccounts, getDemoUpiFootprint, getDemoEducationAndExperience } from "./mock/demoData";
+import { assembleSearchIntelBundle } from "./search/searchIntel";
+
 
 type ProbeResult = {
   ok: boolean;
   status?: number;
   title?: string;
   description?: string;
+  verifiedUsername?: string;
+  verifiedUrl?: string;
 };
 
 type PlatformProbe = {
@@ -34,7 +38,7 @@ const PLATFORM_PROBES: PlatformProbe[] = [
   { tier: 2, platform: "instagram", label: "Instagram",  url: (u) => `https://www.instagram.com/${u}` },
   { tier: 2, platform: "facebook",  label: "Facebook",   url: (u) => `https://www.facebook.com/${u}` },
   { tier: 2, platform: "telegram",  label: "Telegram",   url: (u) => `https://t.me/${u}` },
-  { tier: 2, platform: "linkedin",  label: "LinkedIn",   normalize: (u) => u.replace(/^in\//, ""), url: (u) => `https://www.linkedin.com/in/${u}` },
+  { tier: 2, platform: "linkedin",  label: "LinkedIn",   normalize: (u) => u.replace(/^in\//, "").replace(/_/g, "-"), url: (u) => `https://www.linkedin.com/in/${u}` },
   { tier: 2, platform: "tiktok",    label: "TikTok",     url: (u) => `https://www.tiktok.com/@${u}` },
   { tier: 2, platform: "snapchat",  label: "Snapchat",   url: (u) => `https://www.snapchat.com/add/${u}` },
   { tier: 2, platform: "pinterest", label: "Pinterest",  url: (u) => `https://www.pinterest.com/${u}` },
@@ -88,40 +92,64 @@ function parseHandlesFromBio(bio: string): { platform: string; username: string 
   return found;
 }
 
+function buildExpandedSearchQuery(query: string): string {
+  const cleaned = query.trim().replace(/^@/, "");
+  if (!cleaned) return "";
+
+  if (/^\+?\d{10,15}$/.test(cleaned) || cleaned.includes("@") || (cleaned.startsWith("0x") && cleaned.length === 42)) {
+    return cleaned;
+  }
+
+  const parts = cleaned.split(/[_\-\s]+/);
+  if (parts.length > 1) {
+    const spaceVariant = parts.join(" ");
+    const hyphenVariant = parts.join("-");
+    const underscoreVariant = parts.join("_");
+    const concatVariant = parts.join("");
+    return `("${spaceVariant}" OR "${hyphenVariant}" OR "${underscoreVariant}" OR "${concatVariant}")`;
+  }
+
+  return cleaned;
+}
+
 async function searchWebForSocialProfiles(query: string, capturedAt: string): Promise<{
   accounts: PlatformAccount[];
-  education: { institution: string; degree: string; period: string }[];
+  education: { institution: string; degree: string; period: string; webEnriched?: boolean; website?: string; description?: string }[];
   experience: { role: string; company: string; period: string; details: string }[];
+  hackathons: { name: string; result: string; year: string; source: string }[];
 }> {
   const discoveredAccounts: PlatformAccount[] = [];
-  const education: { institution: string; degree: string; period: string }[] = [];
+  const education: { institution: string; degree: string; period: string; webEnriched?: boolean; website?: string; description?: string }[] = [];
   const experience: { role: string; company: string; period: string; details: string }[] = [];
+  const hackathons: { name: string; result: string; year: string; source: string }[] = [];
 
   try {
-    const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(query + " site:linkedin.com OR site:instagram.com OR site:github.com")}`;
+    const expanded = buildExpandedSearchQuery(query);
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(expanded + " (site:linkedin.com OR site:instagram.com OR site:github.com)")}&num=10`;
     const resp = await fetchWithTimeout(searchUrl, 5000);
-    if (!resp.ok) return { accounts: discoveredAccounts, education, experience };
+    if (!resp.ok) return { accounts: discoveredAccounts, education, experience, hackathons };
 
     const html = await resp.text();
-    const blocks = html.split(/<div[^>]*class="[^"]*algo[^"]*"/gi);
+    // Google search results each live in a <div class="g"> block
+    const blocks = html.split(/<div[^>]*class="[^"]*(?<![a-zA-Z0-9-])g(?![a-zA-Z0-9-])[^"]*"/gi);
     const resultsMap = new Map<string, { url: string; title: string; snippet: string }>();
 
     for (let i = 1; i < blocks.length; i++) {
       const block = blocks[i];
       
-      // Find URL
-      const urlMatch = block.match(/href="([^"]*RU=[^"]*)"/i) || block.match(/href="([^"]*)"/i);
+      // Find URL — Google wraps real URLs in /url?q= redirect
+      const urlMatch = block.match(/href="(\/url\?[^"]+)"/i) || block.match(/href="(https?:\/\/[^"]+)"/i);
       let decodedUrl = '';
       if (urlMatch) {
         const rawUrl = urlMatch[1];
-        if (rawUrl.includes('RU=')) {
-          const ruMatch = rawUrl.match(/RU=([^/&"]+)/);
-          if (ruMatch) {
+        if (rawUrl.startsWith('/url?')) {
+          const qMatch = rawUrl.match(/[?&]q=([^&"]+)/);
+          if (qMatch) {
             try {
-              decodedUrl = decodeURIComponent(ruMatch[1]);
+              decodedUrl = decodeURIComponent(qMatch[1]);
             } catch (e) {}
           }
-        } else if (rawUrl.startsWith('http') && !rawUrl.includes('yahoo.com')) {
+        } else if (rawUrl.startsWith('http') && !rawUrl.includes('google.com')) {
           decodedUrl = rawUrl;
         }
       }
@@ -138,10 +166,12 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
         }
       }
       
-      // Find Snippet
-      const snippetMatch = block.match(/<div[^>]*class="[^"]*compText[^"]*"[^>]*>([\s\S]*?)<\/div>/i) || 
-                           block.match(/<p[^>]*class="[^"]*lh-16[^"]*"[^>]*>([\s\S]*?)<\/p>/i) ||
-                           block.match(/<span[^>]*class="[^"]*compDscr[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+      // Find Snippet — Google uses BNeawe, IsZvec, aCOpRe, lEBKkf, VwiC3b classes
+      const snippetMatch = block.match(/<div[^>]*class="[^"]*BNeawe[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                           block.match(/<div[^>]*class="[^"]*VwiC3b[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                           block.match(/<div[^>]*class="[^"]*IsZvec[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                           block.match(/<span[^>]*class="[^"]*aCOpRe[^"]*"[^>]*>([\s\S]*?)<\/span>/i) ||
+                           block.match(/<div[^>]*class="[^"]*lEBKkf[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
       const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';
       
       if (decodedUrl && (title || snippet)) {
@@ -193,7 +223,7 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
       // Parse followers/connections
       let followers = 0;
       if (platform === "instagram") {
-        const matchInsta = item.snippet.match(/(\d+[\d,.]*)\s*(?:Followers|followers)/i);
+        const matchInsta = item.snippet.match(/(\d+[\d,.]*)\ s*(?:Followers|followers)/i);
         if (matchInsta) {
           followers = parseInt(matchInsta[1].replace(/,/g, ''));
         } else {
@@ -213,9 +243,10 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
         followers = 45;
       }
       
-      // Parse education/experience fields
-      const collegeKeywords = ["college", "university", "institute", "school", "bmsce", "rvce", "iiit", "iit", "pesit", "msrit", "bnmit"];
-      const workKeywords = ["intern", "engineer", "analyst", "developer", "manager", "designer", "consultant"];
+      // ── Parse education / experience / hackathon fields from snippet ──
+      const collegeKeywords = ["college", "university", "institute", "school", "bmsce", "rvce", "iiit", "iit", "pesit", "msrit", "bnmit", "vtu", "autonomous"];
+      const workKeywords = ["intern", "engineer", "analyst", "developer", "manager", "designer", "consultant", "architect", "lead", "founder", "cto", "ceo"];
+      const hackathonKeywords = ["hackathon", "hack", "devfest", "ideathon", "buildathon", "smart india hackathon", "sih", "mlh", "winner", "finalist"];
 
       const eduMatch = item.snippet.match(/Education:\s*([^·\n|]+)/i);
       if (eduMatch) {
@@ -224,7 +255,8 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
           education.push({
             institution,
             degree: "Public Academic Record",
-            period: "Sourced via LinkedIn Index"
+            period: "Sourced via LinkedIn Index",
+            webEnriched: false,
           });
         }
       }
@@ -243,7 +275,7 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
       }
 
       // Parse by segments (splitting on common search snippet separators)
-      const segments = item.snippet.split(/\s*[\-|·|•|\|]\s*/);
+      const segments = item.snippet.split(/\s*[-|·|•|\|]\s*/);
       for (const seg of segments) {
         const cleanSeg = seg.trim();
         const lowerSeg = cleanSeg.toLowerCase();
@@ -258,7 +290,8 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
             education.push({
               institution: cleanVal,
               degree: "Public Academic Record",
-              period: "Sourced via Search Index"
+              period: "Sourced via Search Index",
+              webEnriched: false,
             });
           }
         }
@@ -270,6 +303,24 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
               company: "Public Professional Role",
               period: "Sourced via Search Index",
               details: cleanVal
+            });
+          }
+        }
+
+        // Detect hackathon participation from snippets
+        if (hackathonKeywords.some(hw => lowerSeg.includes(hw))) {
+          const yearMatch = cleanSeg.match(/\b(20\d{2})\b/);
+          const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
+          const resultMatch = cleanSeg.match(/\b(winner|finalist|runner[- ]up|participant|1st|2nd|3rd)\b/i);
+          const result = resultMatch ? resultMatch[1].charAt(0).toUpperCase() + resultMatch[1].slice(1) : "Participant";
+          const hackName = cleanVal.replace(/\b(winner|finalist|runner[- ]up|participant|1st|2nd|3rd|in|at|of|the)\b/gi, "").trim() || cleanSeg;
+
+          if (hackName.length > 3 && !hackathons.some(h => h.name.toLowerCase() === hackName.toLowerCase())) {
+            hackathons.push({
+              name: hackName.length > 60 ? hackName.slice(0, 60) + "…" : hackName,
+              result,
+              year,
+              source: platform === "linkedin" ? "LinkedIn (Web Index)" : `${platform} (Web Index)`,
             });
           }
         }
@@ -286,12 +337,39 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
         followers,
         creationDate: new Date().toISOString().slice(0, 10),
         confidence: "CONFIRMED",
-        reason: `Discovered from live search indexing of ${url}`,
+        reason: `Discovered from live Google search indexing of ${url}`,
         profilePicUrl: platform === "instagram" ? "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200&h=200" :
                        platform === "linkedin" ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200" :
                        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200",
         capturedAt
       });
+    }
+
+    // ── Web-enrich college descriptions using Google search ──────────────
+    for (const edu of education) {
+      if (!edu.webEnriched && edu.institution && edu.institution.length > 4) {
+        try {
+          const colUrl = `https://www.google.com/search?q=${encodeURIComponent(edu.institution + " official college university website")}&num=3`;
+          const colResp = await fetchWithTimeout(colUrl, 4000);
+          if (colResp.ok) {
+            const colHtml = await colResp.text();
+            // Try to find website link
+            const siteMatch = colHtml.match(/href="(https?:\/\/(?!www\.google\.com)[^"]{5,60}\.(?:edu|ac\.in|edu\.in|org)[^"]*?)"/i);
+            if (siteMatch) {
+              edu.website = siteMatch[1].split('"')[0];
+            }
+            // Extract a short description from first result snippet
+            const descMatch = colHtml.match(/<div[^>]*class="[^"]*BNeawe[^"]*"[^>]*>([\s\S]{20,300}?)<\/div>/i) ||
+                              colHtml.match(/<span[^>]*class="[^"]*aCOpRe[^"]*"[^>]*>([\s\S]{20,300}?)<\/span>/i);
+            if (descMatch) {
+              edu.description = descMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+            }
+            edu.webEnriched = true;
+          }
+        } catch {
+          // Silently skip enrichment if it fails
+        }
+      }
     }
 
     // Call NVIDIA NIM to clean up and extract precise resume details if API key is active
@@ -315,12 +393,12 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
           body: JSON.stringify({
             model: process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct",
             temperature: 0.1,
-            max_tokens: 300,
+            max_tokens: 400,
             response_format: { type: "json_object" },
             messages: [
               {
                 role: "system",
-                content: "You are a professional resume parser. Analyze search snippet results for a queried subject. Extract clean list of academic institutions and professional experience. Return ONLY a valid JSON object with format: { \"education\": [ { \"institution\": \"Clean Institution Name\", \"degree\": \"Degree or Public Record\", \"period\": \"Dates or Sourced\" } ], \"experience\": [ { \"role\": \"Job Title\", \"company\": \"Company Name\", \"period\": \"Dates or Sourced\", \"details\": \"Short description\" } ] }. If nothing is found, return empty arrays."
+                content: "You are a professional resume parser. Analyze search snippet results for a queried subject. Extract clean list of academic institutions, professional experience, and hackathon participation. Return ONLY a valid JSON object with format: { \"education\": [ { \"institution\": \"Clean Institution Name\", \"degree\": \"Degree or Public Record\", \"period\": \"Dates or Sourced\" } ], \"experience\": [ { \"role\": \"Job Title\", \"company\": \"Company Name\", \"period\": \"Dates or Sourced\", \"details\": \"Short description\" } ], \"hackathons\": [ { \"name\": \"Hackathon Name\", \"result\": \"Winner/Finalist/Participant\", \"year\": \"YYYY\", \"source\": \"LinkedIn\" } ] }. If nothing is found, return empty arrays."
               },
               {
                 role: "user",
@@ -345,7 +423,8 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
                   education.push({
                     institution: edu.institution,
                     degree: edu.degree || "Public Academic Record",
-                    period: edu.period || "Sourced via Search Index"
+                    period: edu.period || "Sourced via Search Index",
+                    webEnriched: false,
                   });
                 }
               });
@@ -363,6 +442,19 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
                 }
               });
             }
+            if (Array.isArray(parsed.hackathons) && parsed.hackathons.length > 0) {
+              hackathons.length = 0;
+              parsed.hackathons.forEach((h: any) => {
+                if (h.name) {
+                  hackathons.push({
+                    name: h.name,
+                    result: h.result || "Participant",
+                    year: h.year || new Date().getFullYear().toString(),
+                    source: h.source || "LinkedIn (NIM Extracted)",
+                  });
+                }
+              });
+            }
           }
         }
       } catch (err) {
@@ -373,7 +465,7 @@ async function searchWebForSocialProfiles(query: string, capturedAt: string): Pr
     console.error("Dynamic web search crawler failed:", err);
   }
 
-  return { accounts: discoveredAccounts, education, experience };
+  return { accounts: discoveredAccounts, education, experience, hackathons };
 }
 
 function displayNameFromQuery(query: string) {
@@ -640,44 +732,87 @@ async function fetchNewsArticles(query: string): Promise<import("./types").NewsA
   }
 }
 
-async function verifyProfileExistsViaSearch(platform: string, username: string): Promise<boolean> {
+async function verifyProfileExistsViaSearch(platform: string, username: string): Promise<string | null> {
   try {
-    const searchUrl = `https://search.yahoo.com/search?p=site:${platform}.com/${username}`;
+    const lowerUser = username.toLowerCase();
+    const lowerPlatform = platform.toLowerCase();
+
+    let searchUrl = `https://www.google.com/search?q=site:${platform}.com/${username}&num=5`;
+    if (lowerPlatform === "linkedin") {
+      const hyphenated = lowerUser.replace(/_/g, "-");
+      const concat = lowerUser.replace(/[_\-]/g, "");
+      searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`("${hyphenated}" OR "${concat}") site:linkedin.com/in/`)}&num=5`;
+    }
     const resp = await fetchWithTimeout(searchUrl, 4500);
     if (resp.ok) {
       const html = await resp.text();
-      return html.toLowerCase().includes(username.toLowerCase());
+      const blocks = html.split(/<div[^>]*class="[^"]*(?<![a-zA-Z0-9-])g(?![a-zA-Z0-9-])[^"]*"/gi);
+      
+      for (let i = 1; i < blocks.length; i++) {
+        const block = blocks[i];
+        const urlMatch = block.match(/href="(\/url\?[^"]+)"/i) || block.match(/href="(https?:\/\/[^"]+)"/i);
+        if (urlMatch) {
+          let decodedUrl = "";
+          const rawUrl = urlMatch[1];
+          if (rawUrl.startsWith("/url?")) {
+            const qMatch = rawUrl.match(/[?&]q=([^&"]+)/);
+            if (qMatch) {
+              try {
+                decodedUrl = decodeURIComponent(qMatch[1]).toLowerCase();
+              } catch (e) {}
+            }
+          }
+          if (!decodedUrl && rawUrl.startsWith('http') && !rawUrl.includes('google.com')) {
+            decodedUrl = rawUrl.toLowerCase();
+          }
+
+          if (lowerPlatform === "linkedin") {
+            const hyphenated = lowerUser.replace(/_/g, "-");
+            const concat = lowerUser.replace(/[_\-]/g, "");
+            if (decodedUrl.includes(`linkedin.com/in/${hyphenated}`)) {
+              return hyphenated;
+            }
+            if (decodedUrl.includes(`linkedin.com/in/${concat}`)) {
+              return concat;
+            }
+          } else {
+            if (decodedUrl.includes(`${lowerPlatform}.com/${lowerUser}`)) {
+              return username;
+            }
+          }
+        }
+      }
     }
   } catch {
     // ignore
   }
-  return false;
+  return null;
 }
 
 async function fetchLivePasteLeaks(query: string): Promise<any[]> {
   const pastes: any[] = [];
   try {
-    const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent('"' + query + '" site:pastebin.com OR site:justpaste.it OR site:paste.org')}`;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent('"' + query + '" site:pastebin.com OR site:justpaste.it OR site:paste.org')}&num=5`;
     const resp = await fetchWithTimeout(searchUrl, 5000);
     if (!resp.ok) return [];
 
     const html = await resp.text();
-    const blocks = html.split(/<div[^>]*class="[^"]*algo[^"]*"/gi);
+    const blocks = html.split(/<div[^>]*class="[^"]*(?<![a-zA-Z0-9-])g(?![a-zA-Z0-9-])[^"]*"/gi);
 
     for (let i = 1; i < blocks.length; i++) {
       const block = blocks[i];
-      const urlMatch = block.match(/href="([^"]*RU=[^"]*)"/i) || block.match(/href="([^"]*)"/i);
+      const urlMatch = block.match(/href="(\/url\?[^"]+)"/i) || block.match(/href="(https?:\/\/[^"]+)"/i);
       let decodedUrl = '';
       if (urlMatch) {
         const rawUrl = urlMatch[1];
-        if (rawUrl.includes('RU=')) {
-          const ruMatch = rawUrl.match(/RU=([^/&"]+)/);
-          if (ruMatch) {
+        if (rawUrl.startsWith('/url?')) {
+          const qMatch = rawUrl.match(/[?&]q=([^&"]+)/);
+          if (qMatch) {
             try {
-              decodedUrl = decodeURIComponent(ruMatch[1]);
+              decodedUrl = decodeURIComponent(qMatch[1]);
             } catch (e) {}
           }
-        } else if (rawUrl.startsWith('http') && !rawUrl.includes('yahoo.com')) {
+        } else if (rawUrl.startsWith('http') && !rawUrl.includes('google.com')) {
           decodedUrl = rawUrl;
         }
       }
@@ -687,8 +822,9 @@ async function fetchLivePasteLeaks(query: string): Promise<any[]> {
       const h3Match = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
       const title = h3Match ? h3Match[1].replace(/<[^>]+>/g, '').trim() : 'Public Paste Leak';
 
-      const snippetMatch = block.match(/<div[^>]*class="[^"]*compText[^"]*"[^>]*>([\s\S]*?)<\/div>/i) || 
-                           block.match(/<p[^>]*class="[^"]*lh-16[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+      const snippetMatch = block.match(/<div[^>]*class="[^"]*BNeawe[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                           block.match(/<div[^>]*class="[^"]*IsZvec[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                           block.match(/<span[^>]*class="[^"]*aCOpRe[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
       const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : 'Raw credentials paste snippet containing target reference.';
 
       const lowerSnippet = snippet.toLowerCase();
@@ -731,6 +867,24 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
   try {
     const response = await fetchWithTimeout(url);
     if (!response.ok) {
+      if (response.status === 429 || response.status === 999 || response.status === 403) {
+        const platformName = lowercaseUrl.includes("instagram.com") ? "instagram" : lowercaseUrl.includes("twitter.com") ? "twitter" : lowercaseUrl.includes("linkedin.com") ? "linkedin" : "";
+        if (platformName) {
+          let usernamePart = "";
+          if (platformName === "linkedin") {
+            usernamePart = lowercaseUrl.split("linkedin.com/in/")[1]?.split("/")[0]?.split("?")[0] || "";
+          } else {
+            usernamePart = lowercaseUrl.split(`${platformName}.com/`)[1]?.split("/")[0]?.split("?")[0] || "";
+          }
+          if (usernamePart) {
+            const verifiedUsername = await verifyProfileExistsViaSearch(platformName, usernamePart);
+            if (verifiedUsername) {
+              const verifiedUrl = platformName === "linkedin" ? `https://www.linkedin.com/in/${verifiedUsername}` : lowercaseUrl;
+              return { ok: true, status: 200, title: `${verifiedUsername} on ${platformName}`, description: `Public profile found and verified via search indexing.`, verifiedUsername, verifiedUrl };
+            }
+          }
+        }
+      }
       return { ok: response.status < 400, status: response.status };
     }
 
@@ -753,9 +907,10 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
           usernamePart = lowercaseUrl.split(`${platformName}.com/`)[1]?.split("/")[0]?.split("?")[0] || "";
         }
         if (usernamePart) {
-          const exists = await verifyProfileExistsViaSearch(platformName, usernamePart);
-          if (exists) {
-            return { ok: true, status: 200, title: `${usernamePart} on ${platformName}`, description: `Public profile found and verified via search indexing.` };
+          const verifiedUsername = await verifyProfileExistsViaSearch(platformName, usernamePart);
+          if (verifiedUsername) {
+            const verifiedUrl = platformName === "linkedin" ? `https://www.linkedin.com/in/${verifiedUsername}` : lowercaseUrl;
+            return { ok: true, status: 200, title: `${verifiedUsername} on ${platformName}`, description: `Public profile found and verified via search indexing.`, verifiedUsername, verifiedUrl };
           }
         }
       }
@@ -777,9 +932,10 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
           usernamePart = lowercaseUrl.split(`${platformName}.com/`)[1]?.split("/")[0]?.split("?")[0] || "";
         }
         if (usernamePart) {
-          const exists = await verifyProfileExistsViaSearch(platformName, usernamePart);
-          if (exists) {
-            return { ok: true, status: 200, title: `${usernamePart} on ${platformName}`, description: `Public profile found and verified via search indexing.` };
+          const verifiedUsername = await verifyProfileExistsViaSearch(platformName, usernamePart);
+          if (verifiedUsername) {
+            const verifiedUrl = platformName === "linkedin" ? `https://www.linkedin.com/in/${verifiedUsername}` : lowercaseUrl;
+            return { ok: true, status: 200, title: `${verifiedUsername} on ${platformName}`, description: `Public profile found and verified via search indexing.`, verifiedUsername, verifiedUrl };
           }
         }
       }
@@ -1388,6 +1544,15 @@ function generateNexusAnalysis(
   };
 }
 
+function withSearchIntel(profile: SuspectProfile): SuspectProfile {
+  try {
+    profile.searchIntel = assembleSearchIntelBundle(profile);
+  } catch (e) {
+    console.error("Failed to generate Search Intel bundle for profile:", e);
+  }
+  return profile;
+}
+
 export async function investigatePublicSubject(query: string, type: string): Promise<SuspectProfile> {
   const capturedAt = new Date().toISOString();
 
@@ -1406,7 +1571,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     if (matchUsername === "new_suspect") {
       const profile = generateNewSuspectProfile(photoData, capturedAt);
       profile.faceScan = generateFaceScanResult(photoData, profile.realName);
-      return profile;
+      return withSearchIntel(profile);
     } else {
       // Overwrite search data
       const profile = await investigatePublicSubject(matchUsername, "username");
@@ -1425,7 +1590,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
         };
         profile.locations = [exifLocation, ...profile.locations];
       }
-      return profile;
+      return withSearchIntel(profile);
     }
   }
 
@@ -1434,13 +1599,13 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     const upi = await fetchUpiFootprint(query);
     const resolvedName = upi.truecaller.name || displayNameFromQuery(cleanQuery(query));
     const nameProfile = await investigatePublicSubject(resolvedName, "name");
-    return {
+    return withSearchIntel({
       ...nameProfile,
       phoneNumber: query,
       upiFootprint: upi,
       caseReference: `LIVE-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       capturedAt,
-    };
+    });
   }
 
   // Email second-hop username/name resolution
@@ -1448,13 +1613,13 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     const hibp = await fetchHibpBreaches(query);
     const usernamePart = query.split("@")[0] || "";
     const usernameProfile = await investigatePublicSubject(usernamePart, "username");
-    return {
+    return withSearchIntel({
       ...usernameProfile,
       emailAddress: query,
       hibpResult: hibp,
       caseReference: `LIVE-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       capturedAt,
-    };
+    });
   }
 
   const username = cleanQuery(query);
@@ -1509,11 +1674,11 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     .filter(({ probe, result }) => {
       if (!result.ok) return false;
       
-      // Strict verification for Tier 1 APIs
-      if (probe.platform === "github" && !github.account) return false;
-      if (probe.platform === "hackernews" && !hackerNews.account) return false;
-      if (probe.platform === "devto" && !devTo.account) return false;
-      if (probe.platform === "gitlab" && !gitLab.account) return false;
+      // Strict verification for Tier 1 APIs (allow fallback to HTTP probe if API is rate-limited but direct HTTP status is 200)
+      if (probe.platform === "github" && !github.account && result.status !== 200) return false;
+      if (probe.platform === "hackernews" && !hackerNews.account && result.status !== 200) return false;
+      if (probe.platform === "devto" && !devTo.account && result.status !== 200) return false;
+      if (probe.platform === "gitlab" && !gitLab.account && result.status !== 200) return false;
       if (probe.platform === "reddit" && redditPosts.length === 0) {
         const lowerTitle = result.title?.toLowerCase() || "";
         if (!lowerTitle.includes(username.toLowerCase())) return false;
@@ -1540,12 +1705,15 @@ export async function investigatePublicSubject(query: string, type: string): Pro
         }
       }
 
+      const resolvedUsername = result.verifiedUsername || normalized;
+      const resolvedProfileUrl = result.verifiedUrl || profileUrl;
+
       return {
-        id: `${probe.platform}-${normalized}-${index}`,
+        id: `${probe.platform}-${resolvedUsername}-${index}`,
         platform: probe.platform,
         tier: probe.tier,
-        username: normalized,
-        profileUrl,
+        username: resolvedUsername,
+        profileUrl: resolvedProfileUrl,
         displayName: richAccount?.displayName || result.title?.split("|")[0]?.trim().slice(0, 60) || `${probe.label} profile`,
         bio: richAccount?.bio || result.description || `Public ${probe.label} profile confirmed during live acquisition.`,
         profilePicUrl,
@@ -1553,12 +1721,12 @@ export async function investigatePublicSubject(query: string, type: string): Pro
         followers: richAccount?.followers ?? 0,
         creationDate: richAccount?.creationDate || new Date().toISOString().slice(0, 10),
         confidence: confidenceFor(probe.platform, username, result),
-        reason: `Live acquisition from ${profileUrl} → HTTP ${result.status || "?"}. ${probe.tier === 1 ? "Rich API data available." : "HTTP existence confirmed."}`,
+        reason: `Live acquisition from ${resolvedProfileUrl} → HTTP ${result.status || "?"}. ${richAccount ? "Rich API data available." : "HTTP existence confirmed."}`,
         capturedAt,
       };
     });
 
-  // Merge dynamically crawled accounts from Yahoo Search
+  // Merge dynamically crawled accounts from Google Search
   searchCrawled.accounts.forEach((crawled) => {
     const existsIdx = accounts.findIndex(
       (a) => a.platform === crawled.platform && a.username.toLowerCase() === crawled.username.toLowerCase()
@@ -1741,7 +1909,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
 
     // Only generate mock posts for verified demo accounts (exclude real user variants whose profiles are private)
     if ((isDemoUser(a.username) || isDemoUser(displayNameLower)) && !isPradhyutVal && !isMeghanaVal) {
-      let content = "Exploring new sights and coding away! 🌆☕️ #devlife #travel";
+      const content = "Exploring new sights and coding away! 🌆☕️ #devlife #travel";
       return {
         id: `instagram-post-${a.username || "user"}-${idx}`,
         platform: "instagram",
@@ -2214,7 +2382,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     });
   }
 
-  return {
+  return withSearchIntel({
     username: username ? `@${username}` : query,
     realName,
     phoneNumber: type === "phone" ? query : "Not provided",
@@ -2252,10 +2420,15 @@ export async function investigatePublicSubject(query: string, type: string): Pro
     ),
     caseReference: `LIVE-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
     capturedAt,
-    education: getDemoEducationAndExperience(username).education && getDemoEducationAndExperience(username).education!.length > 0 ? getDemoEducationAndExperience(username).education : searchCrawled.education,
-    experience: getDemoEducationAndExperience(username).experience && getDemoEducationAndExperience(username).experience!.length > 0 ? getDemoEducationAndExperience(username).experience : searchCrawled.experience,
+    education: getDemoEducationAndExperience(username).education && getDemoEducationAndExperience(username).education!.length > 0
+      ? getDemoEducationAndExperience(username).education
+      : (searchCrawled.education.length > 0 ? searchCrawled.education : undefined),
+    experience: getDemoEducationAndExperience(username).experience && getDemoEducationAndExperience(username).experience!.length > 0
+      ? getDemoEducationAndExperience(username).experience
+      : (searchCrawled.experience.length > 0 ? searchCrawled.experience : undefined),
+    hackathons: searchCrawled.hackathons.length > 0 ? searchCrawled.hackathons : undefined,
     resumeUrl: getDemoEducationAndExperience(username).resumeUrl || (accounts.find(a => a.platform === "linkedin")?.profileUrl ?? undefined),
-  };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2624,5 +2797,5 @@ export async function investigateMultiField(dossier: DossierInput): Promise<Susp
   // 8. Update case reference for dossier
   merged.caseReference = `DOSSIER-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-  return merged;
+  return withSearchIntel(merged);
 }

@@ -247,6 +247,7 @@ export interface SuspectProfile {
   shadowAccounts?: ShadowAccountResult[];
   cryptoTrace?: CryptoTraceResult;
   faceScan?: FaceScanMetadata | any;
+  domainIntel?: any;
   network: {
     nodes: NetworkNode[];
     links: NetworkLink[];
@@ -272,12 +273,21 @@ export interface SuspectProfile {
     institution: string;
     degree: string;
     period: string;
+    webEnriched?: boolean;
+    website?: string;
+    description?: string;
   }[];
   experience?: {
     role: string;
     company: string;
     period: string;
     details: string;
+  }[];
+  hackathons?: {
+    name: string;
+    result: string;
+    year: string;
+    source: string;
   }[];
   darkWebPastes?: {
     id: string;
@@ -288,7 +298,47 @@ export interface SuspectProfile {
     postedAt: string;
     riskTag: string;
   }[];
+  searchIntel?: SearchIntelBundle;
 }
+
+export interface SearchIntelQuery {
+  id: string;
+  label: string;
+  query: string;
+  category: string;
+  entityType: string;
+  notes?: string;
+}
+
+export interface SearchIntelResult {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  source: string;
+  matchedQueryIds: string[];
+  categories: string[];
+  confidence: "high" | "medium" | "low";
+  riskTags: string[];
+  origin: "seed" | "live";
+  executedAt: string;
+  metadata?: Record<string, any>;
+}
+
+export interface SearchIntelBundle {
+  entityType: string;
+  entityValue: string;
+  queries: SearchIntelQuery[];
+  results: SearchIntelResult[];
+  summary?: string;
+  notes?: string;
+  contextHints?: {
+    names: string[];
+    colleges: string[];
+    companies: string[];
+  };
+}
+
 
 export interface DossierInput {
   usernames: string[];
