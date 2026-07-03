@@ -40,7 +40,7 @@ export function buildMockProfile(query: string | DossierQuery): SuspectProfile {
       { id: "lr2", title: "FIR 214/2025 — IT Act §66D", court: "Cubbon Park PS", date: "2025-04-18", status: "Under Investigation", severity: "CRITICAL" },
     ],
     aliasResults: [
-      { alias: "shadowtrader_99", source: "Sherlock", confidence: 0.92 },
+      { alias: "shadowtrader_99", source: "Username Correlation Engine", confidence: 0.92 },
       { alias: "vik_signals", source: "WhatsMyName", confidence: 0.71 },
     ],
     upiFootprint: { handles: [`${username}@okhdfc`, `vikram.r@oksbi`], banks: ["HDFC", "SBI"], lastSeen: "2026-06-12" },
@@ -120,15 +120,6 @@ export const seedAlerts: AlertItem[] = [
   { id: "a7", title: "OSINT feed synced", details: "Pulled 2,418 records across 14 sources. No errors.", timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(), type: "info" },
   { id: "a8", title: "Wikidata entity match", details: "New entity Q1148290 (corporate director) matched to suspect Manish Naik with 0.74 confidence.", timestamp: new Date(Date.now() - 1000 * 60 * 320).toISOString(), type: "info" },
 ];
-
-export function riskColor(level: RiskLevel) {
-  switch (level) {
-    case "CRITICAL": return "bg-stamp text-primary-foreground";
-    case "HIGH": return "bg-stamp/90 text-primary-foreground";
-    case "MEDIUM": return "bg-warn text-ink";
-    case "LOW": return "bg-evidence/80 text-primary-foreground";
-  }
-}
 
 // ============ Seed dossiers for Case Directory ============
 

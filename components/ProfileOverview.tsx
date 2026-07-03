@@ -518,6 +518,130 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
 
       </div>
 
+      {/* ── Digital Footprint Dashboard ─────────────────────────────── */}
+      <DigitalFootprintDashboard suspect={suspect} />
+
+    </div>
+  );
+}
+
+// ─── Digital Footprint Dashboard ─────────────────────────────────────────────
+
+function clamp(v: number, min = 0, max = 100) { return Math.min(max, Math.max(min, Math.round(v))); }
+
+function barColor(score: number) {
+  if (score <= 30) return "#ef4444";   // red
+  if (score <= 60) return "#f59e0b";   // amber
+  return "#10b981";                     // green
+}
+
+function ScoreBar({ label, score, description }: { label: string; score: number; description: string }) {
+  const color = barColor(score);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1 text-xs font-mono">
+        <span className="text-slate-400 font-medium">{label}</span>
+        <span className="font-bold" style={{ color }}>{score}/100</span>
+      </div>
+      <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+        <div
+          className="h-full rounded-full transition-all duration-1000"
+          style={{ width: `${score}%`, backgroundColor: color }}
+        />
+      </div>
+      <p className="text-[9px] text-slate-600 mt-0.5 font-mono">{description}</p>
+    </div>
+  );
+}
+
+function DigitalFootprintDashboard({ suspect }: { suspect: import("../lib/types").SuspectProfile }) {
+  const accounts = suspect.accounts || [];
+  const posts    = suspect.posts    || [];
+
+  const liAcc  = accounts.find(a => a.platform === "linkedin");
+  const ghAcc  = accounts.find(a => a.platform === "github");
+  const ghIntel = (ghAcc as any)?.githubIntel as import("../lib/types").GithubIntelligence | undefined;
+
+  // 1. Professional Presence
+  const ghFollowers = ghIntel ? Math.min(ghIntel.followers / 500, 1) * 40 : 0;
+  const liFound     = liAcc ? 30 : 0;
+  const companyInfo = (ghIntel?.company || liAcc?.company) ? 30 : 0;
+  const professionalPresence = clamp(ghFollowers + liFound + companyInfo);
+
+  // 2. Open Source Presence
+  const repos = ghIntel?.publicRepos ?? 0;
+  const topStars = ghIntel?.topRepos?.reduce((s, r) => s + r.stars, 0) ?? 0;
+  const openSource = clamp(
+    Math.min(repos / 50, 1) * 50 +
+    Math.min(Math.log10(topStars + 1) / 4, 1) * 50
+  );
+
+  // 3. Social Presence
+  const TOTAL_PLATFORMS = 19; // matches PLATFORM_PROBES length
+  const socialPresence = clamp((accounts.length / TOTAL_PLATFORMS) * 100);
+
+  // 4. Identity Confidence — how many platforms agree on display name
+  const primaryName = (suspect.realName || "").toLowerCase().trim();
+  const matchCount  = accounts.filter(a =>
+    primaryName && (a.displayName || "").toLowerCase().includes(primaryName.split(" ")[0] || "")
+  ).length;
+  const identityConfidence = clamp(accounts.length > 0 ? (matchCount / accounts.length) * 100 : 0);
+
+  // 5. Public Exposure
+  const totalFollowers = accounts.reduce((s, a) => s + (a.followers ?? 0), 0);
+  const totalPosts     = posts.filter(p => p.platform !== "socmint").length;
+  const exposure = clamp(
+    Math.min(Math.log10(totalFollowers + 1) / 6, 1) * 70 +
+    Math.min(totalPosts / 30, 1) * 30
+  );
+
+  return (
+    <div className="glass-panel p-6 rounded-2xl border border-slate-800 mt-6">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+          <span className="text-cyan-400 font-bold text-[10px] font-mono">DF</span>
+        </div>
+        <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
+          Digital Footprint Dashboard
+        </h4>
+        <span className="ml-auto text-[9px] font-bold font-mono px-2 py-0.5 rounded border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
+          LIVE COMPUTED
+        </span>
+      </div>
+
+      <div className="space-y-4">
+        <ScoreBar
+          label="Professional Presence"
+          score={professionalPresence}
+          description={`GitHub followers · LinkedIn ${liFound > 0 ? 'found' : 'not found'} · Company info ${companyInfo > 0 ? 'available' : 'unavailable'}`}
+        />
+        <ScoreBar
+          label="Open Source Presence"
+          score={openSource}
+          description={`${repos} public repos · ${topStars.toLocaleString()} total stars on top repos`}
+        />
+        <ScoreBar
+          label="Social Presence"
+          score={socialPresence}
+          description={`${accounts.length} of ${TOTAL_PLATFORMS} platforms confirmed active`}
+        />
+        <ScoreBar
+          label="Identity Confidence"
+          score={identityConfidence}
+          description={`${matchCount} of ${accounts.length} platform names match primary identity`}
+        />
+        <ScoreBar
+          label="Public Exposure"
+          score={exposure}
+          description={`${totalFollowers.toLocaleString()} total followers · ${totalPosts} captured posts`}
+        />
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-slate-900 flex gap-4 text-[9px] font-mono text-slate-500">
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500" />0–30 Low</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500" />31–60 Medium</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />61–100 High</span>
+      </div>
     </div>
   );
 }

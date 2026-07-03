@@ -7,6 +7,7 @@
 
 import { DORK_TEMPLATES } from "./dorkTemplates";
 import type { SuspectProfile, SearchIntelQuery, SearchIntelResult, SearchIntelBundle } from "../types";
+import { fetchWithTimeout } from "../utils";
 
 // ── Helper functions ────────────────────────────────────────────────────────
 
@@ -31,18 +32,7 @@ function getSourceFromUrl(url: string): string {
   }
 }
 
-async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
-  }
-}
+
 
 // ── Query Dork Generation ───────────────────────────────────────────────────
 
@@ -301,30 +291,22 @@ export async function searchGoogleLive(
 ): Promise<SearchIntelResult[]> {
   const results: SearchIntelResult[] = [];
   try {
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(queryStr)}&num=10`;
-    const resp = await fetchWithTimeout(searchUrl, 5000);
+    const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(queryStr)}`;
+    const resp = await fetchWithTimeout(searchUrl, 5000, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
     if (!resp.ok) return [];
 
     const html = await resp.text();
-    // Split using the standard Google search results class format
-    const blocks = html.split(/<div[^>]*class="[^"]*(?<![a-zA-Z0-9-])g(?![a-zA-Z0-9-])[^"]*"/gi);
+    const blocks = html.split(/<li[^>]*class="[^"]*b_algo[^"]*"/gi);
 
     for (let i = 1; i < blocks.length; i++) {
       const block = blocks[i];
 
       // Find URL
-      const urlMatch = block.match(/href="(\/url\?[^"]+)"/i) || block.match(/href="(https?:\/\/[^"]+)"/i);
+      const urlMatch = block.match(/href="([^"]+)"/i);
       let decodedUrl = '';
       if (urlMatch) {
         const rawUrl = urlMatch[1];
-        if (rawUrl.startsWith('/url?')) {
-          const qMatch = rawUrl.match(/[?&]q=([^&"]+)/);
-          if (qMatch) {
-            try {
-              decodedUrl = decodeURIComponent(qMatch[1]);
-            } catch (e) {}
-          }
-        } else if (rawUrl.startsWith('http') && !rawUrl.includes('google.com')) {
+        if (!rawUrl.includes("bing.com/")) {
           decodedUrl = rawUrl;
         }
       }
@@ -332,20 +314,13 @@ export async function searchGoogleLive(
       if (!decodedUrl) continue;
 
       // Find Title
-      const h3Match = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
-      let title = '';
-      if (h3Match) {
-        title = h3Match[1].replace(/<[^>]+>/g, '').trim();
-      } else {
-        const firstAnchorText = block.match(/<a[^>]*>([\s\S]*?)<\/a>/i);
-        if (firstAnchorText) {
-          title = firstAnchorText[1].replace(/<[^>]+>/g, '').trim();
-        }
-      }
+      const h2Match = block.match(/<h2><a[^>]*>([\s\S]*?)<\/a>/i) || block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
+      let title = h2Match ? h2Match[1].replace(/<[^>]+>/g, '').trim() : 'Web Discovery Link';
       title = title || 'Web Discovery Link';
 
       // Find Snippet
-      const snippetMatch = block.match(/<div[^>]*class="[^"]*compText[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+      const snippetMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i) ||
+                           block.match(/<div[^>]*class="[^"]*compText[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
                            block.match(/<p[^>]*class="[^"]*(?:lh-16|fc-dustygray)[^"]*"[^>]*>([\s\S]*?)<\/p>/i) ||
                            block.match(/<span[^>]*class="[^"]*compDscr[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
       const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';

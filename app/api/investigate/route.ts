@@ -103,12 +103,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Query is required." }, { status: 400 });
     }
 
-    const profile = await investigatePublicSubject(query, type);
+    const githubToken = request.headers.get("x-github-token") || undefined;
+    const profile = await investigatePublicSubject(query, type, githubToken);
     return NextResponse.json({
       profile,
       acquiredAt: new Date().toISOString(),
       mode: "live-public-osint",
     });
+
   } catch (error) {
     return NextResponse.json(
       {

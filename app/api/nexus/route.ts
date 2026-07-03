@@ -18,12 +18,14 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.NVIDIA_API_KEY) {
       return NextResponse.json({
-        key_finding: "NVIDIA API key not configured. Unable to run background analysis.",
-        connected_signals: [],
-        anomalies: [],
-        investigator_priority: "Configure NVIDIA API key for live insights."
+        key_finding: profile?.nexusAnalysis?.key_finding || "NVIDIA API key not configured. Programmatic fallback completed.",
+        connected_signals: profile?.nexusAnalysis?.connected_signals || [],
+        anomalies: profile?.nexusAnalysis?.anomalies || [],
+        investigator_priority: profile?.nexusAnalysis?.investigator_priority || "Configure NVIDIA API key for live insights.",
+        investigator_brief: profile?.nexusAnalysis?.investigator_brief || "Factual brief generated programmatically."
       });
     }
+
 
     const evidenceContext = JSON.stringify(
       {
@@ -49,8 +51,11 @@ Return as JSON:
   "key_finding": "string",
   "connected_signals": [{"signal1": "string", "signal2": "string", "connection": "string"}],
   "anomalies": [{"description": "string", "severity": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"}],
-  "investigator_priority": "string"
+  "investigator_priority": "string",
+  "investigator_brief": "string (A detailed markdown brief under 250 words summarizing the investigation. Focus strictly on public evidence with sections: Investigation Overview, Evidence Collected, Evidence Correlation, Confidence Evolution, Risk Evolution, Modules Used, Remaining Unknowns, Recommended Next Steps. If info for a section is missing, state 'evidence insufficient'. Never fabricate missing details.)"
 }`;
+
+
 
     const response = await fetch(NVIDIA_URL, {
       method: "POST",
@@ -58,6 +63,7 @@ Return as JSON:
         Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
         "Content-Type": "application/json",
       },
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         model: NVIDIA_MODEL,
         temperature: 0.2,

@@ -1,4 +1,5 @@
 import { LegalRecord } from "../types";
+import { fetchWithTimeout } from "../utils";
 
 const RESULT_BLOCK_PATTERN = /<div\s+class=["']result["'][\s\S]*?<\/div>\s*<\/div>|<div\s+class=["']result["'][\s\S]*?<\/div>/gi;
 
@@ -67,7 +68,7 @@ export async function fetchIndianKanoon(name: string): Promise<LegalRecord[]> {
   const url = `https://indiankanoon.org/search/?formInput=${encodeURIComponent(name)}&pagenum=0`;
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, 6000, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; SOCMINT-Shield/1.0; Public-OSINT)",
         Accept: "text/html",

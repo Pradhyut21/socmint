@@ -36,13 +36,45 @@ export const storage = {
     if (typeof window !== "undefined") localStorage.setItem(KEYS.alerts, JSON.stringify(a));
   },
 
-  getAudit(): { id: string; ts: string; action: string; detail?: string }[] {
+  getAudit(): any[] {
     return safe(() => JSON.parse(localStorage.getItem(KEYS.audit) || "[]"), []);
   },
   pushAudit(action: string, detail?: string) {
     if (typeof window === "undefined") return;
     const list = storage.getAudit();
     list.unshift({ id: crypto.randomUUID(), ts: new Date().toISOString(), action, detail });
+    localStorage.setItem(KEYS.audit, JSON.stringify(list.slice(0, 200)));
+  },
+  pushExtendedAudit(params: {
+    action: string;
+    caseId: string;
+    investigationTarget: string;
+    searchType: string;
+    platformsQueried: string[];
+    evidenceCount: number;
+    reportGenerated: boolean;
+    durationMs: number;
+    detail?: string;
+  }) {
+    if (typeof window === "undefined") return;
+    const analyst = storage.getAnalyst();
+    const list = storage.getAudit();
+    const entry: any = {
+      id: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      action: params.action,
+      detail: params.detail,
+      officer: analyst,
+      caseId: params.caseId,
+      investigationTarget: params.investigationTarget,
+      searchType: params.searchType,
+      platformsQueried: params.platformsQueried,
+      evidenceCount: params.evidenceCount,
+      reportGenerated: params.reportGenerated,
+      durationMs: params.durationMs,
+    };
+    list.unshift(entry);
     localStorage.setItem(KEYS.audit, JSON.stringify(list.slice(0, 200)));
   },
 

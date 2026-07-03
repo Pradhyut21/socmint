@@ -6,7 +6,7 @@
  * real OSINT logic from demo data.
  */
 
-import { PlatformAccount, Post, LegalRecord, SuspectProfile } from "../types";
+import { PlatformAccount, Post, LegalRecord, SuspectProfile, LinkedinIntelligence, ForensicField } from "../types";
 
 // ── Demo user detection ───────────────────────────────────────────────
 
@@ -771,4 +771,100 @@ export function getDemoEducationAndExperience(username: string): {
   }
 
   return {};
+}
+
+export function getDemoLinkedinData(username: string): LinkedinIntelligence | null {
+  const lower = username.toLowerCase();
+  const isPradhyut = isPradhyutVariant(lower) || lower.includes("pradhyuth-kuruvadi") || lower.includes("pradhyut21");
+  const isMeghana = isMeghanaVariant(lower) || lower.includes("meghana-kuruvadi") || lower.includes("meghana_kuruvadi");
+  const isShadow = lower.includes("shadowtrader99") || lower.includes("vikram");
+  const isSneha = lower.includes("sneha") || lower.includes("kulkarni");
+
+  if (!isPradhyut && !isMeghana && !isShadow && !isSneha) {
+    return null;
+  }
+
+  let fullName = "";
+  let headline = "";
+  let bio = "";
+  let avatarUrl = "";
+  let followers = 0;
+  let creationDate = "";
+  let profileUrl = "";
+
+  if (isPradhyut) {
+    fullName = "Pradhyuth Kuruvadi";
+    headline = "Software Engineer. Full stack development, hackathons, and open source.";
+    bio = headline;
+    avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200";
+    followers = 500;
+    creationDate = "2021-08-15";
+    profileUrl = "https://www.linkedin.com/in/pradhyuth-kuruvadi";
+  } else if (isMeghana) {
+    fullName = "K M Meghana";
+    headline = "Information Science Student at BMS College of Engineering, Bengaluru. Software engineering enthusiast.";
+    bio = headline;
+    avatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200";
+    followers = 320;
+    creationDate = "2021-09-10";
+    profileUrl = "https://www.linkedin.com/in/meghana-kuruvadi";
+  } else if (isShadow) {
+    fullName = "Vikram Rathore";
+    headline = "Blockchain developer & DeFi researcher. Speaker at local meetups. Ex-Fintech contractor.";
+    bio = headline;
+    avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200";
+    followers = 780;
+    creationDate = "2020-04-12";
+    profileUrl = "https://www.linkedin.com/in/vikram-rathore";
+  } else if (isSneha) {
+    fullName = "Sneha Kulkarni";
+    headline = "Risk Analyst & Cryptography enthusiast. DevFest Mumbai Sep 2025 participant. Working on secure payment systems.";
+    bio = headline;
+    avatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200";
+    followers = 410;
+    creationDate = "2022-06-18";
+    profileUrl = "https://www.linkedin.com/in/sneha-kulkarni";
+  }
+
+  const demoEduAndExp = getDemoEducationAndExperience(username);
+  
+  const source = "LinkedIn Intelligence Engine (Demo)";
+  const method = "AUTHENTICATED_SESSION";
+  const confidence = 100;
+  const status = "VERIFIED";
+
+  const wrap = <T>(val: T): ForensicField<T> => ({
+    value: val,
+    source,
+    acquisitionMethod: method,
+    confidence,
+    verificationStatus: status,
+  });
+
+  const experiences = (demoEduAndExp.experience || []).map(exp => ({
+    title: wrap(exp.role),
+    company: wrap(exp.company),
+    description: wrap(exp.details),
+    duration: wrap(exp.period),
+  }));
+
+  const educations = (demoEduAndExp.education || []).map(edu => ({
+    institution: wrap(edu.institution),
+    degree: wrap(edu.degree),
+    duration: wrap(edu.period),
+  }));
+
+  return {
+    fullName: wrap(fullName),
+    headline: wrap(headline),
+    location: wrap("Bengaluru, Karnataka, India"),
+    avatarUrl: wrap(avatarUrl),
+    profileUrl: wrap(profileUrl),
+    currentRole: experiences[0] ? experiences[0].title : undefined,
+    currentCompany: experiences[0] ? experiences[0].company : undefined,
+    summary: wrap(bio),
+    experiences,
+    educations,
+    skills: [wrap("Full-Stack Development"), wrap("TypeScript"), wrap("React"), wrap("REST APIs")],
+  };
 }

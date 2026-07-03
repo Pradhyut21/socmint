@@ -1,4 +1,5 @@
 import { UpiFootprint } from "../types";
+import { fetchWithTimeout } from "../utils";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs";
@@ -48,7 +49,7 @@ export async function fetchUpiFootprint(phone: string): Promise<UpiFootprint> {
     // 2. Query Truecaller API directly if installationId is resolved
     if (installationId) {
       const url = `https://search5-noneu.truecaller.com/v2/search?q=${normalized}&countryCode=${countryCode}&type=4&locAddr=&placement=SEARCHRESULTS,HISTORY,DETAILS&encoding=json`;
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, 6000, {
         headers: {
           "content-type": "application/json; charset=UTF-8",
           "accept-encoding": "gzip",

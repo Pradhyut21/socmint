@@ -72,16 +72,53 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
   const getUniquePlatforms = () => {
     const platforms = new Set<string>();
     (suspect.posts || []).forEach((p) => platforms.add(p.platform));
+    if (suspect.reasoningSteps && suspect.reasoningSteps.length > 0) {
+      platforms.add("Shield Engine");
+    }
     return Array.from(platforms);
   };
 
-  // Filter posts based on UI controls
-  const filteredPosts = (suspect.posts || []).filter((post) => {
-    const matchesPlatform = filterPlatform === "all" || post.platform === filterPlatform;
-    const matchesRisk = filterRisk === "all" || post.flagLevel === filterRisk;
+  // Merge posts and investigation steps into a single chronological timeline (Feature 6)
+  const timelineItems = [
+    ...(suspect.posts || []).map(p => ({
+      type: "post",
+      id: p.id,
+      platform: p.platform,
+      postedAt: p.postedAt || p.timestamp || suspect.capturedAt,
+      content: p.content,
+      locationName: p.locationName,
+      geolat: p.geolat,
+      geolng: p.geolng,
+      flagLevel: p.flagLevel,
+      flagReason: p.flagReason,
+      capturedAt: p.capturedAt
+    })),
+    ...(suspect.reasoningSteps || []).map((step, idx) => {
+      const datePart = suspect.capturedAt ? suspect.capturedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const isoTime = `${datePart}T${step.timestamp}.000Z`;
+      return {
+        type: "investigation",
+        id: `step-${idx}-${step.timestamp}`,
+        platform: "Shield Engine",
+        postedAt: isoTime,
+        content: `[RECONSTRUCTION ENGINE] Engaged: ${step.module}\nInput Vector: "${step.input}"\nOutput Result: "${step.output}"\nDuration: ${step.durationMs}ms\nConfidence Delta: +${step.confidenceDelta}%`,
+        locationName: undefined,
+        geolat: undefined,
+        geolng: undefined,
+        flagLevel: step.confidenceDelta > 0 ? "SUSPICIOUS" : "NORMAL",
+        flagReason: `Confidence increased: "${step.evidenceGenerated}"`,
+        capturedAt: isoTime
+      };
+    })
+  ].sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+
+  // Filter items based on UI controls
+  const filteredItems = timelineItems.filter((item) => {
+    const matchesPlatform = filterPlatform === "all" || item.platform.toLowerCase() === filterPlatform.toLowerCase();
+    const matchesRisk = filterRisk === "all" || item.flagLevel === filterRisk;
     const matchesSearch = searchQuery.trim() === "" || 
-      post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (post.locationName && post.locationName.toLowerCase().includes(searchQuery.toLowerCase()));
+      item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.locationName && item.locationName.toLowerCase().includes(searchQuery.toLowerCase()));
     
     return matchesPlatform && matchesRisk && matchesSearch;
   });
@@ -141,36 +178,48 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
       </div>
 
       {/* Timeline List */}
-      {(suspect.posts || []).length === 0 ? (
+      {timelineItems.length === 0 ? (
         <div className="glass-panel p-12 text-center rounded-2xl border border-slate-200 shadow-sm font-mono">
           <Clock className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-          <p className="text-sm text-slate-700">No public posts registered for this suspect profile.</p>
+          <p className="text-sm text-slate-700">No public events or posts registered for this suspect profile.</p>
         </div>
-      ) : filteredPosts.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="glass-panel p-12 text-center rounded-2xl border border-slate-200 shadow-sm font-mono">
           <Clock className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-          <p className="text-sm text-slate-700">No public posts matched the active filters.</p>
+          <p className="text-sm text-slate-700">No events matched the active filters.</p>
         </div>
       ) : (
         <div className="relative border-l-2 border-slate-200 pl-6 ml-4 space-y-6">
-          {filteredPosts.map((post) => (
+          {filteredItems.map((post) => (
             <div key={post.id} className="relative group">
               
               {/* Timeline marker node dot */}
-              <div className="absolute -left-[33px] top-1.5 w-4 h-4 rounded-full bg-white border-2 border-blue-600 flex items-center justify-center shadow-md group-hover:border-cyan-500 transition-colors"></div>
+              <div className={`absolute -left-[33px] top-1.5 w-4 h-4 rounded-full bg-white border-2 flex items-center justify-center shadow-md transition-colors ${
+                post.type === "investigation"
+                  ? "border-purple-650 group-hover:border-purple-500"
+                  : "border-blue-600 group-hover:border-cyan-500"
+              }`}></div>
 
               {/* Timeline content card */}
-              <div className="glass-panel p-5 rounded-2xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all">
+              <div className={`glass-panel p-5 rounded-2xl border shadow-sm transition-all ${
+                post.type === "investigation"
+                  ? "border-purple-200 hover:border-purple-300 bg-purple-50/10"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}>
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                   
                   {/* Platform & timestamp */}
                   <div className="flex items-center gap-2.5">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide ${getPlatformColor(post.platform)}`}>
-                      {getPlatformIcon(post.platform)} {post.platform.toUpperCase()}
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide ${
+                      post.type === "investigation"
+                        ? "bg-purple-100 text-purple-750 border border-purple-200"
+                        : getPlatformColor(post.platform)
+                    }`}>
+                      {post.type === "investigation" ? "🔍" : getPlatformIcon(post.platform)} {post.platform.toUpperCase()}
                     </span>
                     <span className="text-[10px] text-slate-600 font-mono flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
-                      {formatTimestamp(post.postedAt || post.timestamp)}
+                      {formatTimestamp(post.postedAt)}
                     </span>
                   </div>
 
@@ -200,22 +249,26 @@ export default function TimelineView({ suspect }: TimelineViewProps) {
                       ? "bg-rose-50 border-rose-200 text-rose-800"
                       : "bg-amber-50 border border-amber-200 text-amber-800"
                   }`}>
-                    <span className="font-bold uppercase mr-1">AI Risk Reasoning:</span>
+                    <span className="font-bold uppercase mr-1">
+                      {post.type === "investigation" ? "Engine Details:" : "AI Risk Reasoning:"}
+                    </span>
                     {post.flagReason}
                   </div>
                 )}
 
                 <div className="mt-4 pt-3 border-t border-slate-100 text-right">
                   <span className="text-[9px] text-slate-500 font-mono">
-                    Captured at {new Date(post.capturedAt || suspect.capturedAt).toLocaleTimeString("en-IN")} IST from public source
+                    Captured at {new Date(post.capturedAt || suspect.capturedAt || new Date().toISOString()).toLocaleTimeString("en-IN")} IST from public source
                   </span>
                 </div>
+
 
               </div>
             </div>
           ))}
         </div>
       )}
+
 
     </div>
   );

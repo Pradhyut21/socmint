@@ -9,7 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { storage } from "@/lib/storage";
-import { riskColor, buildSeedRecents } from "@/lib/mock-data";
+import { riskColor } from "@/lib/utils";
+import { buildSeedRecents } from "@/lib/mock-data";
 import type { SuspectProfile } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 

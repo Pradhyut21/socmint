@@ -261,6 +261,73 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
           </tbody>
         </table>
 
+        {/* LinkedIn Professional History & Credentials */}
+        {(() => {
+          const linkedinAcc = suspect.accounts.find(a => a.platform === "linkedin" && a.linkedinIntel);
+          if (!linkedinAcc || !linkedinAcc.linkedinIntel) return null;
+          const intel = linkedinAcc.linkedinIntel;
+          return (
+            <div style={{ pageBreakInside: "avoid" }}>
+              <h4 style={{ fontSize: "14px", borderBottom: "1px solid #333", paddingBottom: "3px", margin: "20px 0 10px 0" }}>LinkedIn Professional History & Credentials</h4>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", marginBottom: "15px" }}>
+                <tbody>
+                  {intel.fullName?.value && (
+                    <tr>
+                      <td style={{ padding: "5px", border: "1px solid #ddd", fontWeight: "bold", width: "25%" }}>Full Name</td>
+                      <td style={{ padding: "5px", border: "1px solid #ddd" }}>{intel.fullName.value} (Source: {intel.fullName.source})</td>
+                    </tr>
+                  )}
+                  {intel.headline?.value && (
+                    <tr>
+                      <td style={{ padding: "5px", border: "1px solid #ddd", fontWeight: "bold" }}>Headline</td>
+                      <td style={{ padding: "5px", border: "1px solid #ddd" }}>{intel.headline.value}</td>
+                    </tr>
+                  )}
+                  {intel.location?.value && (
+                    <tr>
+                      <td style={{ padding: "5px", border: "1px solid #ddd", fontWeight: "bold" }}>Location</td>
+                      <td style={{ padding: "5px", border: "1px solid #ddd" }}>{intel.location.value}</td>
+                    </tr>
+                  )}
+                  {intel.summary?.value && (
+                    <tr>
+                      <td style={{ padding: "5px", border: "1px solid #ddd", fontWeight: "bold" }}>Summary</td>
+                      <td style={{ padding: "5px", border: "1px solid #ddd", fontStyle: "italic" }}>{intel.summary.value}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {intel.experiences && intel.experiences.length > 0 && (
+                <div style={{ marginBottom: "15px" }}>
+                  <strong style={{ fontSize: "11px", display: "block", marginBottom: "5px" }}>Employment History:</strong>
+                  {intel.experiences.map((exp, idx) => (
+                    <div key={idx} style={{ fontSize: "10px", padding: "4px 0", borderBottom: "1px dashed #eee" }}>
+                      • <strong>{exp.title.value}</strong> at <strong>{exp.company.value}</strong> 
+                      {exp.duration?.value ? ` (${exp.duration.value})` : ""}
+                      {exp.description?.value ? <div style={{ color: "#555", marginTop: "2px", paddingLeft: "10px" }}>{exp.description.value}</div> : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {intel.educations && intel.educations.length > 0 && (
+                <div style={{ marginBottom: "15px" }}>
+                  <strong style={{ fontSize: "11px", display: "block", marginBottom: "5px" }}>Education History:</strong>
+                  {intel.educations.map((edu, idx) => (
+                    <div key={idx} style={{ fontSize: "10px", padding: "4px 0", borderBottom: "1px dashed #eee" }}>
+                      • <strong>{edu.institution.value}</strong> 
+                      {edu.degree?.value && edu.degree.value !== "Degree" ? ` - ${edu.degree.value}` : ""}
+                      {edu.fieldOfStudy?.value ? ` in ${edu.fieldOfStudy.value}` : ""}
+                      {edu.duration?.value ? ` (${edu.duration.value})` : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <h4 style={{ fontSize: "14px", borderBottom: "1px solid #333", paddingBottom: "3px", margin: "20px 0 10px 0" }}>Flagged Content Activity Feed (Top Posts)</h4>
         <div style={{ fontSize: "11px", marginBottom: "20px" }}>
           {suspect.posts.filter(p => p.flagLevel !== "NORMAL").map((post, index) => (
@@ -324,6 +391,58 @@ export default function EvidencePackage({ suspect }: EvidencePackageProps) {
             </div>
           )) : (
             <div>No public legal records associated with this subject.</div>
+          )}
+        </div>
+
+        {/* OSINT Toolkit Summary */}
+        <h4 style={{ fontSize: "14px", borderBottom: "1px solid #333", paddingBottom: "3px", margin: "20px 0 10px 0" }}>OSINT Toolkit Summary</h4>
+        <div style={{ fontSize: "11px", marginBottom: "20px" }}>
+          {suspect.toolkitFindings && suspect.toolkitFindings.length > 0 ? (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+              <thead>
+                <tr style={{ background: "#f5f5f5" }}>
+                  <th style={{ padding: "5px", border: "1px solid #ddd", textAlign: "left" }}>Category</th>
+                  <th style={{ padding: "5px", border: "1px solid #ddd", textAlign: "left" }}>Finding</th>
+                  <th style={{ padding: "5px", border: "1px solid #ddd", textAlign: "left" }}>Source/Provider</th>
+                  <th style={{ padding: "5px", border: "1px solid #ddd", textAlign: "left" }}>Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {suspect.toolkitFindings.map((finding, index) => (
+                  <tr key={index}>
+                    <td style={{ padding: "5px", border: "1px solid #ddd", textTransform: "uppercase", fontWeight: "bold" }}>{finding.category}</td>
+                    <td style={{ padding: "5px", border: "1px solid #ddd" }}>
+                      <strong>{finding.title}</strong>: {finding.description}
+                      {finding.url && <div style={{ fontSize: "9px", color: "#3b82f6" }}>{finding.url}</div>}
+                    </td>
+                    <td style={{ padding: "5px", border: "1px solid #ddd", textTransform: "uppercase" }}>{finding.source} ({finding.provider})</td>
+                    <td style={{ padding: "5px", border: "1px solid #ddd", fontWeight: "bold" }}>{Math.round(finding.confidence * 100)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div>No supplementary OSINT toolkit findings recorded.</div>
+          )}
+        </div>
+
+        {/* External Intelligence (Epieos Findings) */}
+        <h4 style={{ fontSize: "14px", borderBottom: "1px solid #333", paddingBottom: "3px", margin: "20px 0 10px 0" }}>External Intelligence — Epieos Findings</h4>
+        <div style={{ fontSize: "11px", marginBottom: "20px" }}>
+          {suspect.toolkitFindings && suspect.toolkitFindings.some(f => f.provider.toLowerCase() === "epieos") ? (
+            <div style={{ padding: "4px 0" }}>
+              {suspect.toolkitFindings
+                .filter(f => f.provider.toLowerCase() === "epieos")
+                .map((finding, idx) => (
+                  <div key={idx} style={{ borderBottom: "1px solid #eee", padding: "8px 0" }}>
+                    <strong>[Imported Record {idx + 1}] {finding.title}</strong> (Confidence: {Math.round(finding.confidence * 100)}%)<br />
+                    <span style={{ color: "#333" }}>{finding.description}</span><br />
+                    {finding.url && <span style={{ color: "#3b82f6", fontSize: "9px" }}>Profile URL: {finding.url}</span>}
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <div>No external intelligence findings imported from Epieos.</div>
           )}
         </div>
 

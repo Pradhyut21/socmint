@@ -14,6 +14,7 @@ import {
   X,
   Lock,
   UserCog,
+  Terminal,
 } from "lucide-react";
 
 import { storage } from "@/lib/storage";
@@ -26,6 +27,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 const NAV = [
   { href: "/", label: "Investigate Sweep", icon: Search, exact: true },
+  { href: "/toolkit", label: "OSINT Toolkit", icon: Terminal },
   { href: "/alerts", label: "Alerts Center", icon: Bell },
   { href: "/cases", label: "Case Directory", icon: FolderClosed },
   { href: "/compliance", label: "Legal Compliance", icon: ScrollText },

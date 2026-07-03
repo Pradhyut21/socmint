@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { storage } from "@/lib/storage";
-import { riskColor } from "@/lib/mock-data";
+import { printDossier } from "@/lib/export/pdfExport";
+import { riskColor } from "@/lib/utils";
 import type { SuspectProfile, DossierInput, EvidenceArtifact, ContentRiskResult } from "@/lib/types";
 import { SuspectTabs } from "@/components/suspect/SuspectTabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -45,7 +46,7 @@ const SEARCH_TYPES = [
 const SWEEP_STAGES = [
   "Initializing SOCMINT Shield v2 Engine...",
   "Resolving identity across 20 OSINT sources...",
-  "Querying Sherlock & WhatsMyName platform logs...",
+  "Querying Username Correlation Engine & Platform Discovery logs...",
   "Scanning HIBP & Intelligence X breach corpus...",
   "Tracing UPI footprints & Truecaller circle data...",
   "Analyzing blockchain ledger history (sanctions scan)...",
@@ -73,8 +74,21 @@ export default function InvestigatePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("overview");
 
+  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [githubTokenInput, setGithubTokenInput] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setGithubTokenInput(localStorage.getItem("github_token_override") || "");
+    }
+  }, []);
+
   // Lifted Search Form States (so they are preserved when user clicks Modify query)
   const [advanced, setAdvanced] = useState(true);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkResults, setBulkResults] = useState<any[] | null>(null);
+
   const [type, setType] = useState<(typeof SEARCH_TYPES)[number]["value"]>("username");
   const [query, setQuery] = useState("");
   const [dossierUsernames, setDossierUsernames] = useState<string[]>([""]);
@@ -88,6 +102,19 @@ export default function InvestigatePage() {
   const [manualSearchResults, setManualSearchResults] = useState<EvidenceArtifact[]>([]);
   const [hasRunManualSearch, setHasRunManualSearch] = useState(false);
   const [showStandaloneIngest, setShowStandaloneIngest] = useState(false);
+
+  // Compute platform health statuses dynamically
+  const recents = storage.getRecent();
+  const lastSuspect = recents[0];
+  const platformStatuses = suspect?.platformStatuses || lastSuspect?.platformStatuses || [
+    { name: "GitHub API", status: "Online", responseTimeMs: 140 },
+    { name: "Reddit API", status: "Online", responseTimeMs: 220 },
+    { name: "GitLab", status: "Online", responseTimeMs: 110 },
+    { name: "LinkedIn", status: "Online", responseTimeMs: 380 },
+    { name: "Instagram", status: "Online", responseTimeMs: 440 },
+    { name: "Google Search", status: "Online", responseTimeMs: 290 },
+  ];
+
 
   const refreshManualPosts = () => {
     const all = getAllArtifacts().filter(a => a.provenance === "manual_ingest");
@@ -120,6 +147,87 @@ export default function InvestigatePage() {
     }
   }, [caseRef]);
 
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          const formatted = lines.map(l => {
+            const parts = l.split(/[,;\t]/).map(p => p.replace(/^["']|["']$/g, "").trim());
+            if (parts[0]) {
+              return `${parts[0]},${parts[1] || "username"}`;
+            }
+            return "";
+          }).filter(Boolean).join("\n");
+          setBulkInput(formatted);
+          toast.success("CSV file loaded", {
+            description: `Loaded ${lines.length} potential targets.`,
+          });
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const runBulkSweep = async () => {
+    if (!bulkInput.trim()) return;
+    setError(null);
+    setLoading(true);
+    setBulkResults(null);
+
+    const lines = bulkInput.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    const items = lines.map(line => {
+      const parts = line.split(",");
+      const query = parts[0]?.trim() || "";
+      let type = parts[1]?.trim()?.toLowerCase() || "username";
+      if (!["username", "name", "email", "phone", "crypto", "domain"].includes(type)) {
+        type = "username";
+      }
+      return { query, type };
+    }).filter(item => item.query.length > 0);
+
+    if (items.length === 0) {
+      toast.error("No valid targets parsed", {
+        description: "Please check your formatting: target,type",
+      });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const tokenOverride = typeof window !== "undefined" ? localStorage.getItem("github_token_override") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (tokenOverride) {
+        headers["x-github-token"] = tokenOverride;
+      }
+
+      const response = await fetch("/api/investigate/bulk", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ items }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Bulk sweep failed.");
+      }
+
+      setBulkResults(data.results);
+      toast.success("Bulk Sweep completed", {
+        description: `Successfully audited ${data.successCount} of ${data.totalProcessed} targets.`,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown bulk error";
+      setError(msg);
+      toast.error("Bulk sweep failed", { description: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Execute real API investigation
   const runSweep = async (queryVal: string, typeVal: string, dossier?: DossierInput) => {
     setError(null);
@@ -129,7 +237,8 @@ export default function InvestigatePage() {
     const label = typeVal === "dossier" && dossier 
       ? [dossier.usernames[0], dossier.realName, dossier.email].filter(Boolean).join(", ")
       : queryVal;
-    storage.pushAudit("INVESTIGATE", label);
+
+    const startTime = Date.now();
 
     if (typeVal === "manual_post") {
       // Local search over manual posts
@@ -153,6 +262,20 @@ export default function InvestigatePage() {
         });
         setManualSearchResults(matches);
         setHasRunManualSearch(true);
+
+        const durationMs = Date.now() - startTime;
+        storage.pushExtendedAudit({
+          action: "INVESTIGATE",
+          caseId: "MANUAL-SEARCH",
+          investigationTarget: label,
+          searchType: typeVal,
+          platformsQueried: ["Local Storage"],
+          evidenceCount: matches.length,
+          reportGenerated: false,
+          durationMs,
+          detail: `Manual post search completed for "${label}" in ${durationMs}ms.`
+        });
+
         toast.success("Manual post search complete", {
           description: `Found ${matches.length} matching evidence item(s).`
         });
@@ -171,11 +294,18 @@ export default function InvestigatePage() {
         requestBody.dossier = dossier;
       }
 
+      const tokenOverride = typeof window !== "undefined" ? localStorage.getItem("github_token_override") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (tokenOverride) {
+        headers["x-github-token"] = tokenOverride;
+      }
+
       const response = await fetch("/api/investigate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(requestBody),
       });
+
 
       const data = await response.json();
       if (!response.ok) {
@@ -184,7 +314,40 @@ export default function InvestigatePage() {
 
       const profile = data.profile as SuspectProfile;
       setSuspect(profile);
+
+      // ── Duplicate case detection ──────────────────────────────────────
+      const existingCases = storage.getRecent();
+      const duplicate = existingCases.find(c =>
+        c.caseReference !== profile.caseReference && (
+          (profile.username && c.username?.toLowerCase() === profile.username?.toLowerCase()) ||
+          (profile.emailAddress && profile.emailAddress !== "Not provided" && c.emailAddress === profile.emailAddress) ||
+          (profile.phoneNumber  && profile.phoneNumber  !== "Not provided" && c.phoneNumber  === profile.phoneNumber)
+        )
+      );
+      if (duplicate) {
+        toast.warning("Possible duplicate case detected", {
+          description: `This target matches an existing case: ${duplicate.caseReference} (${duplicate.realName}). Review before proceeding.`,
+          duration: 8000,
+        });
+      }
+
       storage.pushRecent(profile);
+
+      const durationMs = Date.now() - startTime;
+      const platformsQueried = profile.platformStatuses?.map(s => s.name) || [];
+      const evidenceCount = profile.evidenceReliability?.length || 0;
+      storage.pushExtendedAudit({
+        action: "INVESTIGATE",
+        caseId: profile.caseReference,
+        investigationTarget: label,
+        searchType: typeVal,
+        platformsQueried,
+        evidenceCount,
+        reportGenerated: false,
+        durationMs,
+        detail: `OSINT Sweep completed for target "${label}" in ${durationMs}ms.`
+      });
+
       toast.success("OSINT Sweep complete", { 
         description: `${profile.realName} · ${profile.riskLevel} · ${profile.caseReference}` 
       });
@@ -266,68 +429,182 @@ export default function InvestigatePage() {
                 </CardContent>
               </Card>
             ) : (
-              <>
-                <SearchForm 
-                  onSearch={runSweep} 
-                  error={error} 
-                  onDismissError={() => setError(null)}
-                  advanced={advanced}
-                  setAdvanced={setAdvanced}
-                  type={type}
-                  setType={setType}
-                  query={query}
-                  setQuery={setQuery}
-                  dossierUsernames={dossierUsernames}
-                  setDossierUsernames={setDossierUsernames}
-                  dossierRealName={dossierRealName}
-                  setDossierRealName={setDossierRealName}
-                  dossierEmail={dossierEmail}
-                  setDossierEmail={setDossierEmail}
-                  dossierPhone={dossierPhone}
-                  setDossierPhone={setDossierPhone}
-                  dossierFaceData={dossierFaceData}
-                  setDossierFaceData={setDossierFaceData}
-                />
+              <div className="grid gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-6">
+                  <SearchForm 
+                    onSearch={runSweep} 
+                    error={error} 
+                    onDismissError={() => setError(null)}
+                    advanced={advanced}
+                    setAdvanced={setAdvanced}
+                    type={type}
+                    setType={setType}
+                    showApiSettings={showApiSettings}
+                    setShowApiSettings={setShowApiSettings}
+                    githubTokenInput={githubTokenInput}
+                    setGithubTokenInput={setGithubTokenInput}
+                    query={query}
 
-                {/* Standalone / Unassociated Manual Posts */}
-                <Card className="border-border shadow-sm">
-                  <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <div>
-                      <CardTitle className="font-display text-lg flex items-center gap-2">
-                        <FilePlus className="h-5 w-5 text-emerald-650" /> Standalone Manual Posts
-                      </CardTitle>
-                      <CardDescription className="text-xs font-mono">
-                        Active manual posts under analysis not associated with any active suspects.
-                      </CardDescription>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setShowStandaloneIngest(true)}
-                      className="gap-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
-                    >
-                      <Plus className="h-4 w-4" /> Ingest Standalone Post
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    {allManualPosts.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 bg-slate-50/50 font-mono">
-                        No standalone manual posts. Click "Ingest Standalone Post" to analyze a standalone post.
-                      </div>
-                    ) : (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {allManualPosts.map((art) => (
-                          <EvidenceArtifactCard key={art.id} artifact={art} onRemove={(id) => {
-                            removeArtifact(id);
-                            setAllManualPosts(prev => prev.filter(a => a.id !== id));
-                            toast.info("Evidence artifact removed.");
-                          }} />
-                        ))}
-                      </div>
+                      setQuery={setQuery}
+                      dossierUsernames={dossierUsernames}
+                      setDossierUsernames={setDossierUsernames}
+                      dossierRealName={dossierRealName}
+                      setDossierRealName={setDossierRealName}
+                      dossierEmail={dossierEmail}
+                      setDossierEmail={setDossierEmail}
+                      dossierPhone={dossierPhone}
+                      setDossierPhone={setDossierPhone}
+                      dossierFaceData={dossierFaceData}
+                      setDossierFaceData={setDossierFaceData}
+                      bulkMode={bulkMode}
+                      setBulkMode={setBulkMode}
+                      bulkInput={bulkInput}
+                      setBulkInput={setBulkInput}
+                      runBulkSweep={runBulkSweep}
+                      handleCsvUpload={handleCsvUpload}
+                    />
+
+                    {/* Bulk Triage Results */}
+                    {bulkResults && (
+                      <Card className="border-border shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-3">
+                          <div>
+                            <CardTitle className="font-display text-lg flex items-center gap-2">
+                              <Sparkles className="h-5 w-5 text-evidence" /> Bulk Investigation Results
+                            </CardTitle>
+                            <CardDescription className="text-xs font-mono">
+                              Summary of parallel OSINT triage. Click "Load Case" to view full recursive reconstruction.
+                            </CardDescription>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => setBulkResults(null)}>
+                            Clear Results
+                          </Button>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="w-full text-left border-collapse text-xs font-mono">
+                              <thead>
+                                <tr className="bg-slate-50 text-slate-650 border-b border-slate-200 font-bold uppercase text-[9px] tracking-wider">
+                                  <th className="p-3">Target</th>
+                                  <th className="p-3">Type</th>
+                                  <th className="p-3">Status</th>
+                                  <th className="p-3">Risk Level</th>
+                                  <th className="p-3">Accounts</th>
+                                  <th className="p-3">Case ID</th>
+                                  <th className="p-3 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {bulkResults.map((res, idx) => {
+                                  const isErr = res.status === "error";
+                                  return (
+                                    <tr key={idx} className="hover:bg-slate-50/50">
+                                      <td className="p-3 font-semibold text-slate-800 break-all select-all">{res.query}</td>
+                                      <td className="p-3 text-slate-500 uppercase">{res.type}</td>
+                                      <td className="p-3">
+                                        {isErr ? (
+                                          <span className="text-rose-600 font-bold">❌ FAILED</span>
+                                        ) : (
+                                          <span className="text-emerald-650 font-bold">✓ SUCCESS</span>
+                                        )}
+                                      </td>
+                                      <td className="p-3">
+                                        {!isErr && res.riskLevel ? (
+                                          <Badge className={`${riskColor(res.riskLevel)} text-[9px] uppercase font-bold py-0.5 px-1.5`}>
+                                            {res.riskLevel} ({res.riskScore || 0})
+                                          </Badge>
+                                        ) : (
+                                          <span className="text-slate-400">—</span>
+                                        )}
+                                      </td>
+                                      <td className="p-3 font-semibold text-slate-700">{!isErr ? res.accountCount : "—"}</td>
+                                      <td className="p-3 text-slate-500">{!isErr ? res.caseReference : "—"}</td>
+                                      <td className="p-3 text-right">
+                                        {!isErr && res.caseReference ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 font-bold"
+                                            onClick={async () => {
+                                              const recents = storage.getRecent();
+                                              const match = recents.find(r => r.caseReference === res.caseReference);
+                                              if (match) {
+                                                setSuspect(match);
+                                                setActiveTab("overview");
+                                              } else {
+                                                runSweep(res.query, res.type);
+                                              }
+                                            }}
+                                          >
+                                            Load Case
+                                          </Button>
+                                        ) : (
+                                          <span className="text-rose-500 text-[10px]">{res.error || "Failed"}</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
                     )}
-                  </CardContent>
-                </Card>
-              </>
+
+                    {/* Standalone / Unassociated Manual Posts */}
+                    <Card className="border-border shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between pb-3">
+                        <div>
+                          <CardTitle className="font-display text-lg flex items-center gap-2">
+                            <FilePlus className="h-5 w-5 text-emerald-650" /> Standalone Manual Posts
+                          </CardTitle>
+                          <CardDescription className="text-xs font-mono">
+                            Active manual posts under analysis not associated with any active suspects.
+                          </CardDescription>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setShowStandaloneIngest(true)}
+                          className="gap-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+                        >
+                          <Plus className="h-4 w-4" /> Ingest Standalone Post
+                        </Button>
+                      </CardHeader>
+                      <CardContent>
+                        {allManualPosts.length === 0 ? (
+                          <div className="rounded-md border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 bg-slate-50/50 font-mono">
+                            No standalone manual posts. Click "Ingest Standalone Post" to analyze a standalone post.
+                          </div>
+                        ) : (
+                          <div className="grid gap-4 md:grid-cols-2">
+                            {allManualPosts.map((art) => (
+                              <EvidenceArtifactCard key={art.id} artifact={art} onRemove={(id) => {
+                                removeArtifact(id);
+                                setAllManualPosts(prev => prev.filter(a => a.id !== id));
+                                toast.info("Evidence artifact removed.");
+                              }} />
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Platform Status Widget */}
+                    <PlatformStatusWidget statuses={platformStatuses} />
+
+                    {/* Recent Investigations History Panel */}
+                    <InvestigationHistoryPanel onSelect={(p) => {
+                      setSuspect(p);
+                      setActiveTab("overview");
+                    }} />
+                  </div>
+                </div>
             )}
+
+
           </motion.div>
         ) : (
           <motion.div
@@ -355,9 +632,32 @@ export default function InvestigatePage() {
                 setDossierFaceData("");
               }}
               onModify={() => { setSuspect(null); setError(null); }}
-              onPrint={() => { storage.pushAudit("EXPORT_REPORT", suspect.caseReference); window.print(); }}
+              onPrint={() => { 
+                storage.pushExtendedAudit({
+                  action: "EXPORT_REPORT",
+                  caseId: suspect.caseReference,
+                  investigationTarget: suspect.realName,
+                  searchType: "report",
+                  platformsQueried: suspect.platformStatuses?.map(s => s.name) || [],
+                  evidenceCount: suspect.evidenceReliability?.length || 0,
+                  reportGenerated: true,
+                  durationMs: 1500,
+                  detail: `PDF Dossier exported for "${suspect.realName}".`
+                });
+                printDossier(suspect);
+              }}
             />
-            <SuspectTabs profile={suspect} onTabChange={setActiveTab} />
+            
+            {/* Animated Console Investigation Replay */}
+            <InvestigationReplayPanel suspect={suspect} />
+
+            <SuspectTabs 
+              profile={suspect} 
+              onTabChange={setActiveTab} 
+              onTriggerSearch={(q, t) => runSweep(q, t)} 
+            />
+
+
           </motion.div>
         )}
       </AnimatePresence>
@@ -376,12 +676,17 @@ function SearchForm({
   onSearch, error, onDismissError,
   advanced, setAdvanced,
   type, setType,
+  showApiSettings, setShowApiSettings,
+  githubTokenInput, setGithubTokenInput,
   query, setQuery,
   dossierUsernames, setDossierUsernames,
   dossierRealName, setDossierRealName,
   dossierEmail, setDossierEmail,
   dossierPhone, setDossierPhone,
   dossierFaceData, setDossierFaceData,
+  bulkMode, setBulkMode,
+  bulkInput, setBulkInput,
+  runBulkSweep, handleCsvUpload,
 }: {
   onSearch: (query: string, type: string, dossier?: DossierInput) => void;
   error: string | null;
@@ -390,6 +695,10 @@ function SearchForm({
   setAdvanced: React.Dispatch<React.SetStateAction<boolean>>;
   type: (typeof SEARCH_TYPES)[number]["value"];
   setType: React.Dispatch<React.SetStateAction<(typeof SEARCH_TYPES)[number]["value"]>>;
+  showApiSettings: boolean;
+  setShowApiSettings: React.Dispatch<React.SetStateAction<boolean>>;
+  githubTokenInput: string;
+  setGithubTokenInput: React.Dispatch<React.SetStateAction<string>>;
   query: string;
   setQuery: React.Dispatch<React.SetStateAction<string>>;
   dossierUsernames: string[];
@@ -402,7 +711,14 @@ function SearchForm({
   setDossierPhone: React.Dispatch<React.SetStateAction<string>>;
   dossierFaceData: string;
   setDossierFaceData: React.Dispatch<React.SetStateAction<string>>;
+  bulkMode: boolean;
+  setBulkMode: React.Dispatch<React.SetStateAction<boolean>>;
+  bulkInput: string;
+  setBulkInput: React.Dispatch<React.SetStateAction<string>>;
+  runBulkSweep: () => void;
+  handleCsvUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
+
 
   // Face webcam state
   const [useCamera, setUseCamera] = useState(false);
@@ -526,10 +842,21 @@ function SearchForm({
         </div>
         <div className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:p-10">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-stamp/30 bg-stamp/5 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-stamp">
-              <ShieldAlert className="h-3.5 w-3.5" />
-              SOCMINT Sweep · public sources only
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-stamp/30 bg-stamp/5 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-stamp">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                SOCMINT Sweep · public sources only
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowApiSettings(true)}
+                className="h-6 rounded-full font-mono text-[9px] uppercase tracking-wider px-3 border-indigo-200 text-indigo-650 bg-indigo-50 hover:bg-indigo-100/50"
+              >
+                ⚙️ API settings
+              </Button>
             </div>
+
             <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-5xl">
               Open a new<br />
               <span className="text-stamp">case file</span> on a suspect.
@@ -557,17 +884,67 @@ function SearchForm({
 
       {/* Forms Card */}
       <Card className="border-border">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4">
           <CardTitle className="flex items-center gap-2 font-display text-xl">
             <Sparkles className="h-4 w-4 text-evidence animate-pulse" /> Begin investigation
           </CardTitle>
-          <Button variant={advanced ? "default" : "outline"} size="sm" onClick={() => setAdvanced((a) => !a)}>
-            <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
-            {advanced ? "Quick search" : "Dossier mode"}
-          </Button>
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              variant={!advanced && !bulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setAdvanced(false); setBulkMode(false); }}
+              className="h-8 text-xs font-mono uppercase tracking-wider"
+            >
+              Quick search
+            </Button>
+            <Button
+              variant={advanced && !bulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setAdvanced(true); setBulkMode(false); }}
+              className="h-8 text-xs font-mono uppercase tracking-wider"
+            >
+              Dossier mode
+            </Button>
+            <Button
+              variant={bulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setBulkMode(true); }}
+              className="h-8 text-xs font-mono uppercase tracking-wider"
+            >
+              Bulk mode
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          {!advanced ? (
+          {bulkMode ? (
+            /* ═══════════ BULK UPLOAD FORM ═══════════ */
+            <div className="space-y-4">
+              <div className="rounded-md border border-indigo-500/30 bg-indigo-50/50 p-3 text-xs">
+                <span className="font-mono uppercase tracking-wider text-indigo-700 font-bold">Bulk mode</span> — input up to 20 targets, one per line, formatted as <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-900">query,type</code> (e.g., <code className="bg-slate-100 px-1 py-0.5 rounded">shadowtrader99,username</code>).
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Audit Targets List</Label>
+                  <label className="text-[10px] text-indigo-650 hover:underline cursor-pointer font-bold font-mono">
+                    📁 Load CSV Target File
+                    <input type="file" onChange={handleCsvUpload} accept=".csv,.txt" className="hidden" />
+                  </label>
+                </div>
+                <textarea
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                  placeholder={`shadowtrader99,username\n+919876543210,phone\nname@domain.com,email\nscam-site.xyz,domain`}
+                  className="w-full h-36 rounded-md border border-input bg-transparent px-3 py-2 text-xs font-mono shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <div className="flex items-center justify-between pt-4 border-t border-border/60">
+                <p className="text-xs text-slate-500">Supported types: username, name, email, phone, crypto, domain.</p>
+                <Button onClick={runBulkSweep} disabled={!bulkInput.trim()} className="h-11 px-6">
+                  Launch bulk sweep <FilePlus className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : !advanced ? (
             /* ═══════════ QUICK SCAN FORM ═══════════ */
             <>
               <div className="flex flex-wrap gap-2">
@@ -793,9 +1170,65 @@ function SearchForm({
           </Button>
         </div>
       </div>
+
+      {/* Developer API settings Dialog */}
+      <Dialog open={showApiSettings} onOpenChange={setShowApiSettings}>
+        <DialogContent className="sm:max-w-md font-mono text-xs bg-white text-slate-800 border border-slate-200 shadow-xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-sm uppercase text-indigo-950 font-bold">Developer API Credentials</DialogTitle>
+            <DialogDescription className="text-[10px] text-slate-500 font-medium">
+              Configure target API authentication keys overrides to prevent rate limits during heavy testing. Keys are stored safely in local browser storage.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-bold text-slate-700">GitHub Personal Access Token (PAT)</Label>
+              <Input
+                type="password"
+                placeholder="ghp_..."
+                value={githubTokenInput}
+                onChange={(e) => setGithubTokenInput(e.target.value)}
+                className="font-mono text-xs bg-slate-50 border border-slate-250 rounded-xl"
+              />
+              <p className="text-[9px] text-slate-500 leading-normal">
+                Used dynamically in `fetchGithubActivity()` to authenticate public requests (limits increase from 60/hr to 5,000/hr).
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 border-t border-slate-100 pt-3">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => { 
+                setGithubTokenInput(""); 
+                localStorage.removeItem("github_token_override"); 
+                toast.success("API credentials cleared"); 
+                setShowApiSettings(false); 
+              }}
+              className="font-bold font-mono text-[10px] uppercase"
+            >
+              Clear Keys
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => { 
+                localStorage.setItem("github_token_override", githubTokenInput.trim()); 
+                toast.success("API credentials saved"); 
+                setShowApiSettings(false); 
+              }}
+              className="font-bold font-mono text-[10px] uppercase bg-indigo-600 hover:bg-indigo-750 text-white"
+            >
+              Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
 
 function SweepSkeleton({ stageText }: { stageText: string }) {
   return (
@@ -1207,3 +1640,200 @@ function StandaloneIngestDialog({
     </Dialog>
   );
 }
+
+// ─── Investigation Replay Panel ──────────────────────────────────────────────
+
+function InvestigationReplayPanel({ suspect }: { suspect: SuspectProfile }) {
+  const steps = suspect.investigationSteps || [];
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    setCurrentStep(0);
+    const interval = setInterval(() => {
+      setCurrentStep((prev) => {
+        if (prev >= steps.length) {
+          clearInterval(interval);
+          setIsPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 450); // play next step every 450ms
+
+    return () => clearInterval(interval);
+  }, [suspect, isPlaying, steps.length]);
+
+  // Auto-scroll to bottom of console as logs print
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [currentStep, isPlaying]);
+
+  if (steps.length === 0) return null;
+
+  return (
+    <Card className="border-border bg-slate-950 text-slate-100 shadow-xl overflow-hidden rounded-2xl">
+      <CardHeader className="pb-3 border-b border-slate-900 flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="font-mono text-sm font-bold text-white flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+            LIVE OSINT INVESTIGATION RUNNER
+          </CardTitle>
+          <CardDescription className="text-slate-500 font-mono text-[9px]">Dossier case audit logs stream</CardDescription>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsPlaying(true)}
+          disabled={isPlaying}
+          className="text-xs font-mono border-slate-800 text-slate-300 bg-slate-900 hover:bg-slate-800 h-7"
+        >
+          {isPlaying ? "Running..." : "▶ Replay Scan"}
+        </Button>
+      </CardHeader>
+      <CardContent 
+        ref={containerRef}
+        className="p-4 font-mono text-[10px] space-y-1.5 max-h-56 overflow-y-auto no-scrollbar scroll-smooth"
+      >
+        {steps.slice(0, currentStep).map((step, idx) => {
+          const isComplete = idx < currentStep - 1 || !isPlaying;
+          const hasSymbol = step.startsWith("✓") || step.startsWith("✗") || step.startsWith("⚠");
+          return (
+            <div key={idx} className="flex items-start gap-2 text-emerald-400">
+              <span className="text-slate-600 select-none">[{new Date(suspect.capturedAt || Date.now()).toLocaleTimeString("en-IN")}]</span>
+              {!hasSymbol && (
+                isComplete ? (
+                  <span className="text-emerald-500">✔</span>
+                ) : (
+                  <span className="animate-pulse">❯</span>
+                )
+              )}
+              <span className={idx === currentStep - 1 ? "text-white font-bold" : "text-emerald-400/90"}>
+                {step}
+              </span>
+            </div>
+          );
+        })}
+        {isPlaying && currentStep < steps.length && (
+          <div className="flex items-center gap-2 text-slate-500 italic animate-pulse">
+            <span>❯</span> Running automated correlation checks...
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Platform Status Widget ──────────────────────────────────────────────────
+
+function PlatformStatusWidget({ statuses }: { statuses: any[] }) {
+  return (
+    <Card className="border-border bg-white shadow-sm rounded-2xl">
+      <CardHeader className="pb-3">
+        <CardTitle className="font-display text-sm font-bold flex items-center gap-2 text-ink">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          Live Platform Status
+        </CardTitle>
+        <CardDescription className="text-slate-500 font-mono text-[9px]">Real-time API & crawler latency monitor</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2.5 font-mono text-[10px]">
+        {statuses.slice(0, 6).map((s, idx) => {
+          const isOnline = s.status === "Online";
+          const isRate = s.status === "Rate Limited";
+          const badgeClass = isOnline
+            ? "bg-emerald-50 text-emerald-700 border-emerald-250"
+            : isRate
+              ? "bg-amber-50 text-amber-700 border-amber-250 animate-pulse"
+              : "bg-rose-50 text-rose-700 border-rose-250";
+
+          return (
+            <div key={idx} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
+              <div className="flex flex-col">
+                <span className="font-bold text-slate-800">{s.name}</span>
+                {s.requestsRemaining !== undefined && (
+                  <span className="text-[8px] text-slate-400 font-semibold">Remaining: {s.requestsRemaining} reqs</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-slate-400 font-medium">{s.responseTimeMs}ms</span>
+                <Badge variant="outline" className={badgeClass + " font-mono text-[9px] border py-0 px-1 uppercase font-bold"}>
+                  {s.status}
+                </Badge>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Recent Investigations History Panel ─────────────────────────────────────
+
+function InvestigationHistoryPanel({ onSelect }: { onSelect: (p: SuspectProfile) => void }) {
+  const [history, setHistory] = useState<SuspectProfile[]>([]);
+
+  useEffect(() => {
+    setHistory(storage.getRecent().slice(0, 20));
+  }, []);
+
+  if (history.length === 0) {
+    return (
+      <Card className="border-border bg-white shadow-sm rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-sm font-bold text-ink">Recent Investigations</CardTitle>
+        </CardHeader>
+        <CardContent className="font-mono text-[10px] text-slate-450 italic text-center py-4 bg-slate-50/50 border border-slate-150 rounded-xl">
+          No recent searches stored in local session log.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-border bg-white shadow-sm rounded-2xl">
+      <CardHeader className="pb-3">
+        <CardTitle className="font-display text-sm font-bold text-ink">Recent Investigations</CardTitle>
+        <CardDescription className="text-slate-500 font-mono text-[9px]">Last 20 cases stored in cache memory</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 max-h-80 overflow-y-auto no-scrollbar font-mono text-[10px]">
+        {history.map((h) => {
+          const platformsCount = new Set(h.accounts?.map(a => a.platform) || []).size;
+          const cleanQ = h.username || h.phoneNumber || h.emailAddress || "Query Target";
+          const queryLabel = cleanQ.length > 20 ? cleanQ.slice(0, 18) + "..." : cleanQ;
+          
+          return (
+            <button
+              key={h.caseReference}
+              onClick={() => onSelect(h)}
+              className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20 bg-white transition-all flex flex-col gap-1 shadow-sm hover:shadow-md"
+            >
+              <div className="flex justify-between items-center font-bold text-ink">
+                <span className="truncate w-2/3">{h.realName}</span>
+                <Badge className={riskColor(h.riskLevel) + " text-[8px] px-1 py-0.2 shrink-0 font-mono uppercase"}>
+                  {h.riskLevel}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center text-[9px] text-slate-500">
+                <span className="truncate font-semibold">{queryLabel}</span>
+                <span className="font-bold">BRS: {h.riskScore}</span>
+              </div>
+              <div className="flex justify-between items-center text-[8px] text-slate-400 border-t border-slate-100 pt-1 mt-0.5">
+                <span className="font-bold">{h.caseReference.slice(0, 14)}...</span>
+                <span className="font-bold">{platformsCount} platforms</span>
+              </div>
+            </button>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+
+
+

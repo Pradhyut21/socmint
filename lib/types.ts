@@ -27,7 +27,7 @@ export interface UpiFootprint {
     sourceUrl: string;
   };
   truecaller: {
-    status: "NOT_CONFIGURED" | "PUBLIC_DATA_UNAVAILABLE";
+    status: "NOT_CONFIGURED" | "PUBLIC_DATA_UNAVAILABLE" | "SUCCESS";
     name?: string;
     spamScore?: number;
     carrier?: string;
@@ -47,12 +47,23 @@ export interface NewsArticle {
   relevanceScore: number;
 }
 
+export interface PlatformStatus {
+  name: string;
+  status: "Online" | "Rate Limited" | "Unavailable" | "FOUND" | "NOT FOUND" | "RATE LIMITED" | "FOUND (PARTIAL)" | "PRIVATE" | "UNAVAILABLE";
+  responseTimeMs: number;
+  requestsRemaining?: number;
+  reason?: string;
+}
+
 export interface NexusAnalysis {
   key_finding: string;
   connected_signals: { signal1: string; signal2: string; connection: string }[];
   anomalies: { description: string; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" }[];
   investigator_priority: string;
+  investigator_brief?: string;
 }
+
+
 
 export interface BreachRecord {
   name: string;
@@ -92,7 +103,145 @@ export interface PlatformAccount {
   url?: string;
   verified?: boolean;
   lastActive?: string;
+  /** Enriched GitHub intelligence — populated by fetchGithubActivity */
+  githubIntel?: GithubIntelligence;
+  /** Enriched Reddit intelligence — populated by fetchRedditActivity */
+  redditIntel?: RedditIntelligence;
+  /** Enriched LinkedIn intelligence — populated by LinkedInProvider */
+  linkedinIntel?: LinkedinIntelligence;
+  /** LinkedIn extraction fields — parsed from public HTML meta tags */
+  jobTitle?: string;
+  company?: string;
+  education?: string;
+  headline?: string;
+  mergeJustification?: string;
 }
+
+
+
+// ─── GitHub Intelligence ─────────────────────────────────────────────────────
+
+export interface GithubRepo {
+  name: string;
+  description: string | null;
+  language: string | null;
+  stars: number;
+  forks: number;
+  topics: string[];
+  homepage: string | null;
+  createdAt: string;
+  pushedAt: string;
+  url: string;
+}
+
+export interface GithubIntelligence {
+  login: string;
+  name: string | null;
+  company: string | null;
+  blog: string | null;
+  location: string | null;
+  email: string | null;
+  hireable: boolean | null;
+  publicRepos: number;
+  publicGists: number;
+  followers: number;
+  following: number;
+  createdAt: string;        // account creation date
+  updatedAt: string;        // last profile update
+  accountAgeDays: number;   // computed from createdAt
+  topRepos: GithubRepo[];   // top 3 by star count
+  techStack: string[];      // unique languages across top-10 repos
+  organizations: { login: string; description: string | null }[];
+  primaryLanguage?: string;
+  mostStarredRepo?: string;
+  totalStars?: number;
+  totalForks?: number;
+  repoCategories?: { category: string; count: number }[];
+  allTopics?: string[];
+  seniorityEstimate?: "Senior Developer" | "Mid-Level Developer" | "Junior / Hobbyist Developer";
+}
+
+
+// ─── Reddit Intelligence ──────────────────────────────────────────────────────
+
+export interface RedditIntelligence {
+  commentKarma: number;
+  linkKarma: number;
+  totalKarma: number;
+  cakeDay: string;          // ISO date
+  isGold: boolean;
+  verified: boolean;
+  topSubreddits: { subreddit: string; count: number }[];  // sorted desc
+  postingFrequency: number;   // average posts per week (last 25)
+  topKeywords: string[];      // top 10 words from post titles
+  accountAgeDays: number;
+}
+
+
+// ─── LinkedIn Intelligence ──────────────────────────────────────────────────
+
+export interface DetailedSource {
+  engine: "Bing" | "DuckDuckGo" | "Yahoo" | "Wayback";
+  confidence: number;
+  extractedAt: string;
+  value: string;
+}
+
+export interface ForensicField<T> {
+  value: T;
+  source: string; // e.g. "LinkedIn Public Profile", "LinkedIn Voyager API"
+  acquisitionMethod: "PUBLIC_METADATA" | "AUTHENTICATED_SESSION" | "SEARCH_INDEX_MAPPED";
+  confidence: number; // 0-100
+  verificationStatus: "VERIFIED" | "UNVERIFIED" | "INFERRED";
+  sources?: DetailedSource[];
+}
+
+export interface SearchEngineEvidence {
+  engine: "Bing" | "DuckDuckGo" | "Yahoo" | "Wayback";
+  query: string;
+  searchedAt: string;
+  success: boolean;
+  responseTimeMs: number;
+  profileUrl?: string;
+  title?: string;
+  snippet?: string;
+  fieldsExtracted: string[];
+  confidence: number;
+  rawSource?: string;
+}
+
+export interface LinkedinIntelligence {
+  fullName?: ForensicField<string>;
+  headline?: ForensicField<string>;
+  location?: ForensicField<string>;
+  avatarUrl?: ForensicField<string>;
+  profileUrl: ForensicField<string>;
+  currentRole?: ForensicField<string>;
+  currentCompany?: ForensicField<string>;
+  summary?: ForensicField<string>;
+  experiences: Array<{
+    title: ForensicField<string>;
+    company: ForensicField<string>;
+    duration?: ForensicField<string>;
+    description?: ForensicField<string>;
+    startDate?: ForensicField<string>;
+    endDate?: ForensicField<string>;
+  }>;
+  educations: Array<{
+    institution: ForensicField<string>;
+    degree?: ForensicField<string>;
+    fieldOfStudy?: ForensicField<string>;
+    duration?: ForensicField<string>;
+  }>;
+  skills: Array<ForensicField<string>>;
+  organizations?: Array<{
+    name: ForensicField<string>;
+    role?: ForensicField<string>;
+  }>;
+  acquisitionLogs?: SearchEngineEvidence[];
+  mergeMatrix?: Record<string, Record<string, "Found" | "Partial" | "Unavailable">>;
+}
+
 
 export interface Post {
   id: string;
@@ -237,6 +386,8 @@ export interface SuspectProfile {
   riskSignals: string[];
   accounts: PlatformAccount[];
   posts: Post[];
+  investigationSteps?: string[];
+  platformStatuses?: PlatformStatus[];
   legalRecords: LegalRecord[];
   aliasResults: AliasResult[];
   upiFootprint?: UpiFootprint | any;
@@ -248,7 +399,29 @@ export interface SuspectProfile {
   cryptoTrace?: CryptoTraceResult;
   faceScan?: FaceScanMetadata | any;
   domainIntel?: any;
+  toolkitExecutions?: ToolkitExecution[];
+  toolkitFindings?: NormalizedFinding[];
+  evidenceGraph?: EvidenceGraphData;
+  reasoningSteps?: ReasoningStep[];
+  evidenceAttribution?: Record<string, FieldAttribution>;
+  investigationQuality?: {
+    score: number;
+    reason: string;
+    breakdown: {
+      searched: number;
+      responded: number;
+      evidenceCount: number;
+      verifiedCount: number;
+      correlationStrength: number;
+      timelineCount: number;
+      aiConfidence: number;
+    };
+  };
+  evidenceReliability?: ReliableEvidenceItem[];
+  developerFingerprint?: PlatformComparison;
+  bioSimilarity?: SemanticSimilarityResult;
   network: {
+
     nodes: NetworkNode[];
     links: NetworkLink[];
   };
@@ -299,6 +472,15 @@ export interface SuspectProfile {
     riskTag: string;
   }[];
   searchIntel?: SearchIntelBundle;
+  suggestedProfiles?: {
+    name: string;
+    platform: string;
+    handle: string;
+    profileUrl: string;
+    bio?: string;
+    followers?: number;
+    matchScore: number; // 0-100, how well the name prefix matches
+  }[];
 }
 
 export interface SearchIntelQuery {
@@ -539,4 +721,139 @@ export interface IngestedPost {
   evidenceId?: string;     // linked EvidenceArtifact id if pinned
   tags?: string[];         // optional analyst-defined tags
 }
+
+export interface NormalizedFinding {
+  id: string;
+  title: string;
+  description: string;
+  source: string;
+  url: string | null;
+  confidence: number; // 0 to 1
+  category: string;
+  entity: string;
+  provider: string;
+  timestamp: string;
+}
+
+export interface ToolkitExecution {
+  id: string;
+  caseReference: string;
+  providerId: string;
+  query: string;
+  timestamp: string;
+  durationMs: number;
+  status: "SUCCESS" | "FAILED";
+  findingsCount: number;
+  logs: string[];
+}
+
+export interface EvidenceNode {
+  id: string;
+  label: string;
+  type: "phone" | "email" | "username" | "github" | "gitlab" | "reddit" | "linkedin" | "instagram" | "twitter" | "website" | "company" | "education" | "upi" | "alias" | "geo" | "event" | "engine" | "school";
+  details?: string;
+}
+
+export interface EvidenceEdge {
+  source: string;
+  target: string;
+  evidenceType: string;
+  confidenceContribution: number;
+  sourceModule: string;
+  rawEvidence: string;
+  reason: string;
+}
+
+export interface EvidenceGraphData {
+  nodes: EvidenceNode[];
+  edges: EvidenceEdge[];
+}
+
+export interface ReasoningStep {
+  timestamp: string;
+  module: string;
+  input: string;
+  output: string;
+  durationMs: number;
+  evidenceGenerated: string;
+  confidenceDelta: number;
+}
+
+export interface FieldAttribution {
+  value: string;
+  source: string;
+  confidence: string;
+  discoveredBy: string;
+}
+
+export interface ReliableEvidenceItem {
+  id: string;
+  source: string;
+  evidenceType: string;
+  confidence: "High" | "Medium" | "Low";
+  reliability: "High" | "Medium" | "Low";
+  freshness: string;
+  verificationStatus: "Yes" | "Partial" | "No";
+  details: string;
+}
+
+export interface DeveloperFingerprint {
+  primaryLanguages: string[];
+  frameworks: string[];
+  topics: string[];
+  repositoryCategories: { category: string; count: number }[];
+  developerStack: string[];
+  ossActivity: {
+    stars: number;
+    forks: number;
+    publicRepos: number;
+    activityLevel: "High" | "Medium" | "Low";
+  };
+}
+
+export interface PlatformComparison {
+  platformA: string;
+  platformB: string;
+  fingerprintA: DeveloperFingerprint;
+  fingerprintB: DeveloperFingerprint;
+  similarity: number;
+  matchingRepos: { name: string; similarity: number }[];
+  matchingTech: string[];
+}
+
+export interface SemanticSimilarityResult {
+  score: number;
+  professionMatch: boolean;
+  professionDetails?: string;
+  interestsMatch: boolean;
+  interestsDetails?: string;
+  organizationMatch: boolean;
+  organizationDetails?: string;
+  technologiesMatch: boolean;
+  technologiesDetails?: string;
+  researchMatch: boolean;
+  researchDetails?: string;
+  reasoningSummary: string;
+}
+
+export interface ExtendedAuditLog {
+  id: string;
+  timestamp: string;
+  officer: {
+    name: string;
+    badge: string;
+    unit: string;
+  };
+  caseId: string;
+  investigationTarget: string;
+  searchType: string;
+  platformsQueried: string[];
+  evidenceCount: number;
+  reportGenerated: boolean;
+  durationMs: number;
+  action: string;
+  detail?: string;
+}
+
+
 
