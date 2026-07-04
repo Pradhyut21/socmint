@@ -866,6 +866,7 @@ export async function fetchTwitterDetails(username: string) {
 
 export async function fetchGithubDetails(username: string): Promise<{
   ok: boolean;
+  status?: number;
   displayName?: string;
   bio?: string;
   profilePicUrl?: string;
@@ -878,7 +879,7 @@ export async function fetchGithubDetails(username: string): Promise<{
       Accept: "application/vnd.github.v3+json",
       "User-Agent": "Antigravity-IDE-OSINT"
     };
-    if (token) {
+    if (token && token !== "ghp_PlaceholderTokenHere") {
       headers["Authorization"] = `token ${token}`;
     }
     const res = await fetchWithTimeout(`https://api.github.com/users/${username}`, 4500, { headers });
@@ -887,6 +888,7 @@ export async function fetchGithubDetails(username: string): Promise<{
       if (data) {
         return {
           ok: true,
+          status: 200,
           displayName: data.name || data.login,
           bio: data.bio || undefined,
           profilePicUrl: data.avatar_url || undefined,
@@ -895,9 +897,9 @@ export async function fetchGithubDetails(username: string): Promise<{
         };
       }
     }
-    return { ok: false };
+    return { ok: false, status: res.status };
   } catch {
-    return { ok: false };
+    return { ok: false, status: 500 };
   }
 }
 
@@ -1062,7 +1064,9 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
           followers: details.followers
         };
       }
-      return { ok: false, status: 404 };
+      // Distinguish rate limit/unauthorized from doesn't exist
+      const failStatus = details.status || 404;
+      return { ok: false, status: failStatus };
     }
   }
 

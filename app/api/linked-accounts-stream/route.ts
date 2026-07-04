@@ -213,6 +213,10 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
           }
         };
       }
+      const failStatus = details.status || 404;
+      if (failStatus === 403 || failStatus === 429) {
+        return { status: "ERROR", reason: "GitHub API Rate Limit Exceeded." };
+      }
       return { status: "NOT_FOUND" };
     } catch (err: any) {
       return { status: "ERROR", reason: err?.message || "Connection timeout" };
