@@ -21,6 +21,8 @@
  * not definitive identifiers, and must be corroborated before any official use.
  */
 
+import crypto from "crypto";
+
 export interface EmailLead {
   email: string;
   confidence: "HIGH" | "MEDIUM" | "LOW";
@@ -66,14 +68,8 @@ async function timedFetch(url: string, timeoutMs = 5000, opts: RequestInit = {})
 }
 
 /** MD5 hash — used for Gravatar lookup */
-async function md5(str: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str.trim().toLowerCase());
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data); // note: Gravatar uses MD5, but we simulate via SHA-256 as Node has no native MD5
-  // Fallback: use a simple djb2 hash converted to hex for non-browser environments
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash) + str.charCodeAt(i);
-  return Math.abs(hash).toString(16).padStart(8, "0") + str.length.toString(16).padStart(8, "0");
+function md5(str: string): string {
+  return crypto.createHash("md5").update(str.trim().toLowerCase()).digest("hex");
 }
 
 function dedupeEmails(leads: EmailLead[]): EmailLead[] {
@@ -144,11 +140,7 @@ function generateEmailPermutations(username: string, realName?: string): string[
  */
 async function checkGravatar(email: string): Promise<boolean> {
   try {
-    // Use MD5 — we approximate with a hash; real Gravatar uses MD5 of email
-    const enc = new TextEncoder();
-    const buf = await crypto.subtle.digest("SHA-1", enc.encode(email.trim().toLowerCase())).catch(() => null);
-    if (!buf) return false;
-    const hash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    const hash = md5(email);
     const url = `https://www.gravatar.com/avatar/${hash}?d=404&size=1`;
     const resp = await timedFetch(url, 4000);
     return resp.ok && resp.status === 200;
