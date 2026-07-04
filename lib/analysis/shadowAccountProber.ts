@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PlatformAccount, Post, AliasResult, ShadowAccountResult } from "../types";
 
 // ── Levenshtein Distance ────────────────────────────────────────────

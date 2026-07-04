@@ -1,920 +1,636 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { SuspectProfile, DossierInput } from "../lib/types";
-import SearchHero from "../components/SearchHero";
-import ProfileOverview from "../components/ProfileOverview";
-import TimelineView from "../components/TimelineView";
-import LegalRecords from "../components/LegalRecords";
-import NetworkGraph from "../components/NetworkGraph";
-import LocationMap from "../components/LocationMap";
-import EvasionTimeline from "../components/EvasionTimeline";
-import EvidencePackage from "../components/EvidencePackage";
-import AiChat from "../components/AiChat";
-import CryptoTraceCard from "../components/CryptoTraceCard";
-import DarkWebMonitor from "../components/DarkWebMonitor";
-import NLPAnalyzer from "../components/NLPAnalyzer";
-import WikidataCard from "../components/WikidataCard";
-import ShadowAccounts from "../components/ShadowAccounts";
-import FaceScanCard from "../components/FaceScanCard";
-
-import { 
-  ShieldAlert, Search, Bell, FolderOpen, Info, Shield, 
-  MapPin, Clock, ArrowLeft, RefreshCw, LogOut, CheckCircle2, AlertOctagon,
-  Menu, X, ChevronLeft, ChevronRight
+import { useRef, useState, useEffect } from "react";
+import {
+  Search, Loader2, Printer, FilePlus, ShieldAlert, Sparkles,
+  AtSign, Phone, Mail, ScanFace, IdCard, SlidersHorizontal, X, AlertTriangle, User, Settings,
 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { storage } from "@/lib/storage";
+import { riskColor } from "@/lib/mock-data";
+import type { SuspectProfile, DossierQuery } from "@/lib/types";
+import { SuspectTabs } from "@/components/suspect/SuspectTabs";
+import { ShieldOrb, type OrbTheme } from "@/components/visual/ShieldOrb";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface AlertItem {
-  id: string;
-  type: "critical" | "warning" | "info";
-  title: string;
-  timestamp: string;
-  details: string;
-  isRead: boolean;
-}
+const SEARCH_TYPES = [
+  { value: "username", label: "Username", icon: AtSign, placeholder: "shadowtrader99" },
+  { value: "realName", label: "Real name", icon: IdCard, placeholder: "Vikram Rathore" },
+  { value: "email", label: "Email", icon: Mail, placeholder: "name@protonmail.com" },
+  { value: "phone", label: "Phone", icon: Phone, placeholder: "+91 98765 43210" },
+  { value: "face", label: "Face scan", icon: ScanFace, placeholder: "image URL or base64" },
+] as const;
 
-export default function Dashboard() {
-  const [activeView, setActiveView] = useState<"search" | "alerts" | "cases" | "compliance">("search");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const tabContainerRef = React.useRef<HTMLDivElement>(null);
+const SWEEP_STAGES = [
+  "Resolving identity across 14 OSINT sources…",
+  "Sherlock · WhatsMyName · checking 412 platforms…",
+  "Querying HIBP & Intelligence X breach corpus…",
+  "Tracing UPI handles · Truecaller · NCRP registry…",
+  "Walking on-chain — BTC, ETH, sanctions screening…",
+  "Cross-checking MCA21, SEBI, court records…",
+  "Compositing dossier · NEXUS auto-synthesis…",
+];
 
-  // Ctrl+K Keyboard Shortcut to focus search
+const TAB_THEME: Record<string, OrbTheme> = {
+  accounts: "social", timeline: "social", wikidata: "legal",
+  nlp: "network", face: "face", shadow: "leaks", crypto: "crypto", financial: "financial",
+  dark: "leaks", legal: "legal", network: "network", geo: "geo", evasion: "leaks",
+  evidence: "evidence",
+};
+
+const RISK_THEME: Record<string, OrbTheme> = {
+  LOW: "low", MEDIUM: "medium", HIGH: "high", CRITICAL: "critical",
+};
+
+export default function InvestigatePage() {
+  const [suspect, setSuspect] = useState<SuspectProfile | null>(null);
+  const [apiResponse, setApiResponse] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [igSession, setIgSession] = useState("");
+  const [igSessionInput, setIgSessionInput] = useState("");
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // Load stored Instagram session on mount
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        const searchInput = document.querySelector('input[placeholder*="search"], input[placeholder*="Search"], input[placeholder*="handle"], input[placeholder*="Query"]') as HTMLInputElement | null;
-        if (searchInput) {
-          searchInput.focus();
-          searchInput.select();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    const stored = typeof window !== "undefined" ? (localStorage.getItem("ig_session_id") || "") : "";
+    setIgSession(stored);
+    setIgSessionInput(stored);
   }, []);
 
-  // Simulated Real-Time OSINT Alerts Generator (simulates background socket notifications)
-  useEffect(() => {
-    const alertsPool = [
-      {
-        type: "warning",
-        title: "UPI transactional footprint detected for sneha_fintech",
-        details: "Structured deposit of ₹1,45,000 recorded via IPIN transaction gateway. High risk routing detected."
-      },
-      {
-        type: "critical",
-        title: "New dark web credit card leak matching Vikram Rathore",
-        details: "Email ID vikram.r@secmail.io matched active SQL dump of carding forum 'Rescator'."
-      },
-      {
-        type: "info",
-        title: "GitHub commit activity recorded for rk_crypto_dev",
-        details: "Push request submitted to private contract repository. Commit signed with active GPG key."
-      },
-      {
-        type: "warning",
-        title: "Geotag proximity warning for shadowtrader99",
-        details: "Public IP routing endpoint registered at Indiranagar block within 400m of reported Mule bank branch."
-      },
-      {
-        type: "info",
-        title: "MCA21 corporate records update index sweep",
-        details: "V.R. Digital Logistics Pvt Ltd status changed to 'Under Resolution Process' in official registry."
-      }
-    ];
-
-    const interval = setInterval(() => {
-      const template = alertsPool[Math.floor(Math.random() * alertsPool.length)];
-      const newAlert = {
-        id: `alert-${Date.now()}`,
-        type: template.type as "critical" | "warning" | "info",
-        title: template.title,
-        timestamp: new Date().toLocaleTimeString("en-IN") + " IST",
-        details: template.details,
-        isRead: false
-      };
-
-      setAlerts(prev => {
-        const updated = [newAlert, ...prev].slice(0, 15);
-        localStorage.setItem("socmint_alerts", JSON.stringify(updated));
-        return updated;
-      });
-      
-      const newLog = {
-        id: `log-${Date.now()}`,
-        action: `Real-time discovery alert received: "${template.title}"`,
-        timestamp: new Date().toLocaleTimeString("en-IN") + " IST"
-      };
-      setAuditLogs(prev => {
-        const updated = [newLog, ...prev];
-        localStorage.setItem("socmint_audit_logs", JSON.stringify(updated));
-        return updated;
-      });
-
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const scrollTabs = (direction: "left" | "right") => {
-    if (tabContainerRef.current) {
-      const scrollAmount = 200;
-      tabContainerRef.current.scrollBy({
-        left: direction === "left" ? -scrollAmount : scrollAmount,
-        behavior: "smooth"
-      });
-    }
+  const saveIgSession = () => {
+    const trimmed = igSessionInput.trim();
+    setIgSession(trimmed);
+    localStorage.setItem("ig_session_id", trimmed);
+    setSettingsOpen(false);
+    toast.success(trimmed ? "Instagram session saved" : "Instagram session cleared", {
+      description: trimmed ? "Live Instagram/Threads scraping is now enabled." : "Instagram session has been removed."
+    });
   };
 
-  const [analystName, setAnalystName] = useState("Inspector Prasad");
-  const [analystBadge, setAnalystBadge] = useState("CY-8902");
-  const [analystUnit, setAnalystUnit] = useState("Karnataka Cell");
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [activeSuspect, setActiveSuspect] = useState<SuspectProfile | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [activeTab, setActiveTab] = useState("overview");
-  const [topBarQuery, setTopBarQuery] = useState("");
-  const [clockTime, setClockTime] = useState("");
-  const [recentInvestigations, setRecentInvestigations] = useState<SuspectProfile[]>([]);
-  
-  // Audited logs list
-  const [auditLogs, setAuditLogs] = useState<{ id: string; action: string; timestamp: string }[]>([
-    { id: "1", action: "Officer authorized session started", timestamp: "09:30:15 IST" }
-  ]);
+  const runSweep = async (dq: DossierQuery) => {
+    setError(null);
+    setLoading(true);
+    setStage(0);
+    const label = dq.username || dq.realName || dq.email || dq.phone || "face-image";
+    storage.pushAudit("INVESTIGATE", label);
 
-  // Real-time alert list
-  const [alerts, setAlerts] = useState<AlertItem[]>([
-    {
-      id: "a1",
-      type: "critical",
-      title: "@shadowtrader99 deleted Reddit account u/shadow_trader_in",
-      timestamp: "12:15:02 IST",
-      details: "Evidence preservation completed. Raw data block locked with SHA-256 integrity hash.",
-      isRead: false
-    },
-    {
-      id: "a2",
-      type: "warning",
-      title: "Geotag Anomaly Detected for Sneha Kulkarni",
-      timestamp: "11:42:10 IST",
-      details: "Simultaneous check-ins within 2 hours registered across Pune and Bengaluru (12.9716, 77.5946).",
-      isRead: false
-    },
-    {
-      id: "a3",
-      type: "info",
-      title: "MCA21 Registry update for Vikram Rathore",
-      timestamp: "09:45:00 IST",
-      details: "Corporate filing status changed to 'Under Active Auditing' for V.R. Digital Logistics Pvt Ltd.",
-      isRead: true
-    }
-  ]);
-
-  // Live IST Clock
-  useEffect(() => {
-    const updateTime = () => {
-      const d = new Date();
-      setClockTime(d.toLocaleTimeString("en-IN") + " IST");
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Load history from localStorage on mount
-  useEffect(() => {
-    const storedHistory = localStorage.getItem("socmint_recent_investigations");
-    if (storedHistory) {
-      try {
-        setRecentInvestigations(JSON.parse(storedHistory));
-      } catch (e) {
-        console.error("Failed to parse stored investigations", e);
-      }
-    }
-
-    const storedLogs = localStorage.getItem("socmint_audit_logs");
-    if (storedLogs) {
-      try {
-        setAuditLogs(JSON.parse(storedLogs));
-      } catch (e) {
-        console.error("Failed to parse stored audit logs", e);
-      }
-    }
-
-    const storedAlerts = localStorage.getItem("socmint_alerts");
-    if (storedAlerts) {
-      try {
-        setAlerts(JSON.parse(storedAlerts));
-      } catch (e) {
-        console.error("Failed to parse stored alerts", e);
-      }
-    }
-
-    const storedName = localStorage.getItem("socmint_analyst_name");
-    if (storedName) setAnalystName(storedName);
-
-    const storedBadge = localStorage.getItem("socmint_analyst_badge");
-    if (storedBadge) setAnalystBadge(storedBadge);
-
-    const storedUnit = localStorage.getItem("socmint_analyst_unit");
-    if (storedUnit) setAnalystUnit(storedUnit);
-  }, []);
-
-  const handleSearch = async (query: string, type: string, dossier?: DossierInput) => {
-    setIsSearching(true);
-    setSearchError("");
+    // Cycle stages to simulate the 10-15s real sweep
+    const stageTimer = setInterval(() => setStage((s) => Math.min(s + 1, SWEEP_STAGES.length - 1)), 800);
 
     try {
-      const requestBody: Record<string, unknown> = { query, type };
-      if (type === "dossier" && dossier) {
-        requestBody.dossier = dossier;
+      // Determine if we need multi-field dossier or single field query
+      let reqBody;
+      const keys = Object.keys(dq).filter(k => dq[k as keyof DossierQuery]);
+      const isDossierMode = keys.length > 1;
+      
+      if (isDossierMode) {
+        reqBody = {
+          type: "dossier",
+          dossier: {
+            usernames: dq.username ? [dq.username] : [],
+            realName: dq.realName || "",
+            email: dq.email || "",
+            phone: dq.phone || "",
+            faceData: dq.faceImage || ""
+          }
+        };
+      } else {
+        const activeKey = keys[0] || "username";
+        const queryVal = dq[activeKey as keyof DossierQuery] || "";
+        const queryType = 
+          activeKey === "faceImage" ? "face" :
+          activeKey === "email" ? "email" :
+          activeKey === "phone" ? "phone" : "username";
+
+        reqBody = {
+          query: queryVal,
+          type: queryType,
+          instagramSessionId: igSession,
+        };
       }
-      const response = await fetch("/api/investigate", {
+
+      const res = await fetch("/api/investigate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(reqBody)
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Investigation failed.");
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Investigation failed");
       }
 
-      const result = data.profile as SuspectProfile;
-      setActiveSuspect(result);
-      
-      let updatedHistory: SuspectProfile[] = [];
-      setRecentInvestigations((prev) => {
-        updatedHistory = [result, ...prev.filter((profile) => profile.caseReference !== result.caseReference)].slice(0, 8);
-        localStorage.setItem("socmint_recent_investigations", JSON.stringify(updatedHistory));
-        return updatedHistory;
-      });
-
-      setIsSearching(false);
-      setActiveTab(type === "face" ? "face" : type === "crypto" ? "crypto" : "overview");
-      setActiveView("search");
-
-      const newLog = {
-        id: Date.now().toString(),
-        action: `Live public OSINT sweep completed for query: "${query}" (Type: ${type}). Accounts found: ${result.accounts.length}.`,
-        timestamp: new Date().toLocaleTimeString("en-IN") + " IST"
-      };
-      setAuditLogs(prev => {
-        const updated = [newLog, ...prev];
-        localStorage.setItem("socmint_audit_logs", JSON.stringify(updated));
-        return updated;
-      });
+      setApiResponse(data);
+      const p = data.profile as SuspectProfile;
+      setSuspect(p);
+      storage.pushRecent(p);
+      toast.success("Sweep complete", { description: `${p.realName} · ${p.riskLevel} · ${p.caseReference}` });
+      setTimeout(() => headerRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
       // Fire off background NEXUS Analysis
       fetch("/api/nexus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile: result }),
+        body: JSON.stringify({ profile: p }),
       })
-        .then(res => res.json())
-        .then(nexusData => {
-          setActiveSuspect(prev => prev ? { ...prev, nexusAnalysis: nexusData } : null);
-          setRecentInvestigations(prev => {
-            const updated = prev.map(p => p.caseReference === result.caseReference ? { ...p, nexusAnalysis: nexusData } : p);
-            localStorage.setItem("socmint_recent_investigations", JSON.stringify(updated));
-            return updated;
-          });
-        })
-        .catch(() => {});
+      .then(res => res.json())
+      .then(nexusData => {
+        setSuspect(prev => prev ? { ...prev, nexusAnalysis: nexusData } : null);
+      })
+      .catch(() => {});
 
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : "Investigation failed.");
-      setIsSearching(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown sweep error";
+      setError(msg);
+      toast.error("Sweep failed", { description: msg });
+    } finally {
+      clearInterval(stageTimer);
+      setLoading(false);
     }
   };
-
-  const handleClearHistory = () => {
-    if (confirm("Are you sure you want to clear all investigation history? This will also reset audit logs and alerts.")) {
-      setRecentInvestigations([]);
-      const defaultLogs = [
-        { id: "1", action: "Officer authorized session started", timestamp: new Date().toLocaleTimeString("en-IN") + " IST" }
-      ];
-      setAuditLogs(defaultLogs);
-      
-      const defaultAlerts: AlertItem[] = [
-        {
-          id: "a1",
-          type: "critical",
-          title: "@shadowtrader99 deleted Reddit account u/shadow_trader_in",
-          timestamp: new Date().toLocaleTimeString("en-IN") + " IST",
-          details: "Evidence preservation completed. Raw data block locked with SHA-256 integrity hash.",
-          isRead: false
-        }
-      ];
-      setAlerts(defaultAlerts);
-      
-      localStorage.removeItem("socmint_recent_investigations");
-      localStorage.setItem("socmint_audit_logs", JSON.stringify(defaultLogs));
-      localStorage.setItem("socmint_alerts", JSON.stringify(defaultAlerts));
-    }
-  };
-
-  const handleSaveAnalystSettings = (name: string, badge: string, unit: string) => {
-    setAnalystName(name);
-    setAnalystBadge(badge);
-    setAnalystUnit(unit);
-    localStorage.setItem("socmint_analyst_name", name);
-    localStorage.setItem("socmint_analyst_badge", badge);
-    localStorage.setItem("socmint_analyst_unit", unit);
-    setShowSettingsModal(false);
-  };
-
-  const handleTopBarSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (topBarQuery.trim()) {
-      handleSearch(topBarQuery.trim(), "username");
-      setTopBarQuery("");
-    }
-  };
-
-  const handleClearSuspect = () => {
-    setActiveSuspect(null);
-    setActiveTab("overview");
-  };
-
-  const handleMarkAlertRead = (id: string) => {
-    setAlerts(prev => {
-      const updated = prev.map(a => a.id === id ? { ...a, isRead: true } : a);
-      localStorage.setItem("socmint_alerts", JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  const unreadAlertCount = alerts.filter(a => !a.isRead).length;
 
   return (
-    <div className="flex h-screen bg-[#080c16] text-slate-200 overflow-hidden font-sans">
-      
-      {/* Sidebar Mobile Backdrop */}
-      {sidebarOpen && (
-        <div 
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300"
-        />
-      )}
+    <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10">
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+            <SweepSkeleton stageText={SWEEP_STAGES[stage]} />
+          </motion.div>
+        ) : !suspect ? (
+          <motion.div key="hero" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
+            <SearchHero onSearch={runSweep} error={error} onDismissError={() => setError(null)} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="dossier"
+            ref={headerRef}
+            className="space-y-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            <SuspectHeader
+              suspect={suspect}
+              orbTheme={TAB_THEME[activeTab] ?? RISK_THEME[suspect.riskLevel] ?? "default"}
+              onNew={() => { setSuspect(null); setError(null); setActiveTab("overview"); setApiResponse(null); }}
+              onPrint={() => { storage.pushAudit("EXPORT_REPORT", suspect.caseReference); window.print(); }}
+              onExportJson={() => {
+                storage.pushAudit("EXPORT_JSON", suspect.caseReference);
+                const exportData = apiResponse || {
+                  title: `Investigation: ${suspect.realName}`,
+                  generated_at: new Date().toISOString(),
+                  summary: [
+                    { label: "Query", value: suspect.username },
+                    { label: "Type", value: "Exported dossier" }
+                  ],
+                  data: {
+                    export_type: "identity_search",
+                    query: suspect.username,
+                    status: "completed",
+                    results: suspect.accounts
+                  }
+                };
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${suspect.caseReference}_dossier.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast.success("JSON report exported");
+              }}
+            />
+            <SuspectTabs profile={suspect} onTabChange={setActiveTab} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
-      {/* Sidebar Navigation */}
-      <aside className={`w-64 bg-[#0a0f1e]/95 md:bg-[#0a0f1e]/80 border-r border-slate-900 flex flex-col justify-between flex-shrink-0 fixed md:static inset-y-0 left-0 transition-transform duration-300 ease-in-out z-40 md:z-30 print:hidden ${
-        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-      }`}>
-        <div>
-          {/* Brand Logo */}
-          <div className="h-16 flex items-center justify-between gap-2.5 px-6 border-b border-slate-900">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-xl glow-blue">
-                <ShieldAlert className="w-5 h-5 text-blue-500" />
-              </div>
-              <span className="font-bold tracking-tight text-white font-mono text-base">
-                SOCMINT<span className="text-blue-500">SHIELD</span>
-              </span>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 bg-slate-950 border border-slate-900 rounded-lg text-slate-400 md:hidden focus:outline-none"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+function SearchHero({
+  onSearch, error, onDismissError,
+}: {
+  onSearch: (dq: DossierQuery) => void;
+  error: string | null;
+  onDismissError: () => void;
+}) {
+  const [type, setType] = useState<(typeof SEARCH_TYPES)[number]["value"]>("username");
+  const [query, setQuery] = useState("");
+  const [advanced, setAdvanced] = useState(false);
+  const [dossier, setDossier] = useState<DossierQuery>({
+    username: "", realName: "", phone: "", email: "", faceImage: "",
+  });
+  const current = SEARCH_TYPES.find((s) => s.value === type)!;
 
-          {/* Nav Links */}
-          <nav className="p-4 space-y-1">
-            <button
-              onClick={() => { setActiveView("search"); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
-                activeView === "search"
-                  ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:bg-slate-950/60 hover:text-slate-200"
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              <span>Investigate Sweep</span>
-            </button>
+  const submitSimple = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+    const key = type === "face" ? "faceImage" : type;
+    onSearch({ [key]: query.trim() } as DossierQuery);
+  };
 
-            <button
-              onClick={() => { setActiveView("alerts"); setSidebarOpen(false); }}
-              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
-                activeView === "alerts"
-                  ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:bg-slate-950/60 hover:text-slate-200"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Bell className="w-4 h-4" />
-                <span>Alerts Center</span>
-              </div>
-              {unreadAlertCount > 0 && (
-                <span className="bg-rose-500 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-full animate-pulse">
-                  {unreadAlertCount}
-                </span>
-              )}
-            </button>
+  const submitDossier = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleaned: DossierQuery = Object.fromEntries(
+      Object.entries(dossier).filter(([, v]) => v && v.trim().length > 0)
+    );
+    if (Object.keys(cleaned).length === 0) {
+      toast.error("Empty dossier query", { description: "Fill at least one field before launching the sweep." });
+      return;
+    }
+    onSearch(cleaned);
+  };
 
-            <button
-              onClick={() => { setActiveView("cases"); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
-                activeView === "cases"
-                  ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:bg-slate-950/60 hover:text-slate-200"
-              }`}
-            >
-              <FolderOpen className="w-4 h-4" />
-              <span>Case Directory</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveView("compliance"); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
-                activeView === "compliance"
-                  ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:bg-slate-950/60 hover:text-slate-200"
-              }`}
-            >
-              <Info className="w-4 h-4" />
-              <span>Legal Compliance</span>
-            </button>
-          </nav>
+  return (
+    <div className="space-y-10">
+      {/* Header band */}
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="classified-banner px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.3em] flex items-center justify-between">
+          <span>Restricted · For authorized auditors only · KSP Cyber Cell</span>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] hover:bg-white/10 transition-colors"
+            title="Settings"
+          >
+            <Settings className="h-3 w-3" />
+            Settings {igSession && <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 ml-1" title="Instagram live scraping active" />}
+          </button>
         </div>
-
-        {/* Auditor Profile Footer */}
-        <button 
-          onClick={() => setShowSettingsModal(true)}
-          className="p-4 border-t border-slate-900 bg-slate-950/40 hover:bg-slate-950/80 transition-colors w-full text-left flex items-center gap-3 focus:outline-none"
-        >
-          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-300 font-mono flex-shrink-0">
-            {analystName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()}
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs font-bold text-white truncate">{analystName}</span>
-            <span className="text-[9px] text-slate-500 font-mono truncate">{analystBadge} • {analystUnit}</span>
-          </div>
-        </button>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        
-        {/* Top Header Bar */}
-        <header className="h-16 border-b border-slate-900 bg-[#0a0f1e]/40 backdrop-blur-sm flex items-center justify-between px-6 flex-shrink-0 z-20 print:hidden">
-          <div className="flex items-center gap-4 flex-1">
-            
-            {/* Hamburger menu for mobile */}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-1.5 bg-slate-950 border border-slate-900 rounded-lg text-slate-400 hover:text-slate-200 md:hidden focus:outline-none"
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-
-            {/* Topbar Quick Search - only shown when suspect page is loaded */}
-            {activeSuspect && activeView === "search" && (
-              <form onSubmit={handleTopBarSearchSubmit} className="relative w-full max-w-sm flex items-center">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3" />
-                <input
-                  type="text"
-                  value={topBarQuery}
-                  onChange={(e) => setTopBarQuery(e.target.value)}
-                  placeholder="Sweep another suspect handle..."
-                  className="w-full pl-9 pr-14 py-1.5 text-xs rounded-xl bg-slate-950/80 border border-slate-900 focus:border-blue-500/40 focus:ring-0 outline-none text-white font-mono placeholder:text-slate-500"
-                />
-                <div className="absolute right-3 px-1.5 py-0.5 rounded text-[8px] font-mono text-slate-500 bg-slate-900 border border-slate-800 pointer-events-none select-none">
-                  Ctrl+K
-                </div>
-              </form>
-            )}
-            
-            {!activeSuspect && activeView === "search" && (
-              <span className="text-xs font-semibold text-slate-400 font-mono">
-                Karnataka State Police Department • Tactical Portal
-              </span>
-            )}
-
-            {activeView === "alerts" && <span className="text-xs font-bold text-white font-mono">ALERTS AND DISCOVERY MONITOR</span>}
-            {activeView === "cases" && <span className="text-xs font-bold text-white font-mono">INVESTIGATION CASE DIRECTORY</span>}
-            {activeView === "compliance" && <span className="text-xs font-bold text-white font-mono">LEGAL COMPLIANCE LOGS</span>}
-          </div>
-
-          <div className="flex items-center gap-4 text-xs font-mono">
-            {/* Live IST clock */}
-            <div className="flex items-center gap-1.5 text-slate-400 bg-slate-950/80 border border-slate-900 px-3 py-1.5 rounded-xl">
-              <Clock className="w-3.5 h-3.5 text-blue-500" />
-              <span>{clockTime || "00:00:00 IST"}</span>
+        <div className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:p-10">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-stamp/30 bg-stamp/5 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-stamp">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              SOCMINT Sweep · public sources only
             </div>
-            
-            <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/20 border border-emerald-500/10 px-3 py-1.5 rounded-xl">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Secure Session Verified</span>
-            </div>
+            <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-5xl">
+              Open a new<br />
+              <span className="text-stamp">case file</span> on a suspect.
+            </h1>
+            <p className="max-w-xl text-sm text-muted-foreground md:text-base">
+              SOCMINT Shield aggregates 14+ open-source signals — social handles, leaks, on-chain trails, UPI / Truecaller / NCRP, court records, face matches — into a single court-admissible dossier.
+            </p>
           </div>
-        </header>
-
-        {/* Scrollable View Area */}
-        <main className="flex-1 overflow-y-auto p-6 z-10 print:overflow-visible print:p-0">
-          
-          {/* SEARCH/INVESTIGATE VIEW */}
-          {activeView === "search" && (
-            <>
-              {!activeSuspect ? (
-                <>
-                  <SearchHero onSearch={handleSearch} isSearching={isSearching} />
-                  {searchError && (
-                    <div className="max-w-3xl mx-auto -mt-6 mb-6 glass-panel p-4 rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-300 text-xs font-mono">
-                      Live sweep failed: {searchError}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="space-y-6 print:space-y-0 print:block">
-                  
-                  {/* Back Navigation & Summary Header */}
-                  <div className="flex items-center justify-between border-b border-slate-900 pb-4 flex-wrap gap-3 print:hidden">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleClearSuspect}
-                        className="px-3 py-1.5 bg-slate-950 border border-slate-900 rounded-lg text-xs font-mono text-slate-400 hover:text-slate-200 hover:bg-slate-900 flex items-center gap-1 transition-all"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" /> New Search
-                      </button>
-
-                      <button
-                        onClick={() => window.print()}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all shadow-md glow-blue"
-                      >
-                        Export Report
-                      </button>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 font-mono">Preserved Profile Dossier:</span>
-                      <span className="text-xs font-bold text-white font-mono bg-blue-950 border border-blue-500/20 px-2 py-0.5 rounded">
-                        {activeSuspect.realName}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Suspect Dashboard Navigation Tabs with horizontal scroll arrows */}
-                  <div className="flex items-center gap-1.5 max-w-full print:hidden">
-                    <button
-                      onClick={() => scrollTabs("left")}
-                      className="p-1.5 bg-slate-950/80 hover:bg-slate-900 border border-slate-900 rounded-lg text-slate-400 hover:text-white flex-shrink-0 transition-colors cursor-pointer"
-                      title="Scroll Left"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-
-                    <div 
-                      ref={tabContainerRef}
-                      className="flex border-b border-slate-900 space-x-1 p-1 bg-slate-950/40 rounded-xl overflow-x-auto scrollbar-none flex-grow"
-                      style={{ scrollbarWidth: "none" }}
-                    >
-                      {[
-                        { id: "overview", label: "Overview" },
-                        { id: "accounts", label: "Linked Accounts" },
-                        { id: "posts", label: "Post Timeline" },
-                        { id: "wikidata", label: "Wikidata Registry" },
-                        { id: "nlp", label: "NLP Analysis" },
-                        { id: "face", label: "Face Scan" },
-                        { id: "shadow", label: "Shadow Profiles", hasBadge: !!(activeSuspect.shadowAccounts && activeSuspect.shadowAccounts.length > 0) },
-                        { id: "crypto", label: "Crypto Trace", hasBadge: !!activeSuspect.cryptoTrace },
-                        { id: "darkweb", label: "Dark Web Logs" },
-                        { id: "legal", label: "Legal & Public Records" },
-                        { id: "network", label: "Network Graph" },
-                        { id: "location", label: "Geotag Trail" },
-                        { id: "evasion", label: "Evasion Timeline", hasBadge: activeSuspect.aliasResults?.some(a => a.evasionPattern) },
-                        { id: "chat", label: "AI Chat" },
-                        { id: "evidence", label: "Court Certificate" }
-                      ].map((tab) => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setActiveTab(tab.id)}
-                          className={`px-4 py-2 rounded-lg text-xs font-mono font-medium transition-all relative flex-shrink-0 ${
-                            activeTab === tab.id
-                              ? "bg-blue-600 text-white shadow-md glow-blue"
-                              : "text-slate-400 hover:text-slate-200"
-                          }`}
-                        >
-                          {tab.label}
-                          {tab.hasBadge && (
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)]"></span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={() => scrollTabs("right")}
-                      className="p-1.5 bg-slate-950/80 hover:bg-slate-900 border border-slate-900 rounded-lg text-slate-400 hover:text-white flex-shrink-0 transition-colors cursor-pointer"
-                      title="Scroll Right"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Active Tab rendering */}
-                  <div className="mt-6 print:mt-0 print:block">
-                    {activeTab === "overview" && <ProfileOverview suspect={activeSuspect} onSelectTab={setActiveTab} />}
-                    
-                    {activeTab === "accounts" && (
-                      <div className="glass-panel p-6 rounded-2xl border border-slate-800">
-                        <h4 className="text-sm font-semibold text-white font-mono uppercase tracking-wider mb-6">
-                          Discovered Platform Profiles
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {(activeSuspect.accounts || []).map((acc) => (
-                            <div key={acc.id} className="p-4 bg-slate-950/40 border border-slate-900 rounded-xl relative">
-                              <div className="flex items-center gap-1 absolute top-2 right-2">
-                                {acc.tier === 1 && (
-                                  <span className="text-[7px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1 py-0.5 rounded font-mono">T1 API</span>
-                                )}
-                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold font-mono ${
-                                  acc.confidence === "CONFIRMED" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25" : "bg-slate-700/30 text-slate-400"
-                                }`}>{acc.confidence}</span>
-                              </div>
-                              <h5 className="text-xs font-bold text-white uppercase font-mono">{acc.platform}</h5>
-                              <span className="text-[10px] text-blue-400 font-mono">@{acc.username}</span>
-                              <p className="text-[10px] text-slate-400 mt-2 font-mono">{acc.bio || "No bio available."}</p>
-                              <div className="mt-3 pt-2 border-t border-slate-900 flex justify-between text-[10px] font-mono">
-                                <span className="text-slate-500">{acc.followers.toLocaleString()} Followers</span>
-                                <a href={acc.profileUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">Inspect Profile</a>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {activeTab === "posts" && <TimelineView suspect={activeSuspect} />}
-                    {activeTab === "wikidata" && <WikidataCard suspect={activeSuspect} />}
-                    {activeTab === "nlp" && <NLPAnalyzer suspect={activeSuspect} />}
-                    {activeTab === "face" && <FaceScanCard suspect={activeSuspect} />}
-                    {activeTab === "shadow" && <ShadowAccounts suspect={activeSuspect} />}
-                    {activeTab === "crypto" && <CryptoTraceCard suspect={activeSuspect} />}
-                    {activeTab === "darkweb" && <DarkWebMonitor suspect={activeSuspect} />}
-                    {activeTab === "legal" && <LegalRecords suspect={activeSuspect} />}
-                    {activeTab === "network" && <NetworkGraph suspect={activeSuspect} />}
-                    {activeTab === "location" && <LocationMap suspect={activeSuspect} />}
-                    {activeTab === "evasion" && <EvasionTimeline suspect={activeSuspect} />}
-                    {activeTab === "chat" && <AiChat suspect={activeSuspect} />}
-                    {activeTab === "evidence" && <EvidencePackage suspect={activeSuspect} />}
-                  </div>
-
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ALERTS VIEW */}
-          {activeView === "alerts" && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
-                  Active Real-Time Discovery Monitor
-                </h4>
-                <span className="text-xs text-slate-500 font-mono">System listening for suspect status updates</span>
-              </div>
-
-              <div className="space-y-4">
-                {alerts.map((alert) => (
-                  <div 
-                    key={alert.id}
-                    className={`glass-panel p-5 rounded-2xl border transition-all relative overflow-hidden ${
-                      alert.isRead ? "border-slate-900 bg-slate-950/20" : "border-slate-800 bg-slate-950/50"
-                    }`}
-                  >
-                    {/* Left vertical visual marker */}
-                    <div className={`absolute top-0 left-0 bottom-0 w-1 ${
-                      alert.type === "critical" ? "bg-rose-500 glow-red" :
-                      alert.type === "warning" ? "bg-amber-500 glow-amber" : "bg-blue-500"
-                    }`}></div>
-
-                    <div className="flex items-start justify-between flex-wrap gap-2 pl-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[9px] font-bold font-mono px-2 py-0.5 rounded border ${
-                            alert.type === "critical" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                            alert.type === "warning" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                            "bg-blue-500/10 text-blue-450 border-blue-500/20"
-                          }`}>
-                            {alert.type.toUpperCase()}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-mono">{alert.timestamp}</span>
-                        </div>
-                        <h5 className="text-xs font-bold text-white font-mono">{alert.title}</h5>
-                        <p className="text-[11px] text-slate-400 font-mono leading-relaxed">{alert.details}</p>
-                      </div>
-
-                      {!alert.isRead && (
-                        <button
-                          onClick={() => handleMarkAlertRead(alert.id)}
-                          className="px-2.5 py-1 bg-slate-950 hover:bg-slate-900 text-[9px] font-bold font-mono text-slate-400 border border-slate-900 hover:border-slate-850 rounded-lg"
-                        >
-                          Mark Audited
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* CASES DIRECTORY VIEW */}
-          {activeView === "cases" && (
-            <div className="max-w-5xl mx-auto space-y-6">
-              <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
-                  Investigated Suspect Archives
-                </h4>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-500 font-mono">Tamper-proof audit listing</span>
-                  {recentInvestigations.length > 0 && (
-                    <button
-                      onClick={handleClearHistory}
-                      className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold font-mono text-rose-450 border border-rose-500/20 hover:border-rose-500/35 rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      Clear History
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {recentInvestigations.length === 0 && (
-                  <div className="md:col-span-3 glass-panel p-8 rounded-2xl border border-slate-800 text-center">
-                    <p className="text-xs text-slate-400 font-mono">
-                      No stored suspect directory is loaded. Run a live sweep to create a temporary session dossier.
-                    </p>
-                  </div>
-                )}
-
-                {recentInvestigations.map((profile) => (
-                  <div 
-                    key={profile.caseReference}
-                    onClick={() => {
-                      setActiveSuspect(profile);
-                      setActiveTab("overview");
-                      setActiveView("search");
-                    }}
-                    className="glass-panel p-5 rounded-2xl border border-slate-800 hover:border-blue-500/30 transition-all cursor-pointer group flex flex-col justify-between min-h-[180px]"
-                  >
-                    <div className="flex items-start justify-between">
-                      <img
-                        src={profile.photoUrl}
-                        alt={profile.realName}
-                        className="w-12 h-12 rounded-xl object-cover border border-slate-800"
-                      />
-                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold font-mono border ${
-                        profile.riskLevel === "CRITICAL" ? "bg-rose-500/10 text-rose-400 border-rose-500/20 glow-red" :
-                        profile.riskLevel === "HIGH" ? "bg-orange-500/10 text-orange-400 border-orange-500/20" :
-                        profile.riskLevel === "MEDIUM" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                        "bg-emerald-500/10 text-emerald-450 border-emerald-500/20 glow-green"
-                      }`}>
-                        {profile.riskLevel}
-                      </span>
-                    </div>
-
-                    <div className="mt-4">
-                      <h5 className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors">{profile.realName}</h5>
-                      <span className="text-[10px] text-slate-500 font-mono">{profile.username}</span>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-slate-900 flex justify-between items-center text-[9px] font-mono text-slate-400">
-                      <span>{(profile.accounts || []).length} Platforms Linked</span>
-                      <span>BRS: <strong className="text-white">{profile.riskScore}</strong></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* POLICY COMPLIANCE VIEW */}
-          {activeView === "compliance" && (
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4 font-mono text-xs">
-                <div className="flex items-center gap-2 mb-2 text-blue-500">
-                  <Shield className="w-5 h-5" />
-                  <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
-                    Privacy Policy & OSINT Guidelines Compliance
-                  </h4>
-                </div>
-
-                <h5 className="text-xs font-bold text-white mb-2 uppercase">1. Article 21 Constitution Bounds & DPDP Act 2023</h5>
-                <p className="text-slate-400 leading-relaxed">
-                  SOCMINT Shield is strictly designed as an Open Source Intelligence (OSINT) pipeline. It scans only public-facing profiles, geotag stickers, and public registries. The tool does not intercept private messaging packets, hack user endpoints, or bypass credential locks. Under Article 21, public data is admissible when processed transparently for state security.
-                </p>
-
-                <h5 className="text-xs font-bold text-white mb-2 uppercase">2. Section 65B Indian Evidence Act Admissibility</h5>
-                <p className="text-slate-400 leading-relaxed">
-                  Electronic evidence captured by this portal is verified with cryptographic SHA-256 block signatures. This acts as tamper-proof metadata log registration, qualifying as compliant certificate files under Section 65B without requiring external expert verification.
-                </p>
-              </div>
-
-              {/* Session Audit Trails listing */}
-              <div className="glass-panel p-6 rounded-2xl border border-slate-800">
-                <h4 className="text-sm font-semibold text-white font-mono uppercase tracking-wider mb-4">
-                  Session Compliance Audit Logs
-                </h4>
-                <div className="space-y-3 font-mono text-[10px] text-slate-500 max-h-[250px] overflow-y-auto pr-2">
-                  {auditLogs.map((log) => (
-                    <div key={log.id} className="flex justify-between border-b border-slate-900 pb-2">
-                      <span className="text-slate-400 max-w-[80%]">{log.action}</span>
-                      <span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {log.timestamp}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-        </main>
-
-        {/* Global Compliance Footer */}
-        <footer className="h-10 border-t border-slate-900 bg-[#080c16] flex items-center justify-between px-6 text-[9px] font-mono text-slate-500 flex-shrink-0 z-20 print:hidden">
-          <div className="flex items-center gap-1">
-            <Shield className="w-3.5 h-3.5 text-blue-500" />
-            <span>SOCMINT Shield v2.0 • Government Hackathon Submission • 20-Platform OSINT Engine</span>
+          <div className="hidden md:flex items-center justify-center">
+            <ShieldOrb className="h-56 w-56" />
           </div>
-          <div>DPDP Act 2023 & Section 65B Indian Evidence Act Compliant</div>
-        </footer>
-
+        </div>
       </div>
 
-      {/* Analyst Settings Modal */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-950 border border-slate-800 p-6 rounded-2xl shadow-2xl font-mono text-xs">
-            <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4 border-b border-slate-900 pb-2">
-              Analyst Identity Settings
-            </h4>
-            
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const name = formData.get("name") as string || "Inspector Prasad";
-              const badge = formData.get("badge") as string || "CY-8902";
-              const unit = formData.get("unit") as string || "Karnataka Cell";
-              handleSaveAnalystSettings(name, badge, unit);
-            }} className="space-y-4">
-              <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Analyst Name</label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  defaultValue={analystName}
-                  className="w-full p-2 bg-slate-905 border border-slate-800 rounded-lg text-white outline-none focus:border-blue-500/40"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Badge ID</label>
-                <input 
-                  type="text" 
-                  name="badge" 
-                  defaultValue={analystBadge}
-                  className="w-full p-2 bg-slate-905 border border-slate-800 rounded-lg text-white outline-none focus:border-blue-500/40"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] text-slate-500 block mb-1">Unit / Division</label>
-                <input 
-                  type="text" 
-                  name="unit" 
-                  defaultValue={analystUnit}
-                  className="w-full p-2 bg-slate-905 border border-slate-800 rounded-lg text-white outline-none focus:border-blue-500/40"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button 
-                  type="button"
-                  onClick={() => setShowSettingsModal(false)}
-                  className="px-3 py-1.5 bg-[#0a0f1d] border border-slate-900 text-slate-400 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md glow-blue"
-                >
-                  Save Settings
-                </button>
-              </div>
-            </form>
+      {error && (
+        <div className="flex items-start gap-3 rounded-md border-l-4 border-stamp bg-stamp/5 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-stamp" />
+          <div className="flex-1">
+            <div className="font-mono text-[11px] uppercase tracking-wider text-stamp">Sweep failed</div>
+            <div className="mt-1 text-sm">{error}</div>
           </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onDismissError}><X className="h-4 w-4" /></Button>
         </div>
       )}
 
+      {/* Search form */}
+      <Card className="border-border">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 font-display text-xl">
+            <Sparkles className="h-4 w-4 text-evidence" /> Begin investigation
+          </CardTitle>
+          <Button variant={advanced ? "default" : "outline"} size="sm" onClick={() => setAdvanced((a) => !a)}>
+            <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
+            {advanced ? "Quick search" : "Dossier mode"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {!advanced ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {SEARCH_TYPES.map((t, i) => {
+                  const Icon = t.icon;
+                  const active = type === t.value;
+                  return (
+                    <motion.button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setType(t.value)}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04, duration: 0.25 }}
+                      whileHover={{ scale: 1.04 }}
+                      whileTap={{ scale: 0.96 }}
+                      className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${active ? "border-stamp bg-stamp text-primary-foreground" : "border-border bg-card hover:bg-muted"}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {t.label}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <form onSubmit={submitSimple} className="space-y-3">
+                <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Search · {current.label}</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      autoFocus
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={current.placeholder}
+                      className="h-12 pl-10 text-base"
+                    />
+                  </div>
+                  <Button type="submit" disabled={!query.trim()} className="h-12 px-6">
+                    Run sweep <FilePlus className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">All queries are logged to the audit ledger and visible to your supervising officer.</p>
+              </form>
+            </>
+          ) : (
+            <form onSubmit={submitDossier} className="space-y-4">
+              <div className="rounded-md border border-evidence/30 bg-evidence/5 p-3 text-xs">
+                <span className="font-mono uppercase tracking-wider text-evidence">Dossier mode</span> — supply any combination of identifiers. The sweep will fuse them into a single composite subject.
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <DossierField icon={AtSign} label="Username" placeholder="shadowtrader99" value={dossier.username || ""} onChange={(v) => setDossier({ ...dossier, username: v })} />
+                <DossierField icon={IdCard} label="Real name" placeholder="Vikram Rathore" value={dossier.realName || ""} onChange={(v) => setDossier({ ...dossier, realName: v })} />
+                <DossierField icon={Phone} label="Phone" placeholder="+91 98765 43210" value={dossier.phone || ""} onChange={(v) => setDossier({ ...dossier, phone: v })} mono />
+                <DossierField icon={Mail} label="Email" placeholder="name@protonmail.com" value={dossier.email || ""} onChange={(v) => setDossier({ ...dossier, email: v })} mono />
+                <DossierField icon={ScanFace} label="Face image (URL or base64)" placeholder="https://… or data:image/jpeg;base64,…" value={dossier.faceImage || ""} onChange={(v) => setDossier({ ...dossier, faceImage: v })} className="md:col-span-2" mono />
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-muted-foreground">Composite sweeps consume more upstream quota — expect 10-15s runtime.</p>
+                <Button type="submit" className="h-11 px-6">
+                  Launch dossier sweep <FilePlus className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Capability strip */}
+      <div className="grid gap-3 md:grid-cols-3">
+        {[
+          { t: "14 OSINT sources", d: "Sherlock · WhatsMyName · HIBP · Chainalysis · MCA21 · GDELT · PimEyes · Truecaller · NCRP …" },
+          { t: "Court-admissible dossier", d: "Every record carries provenance, hash, and IST timestamp." },
+          { t: "Live API integration", d: "Fully connected to the robust Next.js /api/investigate backend engine." },
+        ].map((c, i) => (
+          <motion.div
+            key={c.t}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 + i * 0.08, duration: 0.3 }}
+            className="rounded-md border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-stamp/30"
+          >
+            <div className="font-mono text-[11px] uppercase tracking-wider text-stamp">{c.t}</div>
+            <div className="mt-1 text-sm text-muted-foreground">{c.d}</div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DossierField({
+  icon: Icon, label, placeholder, value, onChange, mono, className,
+}: {
+  icon: typeof AtSign; label: string; placeholder: string;
+  value: string; onChange: (v: string) => void; mono?: boolean; className?: string;
+}) {
+  return (
+    <div className={`space-y-1.5 ${className ?? ""}`}>
+      <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <div className="relative">
+        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`pl-9 ${mono ? "font-mono text-sm" : ""}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SweepSkeleton({ stageText }: { stageText: string }) {
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="classified-banner px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.3em]">
+          Sweep in progress · {new Date().toLocaleTimeString("en-IN")} IST
+        </div>
+        <div className="space-y-4 p-6 md:p-8">
+          <div className="flex items-center gap-3">
+            <div className="relative h-10 w-10">
+              <Loader2 className="h-10 w-10 animate-spin text-stamp" />
+              <ShieldAlert className="absolute inset-0 m-auto h-4 w-4 text-stamp" />
+            </div>
+            <div>
+              <div className="font-display text-xl font-semibold">Running OSINT sweep…</div>
+              <div className="font-mono text-xs text-muted-foreground">{stageText}</div>
+            </div>
+          </div>
+          <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="scan-bar absolute inset-y-0 w-1/3 rounded-full bg-stamp/70" />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-16 w-16 rounded-md" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-2 overflow-hidden">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="h-9 w-28 shrink-0" />
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader><Skeleton className="h-5 w-40" /></CardHeader>
+          <CardContent className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-2 w-full" />
+              </div>
+            ))}
+            <Skeleton className="h-px w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-5/6" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="aspect-square w-full" />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function SuspectHeader({ suspect, orbTheme, onNew, onPrint, onExportJson }: { suspect: SuspectProfile; orbTheme: OrbTheme; onNew: () => void; onPrint: () => void; onExportJson: () => void }) {
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="classified-banner px-4 py-1 font-mono text-[10px] uppercase tracking-[0.3em]">
+        Active dossier · {suspect.caseReference} · Captured {new Date(suspect.capturedAt).toLocaleString("en-IN")}
+      </div>
+      <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 overflow-hidden rounded-md border-2 border-stamp/40 bg-muted">
+            <img src={suspect.photoUrl} alt={suspect.realName} className="h-full w-full object-cover" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display text-2xl font-semibold tracking-tight">{suspect.realName}</h2>
+              <Badge className={riskColor(suspect.riskLevel) + " font-mono text-[10px] uppercase tracking-wider"}>
+                {suspect.riskLevel} · {suspect.riskScore}
+              </Badge>
+            </div>
+            {(() => {
+              let usernameDisplay = suspect.username;
+              if (usernameDisplay) {
+                usernameDisplay = usernameDisplay.replace(/^@+/, "");
+                if (usernameDisplay.includes("@")) {
+                  usernameDisplay = usernameDisplay.split("@")[0];
+                }
+                usernameDisplay = `@${usernameDisplay}`;
+              }
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {usernameDisplay && (
+                    <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground shadow-sm">
+                      <User className="h-3 w-3 text-muted-foreground/60" />
+                      <span>{usernameDisplay}</span>
+                    </div>
+                  )}
+
+                  {suspect.emailAddress && suspect.emailAddress !== "Not provided" && (
+                    <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground shadow-sm">
+                      <Mail className="h-3 w-3 text-muted-foreground/60" />
+                      <span>{suspect.emailAddress}</span>
+                    </div>
+                  )}
+
+                  {suspect.phoneNumber && suspect.phoneNumber !== "Not provided" && (
+                    <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground shadow-sm">
+                      <Phone className="h-3 w-3 text-muted-foreground/60" />
+                      <span>{suspect.phoneNumber}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:block h-20 w-20 shrink-0 no-print" title={`Theme: ${orbTheme}`}>
+            <ShieldOrb className="h-20 w-20" theme={orbTheme} />
+          </div>
+          <div className="flex flex-wrap gap-2 no-print">
+            <Button variant="outline" onClick={onNew}><Search className="mr-2 h-4 w-4" /> New search</Button>
+            <Button variant="outline" onClick={onPrint}><Printer className="mr-2 h-4 w-4" /> Export PDF</Button>
+            <Button onClick={onExportJson}><FilePlus className="mr-2 h-4 w-4" /> Export JSON</Button>
+          </div>
+        </div>
+      </div>
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-stamp" />
+                <h2 className="font-semibold text-base">Scraping Settings</h2>
+              </div>
+              <button onClick={() => setSettingsOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Instagram session */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Instagram Session Cookie</label>
+                {igSession ? (
+                  <span className="flex items-center gap-1 text-xs text-green-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-400 inline-block" />
+                    Live scraping active
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Not configured</span>
+                )}
+              </div>
+              <input
+                id="ig-session-input"
+                type="password"
+                value={igSessionInput}
+                onChange={e => setIgSessionInput(e.target.value)}
+                placeholder="Paste your Instagram sessionid cookie value…"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-stamp/50"
+              />
+              <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-semibold text-foreground">How to get your sessionid:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Open <strong>instagram.com</strong> in your browser and log in</li>
+                  <li>Press <strong>F12</strong> → Application → Cookies → www.instagram.com</li>
+                  <li>Find <strong>sessionid</strong> and copy its value</li>
+                  <li>Paste it above and click Save</li>
+                </ol>
+                <p className="mt-1 text-amber-400/80">Your cookie stays on this device only (localStorage). It is used solely for live Instagram/Threads profile lookups.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveIgSession}
+                  className="flex-1 rounded-md bg-stamp px-4 py-2 text-sm font-medium text-white hover:bg-stamp/90 transition-colors"
+                >
+                  Save
+                </button>
+                {igSession && (
+                  <button
+                    onClick={() => { setIgSessionInput(""); setIgSession(""); localStorage.removeItem("ig_session_id"); setSettingsOpen(false); }}
+                    className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

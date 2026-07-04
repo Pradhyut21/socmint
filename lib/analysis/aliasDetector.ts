@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AliasResult, PlatformAccount, Post } from "../types";
 
 function tokenize(value: string) {

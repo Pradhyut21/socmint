@@ -1,373 +1,271 @@
-/**
- * SOCMINT Shield — Demo / Mock Data Module
- * 
- * All hardcoded demo profiles (hackathon subjects) live here.
- * This keeps liveSocmint.ts clean and makes it easy to tell
- * real OSINT logic from demo data.
- */
-
+import fs from "fs";
+import path from "path";
 import { PlatformAccount, Post, LegalRecord, SuspectProfile } from "../types";
 
-// ── Demo user detection ───────────────────────────────────────────────
+// Target demo usernames
+const TARGET_USERS = ["darkphoenix_07", "kishansaaai", "shadowtrader99", "sneha_fintech", "kulkarni_sneha", "pradhh.18"];
 
 export function isDemoUser(username: string): boolean {
-  const lower = username.toLowerCase();
-  return (
-    lower.includes("shadowtrader99") ||
-    lower.includes("sneha_fintech") ||
-    lower.includes("kulkarni_sneha")
-  );
+  const lower = username.toLowerCase().replace("@", "");
+  return TARGET_USERS.includes(lower);
 }
 
-// ── Demo probe overrides ─────────────────────────────────────────────
-// Returns a mock HTTP probe result for known demo usernames on certain platforms.
+export function loadDownloadedJson(username: string): any {
+  const cleanUser = username.toLowerCase().replace("@", "");
+  const possibleDirs = [
+    "C:\\Users\\saiki\\Downloads",
+    "C:\\Users\\saiki\\OneDrive\\Documents\\Desktop\\Downloads",
+    "C:\\Users\\saiki\\OneDrive\\Desktop\\Downloads"
+  ];
+  for (const baseDir of possibleDirs) {
+    if (!fs.existsSync(baseDir)) continue;
+    try {
+      const files = fs.readdirSync(baseDir);
+      for (const file of files) {
+        const lowerFile = file.toLowerCase();
+        if (lowerFile.endsWith(".json") && lowerFile.includes(cleanUser)) {
+          const content = fs.readFileSync(path.join(baseDir, file), "utf-8");
+          return JSON.parse(content);
+        }
+      }
+    } catch (e) {
+      console.error("Error reading directory/file:", e);
+    }
+  }
+  return null;
+}
 
 export function getDemoProbeResult(
   lowercaseUrl: string
-): { ok: boolean; status: number; title?: string; description?: string } | null {
-  if (lowercaseUrl.includes("shadowtrader99")) {
-    if (lowercaseUrl.includes("linkedin")) {
-      return {
-        ok: true,
-        status: 200,
-        title: "Vikram Rathore | LinkedIn",
-        description:
-          "Blockchain developer & DeFi researcher. Attended DevFest Delhi in Oct 2025. Speaker at local meetups. Ex-Fintech contractor.",
-      };
+): { ok: boolean; status: number; displayName?: string; bio?: string; profilePicUrl?: string; followers?: number; following?: number; posts?: number; isPrivate?: boolean; creationDate?: string; lastActive?: string; extras?: any } | null {
+  // 1. Parse platform name (e.g. instagram.com, threads.net, etc.)
+  let platformKey = "";
+  if (lowercaseUrl.includes("instagram.com")) platformKey = "instagram";
+  else if (lowercaseUrl.includes("threads.net")) platformKey = "threads";
+  else if (lowercaseUrl.includes("twitter.com") || lowercaseUrl.includes("x.com")) platformKey = "twitter";
+  else if (lowercaseUrl.includes("pinterest.com")) platformKey = "pinterest";
+  else if (lowercaseUrl.includes("developer.apple.com")) platformKey = "appledevelopers";
+  else if (lowercaseUrl.includes("chess.com")) platformKey = "chess";
+
+  // 2. Extract username from the URL
+  let queryUsername = "";
+  try {
+    const urlObj = new URL(lowercaseUrl);
+    const pathname = urlObj.pathname;
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length > 0) {
+      queryUsername = parts[parts.length - 1].replace("@", "").toLowerCase();
+      queryUsername = queryUsername.split("?")[0].split("#")[0];
     }
-    if (lowercaseUrl.includes("github")) {
-      return {
-        ok: true,
-        status: 200,
-        title: "shadowtrader99 (Vikram Rathore) · GitHub",
-        description:
-          "Full stack DeFi builder. Hackathon participant at EthIndia Bengaluru Dec 2025. Exploring decentralized liquidity.",
-      };
+  } catch {}
+
+  if (!queryUsername) return null;
+
+  // 3. Scan downloads directory to find a matching JSON file
+  const possibleDirs = [
+    "C:\\Users\\saiki\\Downloads",
+    "C:\\Users\\saiki\\OneDrive\\Documents\\Desktop\\Downloads",
+    "C:\\Users\\saiki\\OneDrive\\Desktop\\Downloads"
+  ];
+
+  let matchedJson: any = null;
+  let matchedTargetUser = "";
+
+  for (const baseDir of possibleDirs) {
+    if (!fs.existsSync(baseDir)) continue;
+    try {
+      const files = fs.readdirSync(baseDir);
+      for (const file of files) {
+        if (!file.toLowerCase().endsWith(".json")) continue;
+        const filePath = path.join(baseDir, file);
+        const content = fs.readFileSync(filePath, "utf-8");
+        const json = JSON.parse(content);
+
+        // Check if queryUsername matches the main query (exact match only)
+        const mainQuery = String(json.data?.query || json.query || "").toLowerCase().replace("@", "");
+        if (mainQuery === queryUsername) {
+          matchedJson = json;
+          matchedTargetUser = mainQuery;
+          break;
+        }
+
+        // Check discovered_usernames list (exact match only)
+        const discovered = json.data?.discovered_usernames || json.discovered_usernames || [];
+        const isDiscovered = discovered.some((d: any) => {
+          const u = String(d.username || "").toLowerCase().replace("@", "");
+          return u === queryUsername;
+        });
+
+        if (isDiscovered) {
+          matchedJson = json;
+          matchedTargetUser = mainQuery;
+          break;
+        }
+
+        // Check results list for matching usernames
+        const results = json.data?.results || [];
+        const isResult = results.some((r: any) => {
+          const u = String(r.username || "").toLowerCase().replace("@", "");
+          return u === queryUsername;
+        });
+
+        if (isResult) {
+          matchedJson = json;
+          matchedTargetUser = mainQuery;
+          break;
+        }
+      }
+      if (matchedJson) break;
+    } catch (e) {
+      console.error("Error reading downloads dir:", e);
     }
   }
 
-  if (
-    lowercaseUrl.includes("sneha_fintech") ||
-    lowercaseUrl.includes("kulkarni_sneha")
-  ) {
-    if (lowercaseUrl.includes("linkedin")) {
-      return {
-        ok: true,
-        status: 200,
-        title: "Sneha Kulkarni | LinkedIn",
-        description:
-          "Risk Analyst & Cryptography enthusiast. DevFest Mumbai Sep 2025 participant. Working on secure payment systems.",
-      };
-    }
-    if (lowercaseUrl.includes("github")) {
-      return {
-        ok: true,
-        status: 200,
-        title: "sneha_fintech (Sneha Kulkarni) · GitHub",
-        description: "Fintech security research. Winner of Smart India Hackathon Pune, Nov 2025.",
-      };
+  // 4. Handle hardcoded alias mappings for kishansaaai
+  if (!matchedJson) {
+    const isKishanAlias = queryUsername.includes("sai.kishan.a.007") || 
+                         queryUsername.includes("saikishana1") || 
+                         queryUsername.includes("sai_kishan_a") ||
+                         queryUsername.includes("kishansaaai");
+    if (isKishanAlias) {
+      matchedJson = loadDownloadedJson("kishansaaai");
+      matchedTargetUser = "kishansaaai";
     }
   }
 
-  return null; // not a demo URL
-}
-
-// ── Demo GitHub activity ──────────────────────────────────────────────
-
-export function getDemoGithubData(
-  username: string
-): { account: Partial<PlatformAccount>; posts: Post[] } | null {
-  const lower = username.toLowerCase();
-
-  if (lower.includes("shadowtrader99")) {
-    return {
-      account: {
-        displayName: "Vikram Rathore",
-        bio: "Full stack DeFi builder. Hackathon participant at EthIndia Bengaluru Dec 2025. Exploring decentralized liquidity.",
-        profilePicUrl: "https://api.dicebear.com/9.x/initials/svg?seed=Vikram%20Rathore",
-        followers: 128,
-        creationDate: "2024-06-20",
-      },
-      posts: [
-        {
-          id: "github-sh-1",
-          platform: "github",
-          content:
-            "Had an amazing time at EthIndia Bengaluru (Dec 2025) working on decentralized liquidity pools! #ETH #DeFi",
-          postedAt: "2025-12-05T18:30:00Z",
-          flagLevel: "NORMAL",
-          capturedAt: new Date().toISOString(),
-        },
-        {
-          id: "github-sh-2",
-          platform: "github",
-          content:
-            "Participating in HackMIT next week! Super excited to build on campus in Boston.",
-          postedAt: "2025-09-08T10:00:00Z",
-          flagLevel: "NORMAL",
-          capturedAt: new Date().toISOString(),
-        },
-        {
-          id: "github-sh-3",
-          platform: "github",
-          content:
-            "Got accepted to EthGlobal London! Can't wait to travel to the UK in March.",
-          postedAt: "2025-03-02T15:45:00Z",
-          flagLevel: "NORMAL",
-          capturedAt: new Date().toISOString(),
-        },
-      ],
-    };
+  // 5. Handle user custom test accounts
+  if (!matchedJson) {
+    const isPradhyutAlias = queryUsername.includes("pradhh.18") || 
+                           queryUsername.includes("pradhyut21") || 
+                           queryUsername.includes("pradhyut");
+    if (isPradhyutAlias) {
+      matchedTargetUser = "pradhh.18";
+    }
   }
 
-  if (lower.includes("sneha_fintech") || lower.includes("kulkarni")) {
-    return {
-      account: {
-        displayName: "Sneha Kulkarni",
-        bio: "Fintech security research. Winner of Smart India Hackathon Pune, Nov 2025.",
-        profilePicUrl: "https://api.dicebear.com/9.x/initials/svg?seed=Sneha%20Kulkarni",
-        followers: 94,
-        creationDate: "2024-01-15",
-      },
-      posts: [
-        {
-          id: "github-sn-1",
-          platform: "github",
-          content:
-            "Proud to win Smart India Hackathon Pune in Nov 2025! Built a secure transaction monitoring tool.",
-          postedAt: "2025-11-12T14:20:00Z",
-          flagLevel: "NORMAL",
-          capturedAt: new Date().toISOString(),
-        },
-        {
-          id: "github-sn-2",
-          platform: "github",
-          content: "Excited to be mentoring at a security hackathon in Berlin next spring!",
-          postedAt: "2025-04-18T09:15:00Z",
-          flagLevel: "NORMAL",
-          capturedAt: new Date().toISOString(),
-        },
-      ],
-    };
+  // If we found a matching user or custom test account
+  if (matchedJson || matchedTargetUser) {
+    // If it is Instagram or Threads, return a valid profile
+    if (platformKey === "instagram" || platformKey === "threads") {
+      const isInsta = platformKey === "instagram";
+      const results = matchedJson?.data?.results || [];
+      const record = results.find((r: any) => {
+        const plat = String(r.platform || "").toLowerCase();
+        const u = String(r.username || "").toLowerCase().replace("@", "");
+        return (plat === "instagram" || plat === "threads") && u === queryUsername;
+      });
+
+      if (record) {
+        return {
+          ok: true,
+          status: 200,
+          displayName: record.displayName,
+          bio: record.bio || record.description,
+          profilePicUrl: record.pfpUrl,
+          followers: record.followers,
+          following: record.following,
+          posts: record.posts,
+          isPrivate: record.isPrivate,
+          creationDate: record.createdAt,
+          lastActive: record.lastActive,
+          extras: record.extras || {}
+        };
+      }
+
+      // No real Instagram/Threads record found in JSON — return null so platform is skipped cleanly.
+      return null;
+    }
+
+    // For other platforms, check if we have a record in the JSON file
+    if (matchedJson) {
+      const results = matchedJson.data?.results || [];
+      const record = results.find((r: any) => {
+        if (!r.profileUrl && !r.platformUrl) return false;
+        const urlToCheck = String(r.profileUrl || r.platformUrl || "").toLowerCase();
+        try {
+          const hostname = new URL(lowercaseUrl).hostname.replace("www.", "");
+          if (urlToCheck.startsWith("http")) {
+            const u1 = new URL(urlToCheck).hostname.replace("www.", "");
+            return u1 === hostname;
+          }
+          return urlToCheck.includes(hostname);
+        } catch {
+          return false;
+        }
+      });
+
+      if (record) {
+        return {
+          ok: true,
+          status: 200,
+          displayName: record.displayName,
+          bio: record.bio || record.description,
+          profilePicUrl: record.pfpUrl,
+          followers: record.followers,
+          following: record.following,
+          posts: record.posts,
+          isPrivate: record.isPrivate,
+          creationDate: record.createdAt,
+          lastActive: record.lastActive,
+          extras: record.extras || {}
+        };
+      }
+    }
   }
 
   return null;
 }
 
-// ── Demo legal records ────────────────────────────────────────────────
+export function getDemoGithubData(
+  username: string
+): { account: Partial<PlatformAccount>; posts: Post[] } | null {
+  const json = loadDownloadedJson(username);
+  if (!json) return null;
+
+  const results = json.data?.results || [];
+  const gh = results.find((r: any) => r.platform.toLowerCase() === "github");
+  if (!gh) return null;
+
+  return {
+    account: {
+      displayName: gh.displayName || gh.username,
+      bio: gh.bio || "Public GitHub profile found.",
+      profilePicUrl: gh.pfpUrl,
+      followers: gh.followers || 0,
+      creationDate: gh.createdAt || new Date().toISOString().slice(0, 10),
+      extras: gh.extras || {}
+    },
+    posts: []
+  };
+}
 
 export function getDemoLegalRecords(
   username: string,
   realName: string,
   capturedAt: string
 ): LegalRecord[] {
-  const lower = username.toLowerCase();
-  const lowerName = realName.toLowerCase();
-  const records: LegalRecord[] = [];
-
-  if (lower.includes("shadowtrader99") || lowerName.includes("vikram")) {
-    records.push(
-      {
-        id: "mock-crime-blr",
-        source: "Karnataka Police Cyber Cell",
-        recordType: "Court Case",
-        title: "Cyber Crime Complaint - Indiranagar, Bengaluru (FIR 345/2025)",
-        summary:
-          "Complaint filed on 2025-12-06 regarding unauthorized crypto transfer and escrow bypass matching indicators of shadowtrader99.",
-        date: "2025-12-06",
-        url: "https://ecourts.gov.in",
-        credibilityScore: 95,
-        credibilityLevel: "HIGH",
-        capturedAt,
-      },
-      {
-        id: "mock-crime-del",
-        source: "Delhi Police Cyber Cell",
-        recordType: "Court Case",
-        title: "UPI Fraud Complaint - Rohini, Delhi (FIR 812/2025)",
-        summary:
-          "Investigation report from Delhi Police Cyber Cell detailing money mule account routing. Timeframe overlaps with DevFest Delhi in Oct 2025.",
-        date: "2025-10-20",
-        url: "https://ecourts.gov.in",
-        credibilityScore: 95,
-        credibilityLevel: "HIGH",
-        capturedAt,
-      }
-    );
-  }
-
-  if (lower.includes("sneha") || lowerName.includes("sneha")) {
-    records.push(
-      {
-        id: "mock-crime-pune",
-        source: "Maharashtra Police IT Cell",
-        recordType: "Court Case",
-        title: "Financial Analytics Security Audit - Pune (FIR 412/2025)",
-        summary:
-          "Audit registry filed on 2025-11-15 during Smart India Hackathon Pune regarding testing of unauthorized payment bypasses.",
-        date: "2025-11-15",
-        url: "https://ecourts.gov.in",
-        credibilityScore: 95,
-        credibilityLevel: "HIGH",
-        capturedAt,
-      },
-      {
-        id: "mock-crime-mum",
-        source: "Mumbai Cyber Crime Cell",
-        recordType: "Court Case",
-        title: "UPI Phishing Investigation - Andheri, Mumbai (REG 118/2025)",
-        summary:
-          "Preliminary FIR mentioning a handle similar to kulkarni_sneha in a structured UPI phishing ring active in Sep 2025.",
-        date: "2025-09-25",
-        url: "https://ecourts.gov.in",
-        credibilityScore: 90,
-        credibilityLevel: "HIGH",
-        capturedAt,
-      }
-    );
-  }
-
-  return records;
+  return [];
 }
-
-// ── Full face-scan demo profile (new suspect mode) ────────────────────
 
 export function getDemoNewSuspectProfile(
   photoUrl: string,
   capturedAt: string
 ): Omit<SuspectProfile, "faceScan" | "network" | "caseReference"> {
-  const realName = "Rajesh Kumar";
-  const username = "rk_crypto_dev";
-  const phoneNumber = "+91 99887 76655";
-  const emailAddress = "rk_crypto@proton.me";
-
-  const accounts: PlatformAccount[] = [
-    {
-      id: "github-rk_crypto_dev",
-      platform: "github",
-      tier: 1,
-      username: "rk_crypto_dev",
-      profileUrl: "https://github.com/rk_crypto_dev",
-      displayName: "Rajesh Kumar",
-      bio: "Blockchain architect and open source builder. Active in Bengaluru Web3 developer groups.",
-      profilePicUrl: photoUrl,
-      deepfakeFlag: false,
-      followers: 45,
-      creationDate: "2024-03-10",
-      confidence: "CONFIRMED",
-      reason: "Matched during automated forensic face indexing sweep.",
-      capturedAt,
-    },
-    {
-      id: "twitter-rk_crypto_dev",
-      platform: "twitter",
-      tier: 2,
-      username: "rk_crypto_dev",
-      profileUrl: "https://x.com/rk_crypto_dev",
-      displayName: "Rajesh Web3",
-      bio: "DeFi protocols, smart contract audits, and zero knowledge scaling. Sourced in Indiranagar.",
-      deepfakeFlag: false,
-      followers: 210,
-      creationDate: "2024-05-15",
-      confidence: "PROBABLE",
-      reason: "Handle and Bio correlation search.",
-      capturedAt,
-    },
-  ];
-
-  const posts: Post[] = [
-    {
-      id: "post-rk-1",
-      platform: "github",
-      content: "Committed secure multi-sig contract revisions for local liquidity project in Bengaluru.",
-      postedAt: "2026-05-24T10:15:00Z",
-      flagLevel: "NORMAL",
-      capturedAt,
-    },
-    {
-      id: "post-rk-2",
-      platform: "twitter",
-      content:
-        "Exploring off-grid mixers. Layer 2 transactions are starting to show grid trace vulnerabilities.",
-      postedAt: "2026-05-25T14:30:00Z",
-      flagLevel: "SUSPICIOUS",
-      flagReason: "DeFi mixer keywords flagged.",
-      capturedAt,
-    },
-  ];
-
-  const legalRecords: LegalRecord[] = [
-    {
-      id: "legal-rk-1",
-      source: "Karnataka Police Cyber Cell",
-      recordType: "Court Case",
-      title: "Cyber Cell Enquiry - Halasuru, Bengaluru (FIR 109/2026)",
-      summary:
-        "Preliminary investigation on transaction routing related to mirror payments and unauthorized smart contract sweeps.",
-      date: "2026-05-28",
-      url: "https://ecourts.gov.in",
-      credibilityScore: 90,
-      credibilityLevel: "HIGH",
-      capturedAt,
-    },
-  ];
-
   return {
-    username: `@${username}`,
-    realName,
-    phoneNumber,
-    emailAddress,
+    username: "unknown",
+    realName: "Unknown Subject",
+    phoneNumber: "Not provided",
+    emailAddress: "Not provided",
     photoUrl,
-    riskScore: 65,
-    riskLevel: "HIGH",
-    riskSubscores: { language: 15, behavioral: 20, network: 15, legal: 15 },
-    riskSignals: [
-      "2 platform accounts identified with face matching tags.",
-      "Committed contract code mentions unverified local liquidity pools.",
-      "Karnataka Police Cyber Cell FIR record matches suspect details in Bengaluru.",
-      "EXIF tags from uploaded image place suspect at crime-scene Indiranagar, Bengaluru within 4 days of FIR.",
-    ],
-    accounts,
-    posts,
-    legalRecords,
-    aliasResults: [
-      {
-        platform: "Telegram",
-        handle: "rk_alpha_yield",
-        profileUrl: "https://t.me/rk_alpha_yield",
-        isAlias: true,
-        confidence: 78,
-        confidenceLevel: "PROBABLE",
-        aliasSignals: ["Bio writing style correlation", "Activity time matching"],
-        evasionPattern: true,
-        evasionReason: "Alternate handle using standard evasion patterns.",
-      },
-    ],
-    shadowAccounts: [
-      {
-        handle: "rk_stealth_node",
-        platform: "github",
-        profileUrl: "https://github.com/rk_stealth_node",
-        detectionMethod: "Levenshtein distance matching",
-        handleSimilarity: 68,
-        bioCrossRef: 75,
-        avatarMatch: 0,
-        overallConfidence: 71,
-        confidenceLevel: "PROBABLE",
-        signals: ["Writing style overlap", "Shared GPG keys"],
-        isPrivate: false,
-      },
-    ],
-    locations: [
-      {
-        lat: 12.9716,
-        lng: 77.5946,
-        locationName: "Bengaluru",
-        date: "2026-05-24",
-        source: "Face Scan EXIF",
-        details: "Geotag parsed from EXIF metadata in uploaded face image.",
-      },
-    ],
-    capturedAt,
+    riskScore: 0,
+    riskLevel: "LOW",
+    riskSubscores: { language: 0, behavioral: 0, network: 0, legal: 0 },
+    riskSignals: [],
+    accounts: [],
+    posts: [],
+    legalRecords: [],
+    aliasResults: [],
+    locations: [],
+    capturedAt
   };
 }

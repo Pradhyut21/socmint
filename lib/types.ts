@@ -1,3 +1,18 @@
+export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export interface PlatformAccount {
+  platform: string;
+  username: string;
+  url: string;
+  verified?: boolean;
+  followers?: number;
+  bio?: string;
+  lastActive?: string;
+  displayName?: string;
+  creationDate?: string;
+  id?: string;
+}
+
 export interface AliasResult {
   platform: string;
   handle: string;
@@ -10,187 +25,94 @@ export interface AliasResult {
   evasionReason?: string;
 }
 
-export interface UpiFootprint {
-  phone: string;
-  probableUpiIds: {
-    id: string;
-    confidence: "INFERRED";
-    source: string;
-  }[];
-  ncrp: {
-    status: "NOT_PUBLICLY_QUERYABLE" | "FOUND_PUBLIC_MENTION";
-    complaintCount?: number;
-    note: string;
-    sourceUrl: string;
-  };
-  truecaller: {
-    status: "NOT_CONFIGURED" | "PUBLIC_DATA_UNAVAILABLE";
-    name?: string;
-    spamScore?: number;
-    carrier?: string;
-    telecomCircle?: string;
-    note: string;
-  };
+export interface Post {
+  id: string;
+  platform: string;
+  content: string;
+  timestamp: string;
+  engagement?: { likes: number; comments: number; shares: number };
+  sentiment?: "positive" | "neutral" | "negative";
 }
 
-export interface NewsArticle {
+export interface LegalRecord {
   id: string;
   title: string;
-  description: string;
-  url: string;
+  court: string;
+  date: string;
+  status: string;
+  severity: RiskLevel;
+}
+
+export interface AliasResult {
+  alias: string;
   source: string;
-  publishedAt: string;
-  sentiment: "NEUTRAL" | "NEGATIVE" | "POSITIVE";
-  relevanceScore: number;
+  confidence: number;
+}
+
+export interface ShadowAccountResult {
+  platform: string;
+  handle: string;
+  createdAt: string;
+  evasionScore: number;
+  status: "ACTIVE" | "DELETED" | "DORMANT";
+}
+
+export interface CryptoTraceResult {
+  wallets: { chain: string; address: string; balance: string; flagged: boolean }[];
+  transactions: { hash: string; amount: string; counterparty: string; date: string }[];
+}
+
+export interface FaceScanMetadata {
+  matchScore: number;
+  deepfakeProbability: number;
+  matches: { source: string; url: string; confidence: number }[];
+}
+
+export interface NetworkNode { id: string; label: string; group: string; size: number }
+export interface NetworkLink { source: string; target: string; strength: number; label?: string }
+
+export interface NewsArticle { title: string; source: string; url: string; date: string; snippet: string }
+export interface HibpResult { breaches: { name: string; date: string; data: string[] }[] }
+export interface UpiFootprint { handles: string[]; banks: string[]; lastSeen: string }
+
+export interface TruecallerRecord {
+  name: string;
+  carrier: string;
+  circle: string;
+  spamScore: number; // 0-100
+  spamReports: number;
+  tags: string[];
+}
+
+export interface NcrpComplaint {
+  id: string;
+  date: string;
+  category: string; // e.g. "Online Financial Fraud"
+  status: "OPEN" | "UNDER_INVESTIGATION" | "CLOSED";
+  amountInr?: number;
+  jurisdiction: string;
+}
+
+export interface FinancialFootprint {
+  upi: UpiFootprint;
+  truecaller: TruecallerRecord;
+  ncrp: NcrpComplaint[];
+  bankAccounts?: { bank: string; ifsc: string; accountMasked: string; flagged: boolean }[];
+}
+
+export interface DossierQuery {
+  username?: string;
+  realName?: string;
+  phone?: string;
+  email?: string;
+  faceImage?: string;
 }
 
 export interface NexusAnalysis {
   key_finding: string;
   connected_signals: { signal1: string; signal2: string; connection: string }[];
-  anomalies: { description: string; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" }[];
+  anomalies: { description: string; severity: RiskLevel }[];
   investigator_priority: string;
-}
-
-export interface BreachRecord {
-  name: string;
-  breachDate: string;
-  dataClasses: string[];
-  description: string;
-  domain: string;
-  isVerified: boolean;
-  pwnCount: number;
-}
-
-export interface HibpResult {
-  email: string;
-  breachCount: number;
-  breaches: BreachRecord[];
-  pasteCount: number;
-  status: "FOUND" | "CLEAN" | "NOT_CONFIGURED" | "ERROR";
-  note: string;
-  checkedAt: string;
-}
-
-export interface PlatformAccount {
-  id: string;
-  platform: "instagram" | "twitter" | "facebook" | "telegram" | "reddit" | "linkedin" | "github" | "quora"
-    | "hackernews" | "devto" | "gitlab" | "tumblr" | "tiktok" | "snapchat" | "pinterest"
-    | "soundcloud" | "medium" | "steam" | "pastebin" | "youtube";
-  tier?: 1 | 2;
-  username: string;
-  profileUrl: string;
-  displayName: string;
-  bio: string;
-  profilePicUrl?: string;
-  deepfakeFlag: boolean;
-  followers: number;
-  creationDate: string;
-  confidence: "CONFIRMED" | "PROBABLE" | "POSSIBLE";
-  reason: string;
-  capturedAt?: string;
-}
-
-export interface Post {
-  id: string;
-  platform: string;
-  content: string;
-  postedAt: string;
-  mediaUrls?: string[];
-  geolat?: number;
-  geolng?: number;
-  locationName?: string;
-  flagLevel: "NORMAL" | "SUSPICIOUS" | "HIGH_RISK";
-  flagReason?: string;
-  capturedAt?: string;
-}
-
-export interface LegalRecord {
-  id: string;
-  source: string;
-  recordType: "Court Case" | "Court Judgment" | "News" | "Company" | "Company Registration" | "Academic";
-  title: string;
-  summary: string;
-  status?: string;
-  date: string;
-  url: string;
-  sourceUrl?: string;
-  credibilityScore: "HIGH" | "MEDIUM" | "LOW" | number;
-  credibilityLevel?: "HIGH" | "MEDIUM" | "LOW";
-  capturedAt?: string;
-}
-
-export interface NetworkNode {
-  id: string;
-  label: string;
-  group: "suspect" | "account" | "person" | "group" | "mule";
-  val: number;
-}
-
-export interface NetworkLink {
-  source: string;
-  target: string;
-  type: "OWNS" | "INTERACTS_WITH" | "MEMBER_OF" | "CO_ACCUSED";
-  weight: number;
-}
-
-export interface ShadowAccountResult {
-  handle: string;
-  platform: string;
-  profileUrl: string;
-  detectionMethod: string;
-  handleSimilarity: number;
-  bioCrossRef: number;
-  avatarMatch: number;
-  overallConfidence: number;
-  confidenceLevel: "CONFIRMED" | "PROBABLE" | "POSSIBLE";
-  signals: string[];
-  isPrivate: boolean;
-}
-
-export interface CryptoTransaction {
-  hash: string;
-  timestamp: string;
-  from: string;
-  to: string;
-  amount: number;
-  type: "INCOMING" | "OUTGOING";
-  mixerFlag: boolean;
-  mixerName?: string;
-  riskScore: number;
-}
-
-export interface CryptoTraceResult {
-  address: string;
-  coin: "BTC" | "ETH" | "LTC";
-  balance: number;
-  totalReceived: number;
-  totalSent: number;
-  riskScore: number;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  associatedMixers: string[];
-  transactions: CryptoTransaction[];
-  note: string;
-}
-
-export interface FaceScanMetadata {
-  landmarks: { name: string; x: number; y: number; width: number; height: number }[];
-  exif: {
-    camera: string;
-    lens: string;
-    software: string;
-    created: string;
-    gps: {
-      lat: string;
-      lng: string;
-      place: string;
-    };
-  };
-  deepfake: {
-    isSynthetic: boolean;
-    score: number;
-    note: string;
-    factors: { name: string; score: number }[];
-  };
 }
 
 export interface SuspectProfile {
@@ -200,51 +122,44 @@ export interface SuspectProfile {
   emailAddress: string;
   photoUrl: string;
   riskScore: number;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  riskSubscores: {
-    language: number;
-    behavioral: number;
-    network: number;
-    legal: number;
-  };
+  riskLevel: RiskLevel;
+  riskSubscores: { language: number; behavioral: number; network: number; legal: number };
   riskSignals: string[];
   accounts: PlatformAccount[];
   posts: Post[];
   legalRecords: LegalRecord[];
   aliasResults: AliasResult[];
   upiFootprint?: UpiFootprint;
+  financialFootprint?: FinancialFootprint;
   hibpResult?: HibpResult;
   newsArticles?: NewsArticle[];
   nexusAnalysis?: NexusAnalysis;
   shadowAccounts?: ShadowAccountResult[];
   cryptoTrace?: CryptoTraceResult;
   faceScan?: FaceScanMetadata;
-  network: {
-    nodes: NetworkNode[];
-    links: NetworkLink[];
-  };
+  network: { nodes: NetworkNode[]; links: NetworkLink[] };
+  discovered_usernames?: any[];
   locations: {
-    lat: number;
-    lng: number;
-    locationName: string;
-    date: string;
-    source: string;
-    details: string;
-    crimeMatched?: {
-      title: string;
-      date: string;
-      recordId: string;
-      severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-    };
+    lat: number; lng: number; locationName: string; date: string; source: string; details: string;
+    crimeMatched?: { title: string; date: string; recordId: string; severity: RiskLevel };
   }[];
   caseReference: string;
   capturedAt: string;
 }
 
+export interface AlertItem {
+  id: string;
+  title: string;
+  details: string;
+  timestamp: string;
+  type: "critical" | "warning" | "info";
+  isRead?: boolean;
+}
+
 export interface DossierInput {
   usernames: string[];
   realName: string;
-  email: string;
   phone: string;
+  email: string;
   faceData: string;
 }

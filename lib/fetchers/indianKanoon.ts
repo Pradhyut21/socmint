@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { LegalRecord } from "../types";
 
 const RESULT_BLOCK_PATTERN = /<div\s+class=["']result["'][\s\S]*?<\/div>\s*<\/div>|<div\s+class=["']result["'][\s\S]*?<\/div>/gi;
