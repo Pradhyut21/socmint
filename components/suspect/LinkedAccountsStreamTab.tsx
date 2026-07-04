@@ -296,6 +296,9 @@ function AccountDetailCard({ account }: { account: AccountResult }) {
       ? "bg-indigo-50 text-indigo-700 border-indigo-200"
       : "bg-amber-50 text-amber-700 border-amber-200";
 
+  const confidenceRange =
+    account.confidence === "CONFIRMED" ? "85–100%" : account.confidence === "PROBABLE" ? "70–84%" : "50–69%";
+
   return (
     <motion.div
       layout
@@ -304,32 +307,53 @@ function AccountDetailCard({ account }: { account: AccountResult }) {
     >
       <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
         <CardContent className="p-4 space-y-2">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-start justify-between gap-2 flex-wrap border-b border-slate-100 pb-1.5">
             <span className="font-bold text-[11px] uppercase tracking-wider text-indigo-900">
               {account.platform}
             </span>
             <Badge variant="outline" className={`text-[8px] uppercase font-bold px-1.5 border ${confidenceColor}`}>
-              {account.confidence}
+              {account.confidence} ({confidenceRange})
             </Badge>
           </div>
 
-          <div className="font-bold text-[13px] text-ink">
-            @{account.username}
+
+          {/* Avatar + Info side-by-side */}
+          <div className="flex items-start gap-3 pt-1">
+            {account.profilePicUrl && (
+              <img
+                src={account.profilePicUrl}
+                alt={`${account.username}'s avatar`}
+                className="w-12 h-12 rounded-xl object-cover border border-slate-200 bg-slate-50 shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+            )}
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="font-bold text-[13px] text-ink truncate">
+                @{account.username}
+              </div>
+              {account.displayName && account.displayName !== account.username && (
+                <div className="text-[11px] text-slate-600 font-semibold truncate">{account.displayName}</div>
+              )}
+              {account.bio && (
+                <p className="text-[10px] text-slate-655 leading-relaxed line-clamp-3 font-sans pt-0.5">
+                  {account.bio}
+                </p>
+              )}
+            </div>
           </div>
 
-          {account.displayName && account.displayName !== account.username && (
-            <div className="text-[11px] text-slate-600 font-semibold">{account.displayName}</div>
-          )}
-
-          {account.bio && (
-            <p className="text-[10px] text-slate-655 leading-relaxed line-clamp-2 font-sans">
-              {account.bio}
-            </p>
-          )}
-
           <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-mono">
-            <span>{account.followers.toLocaleString()} followers</span>
-            {account.postCount > 0 && <span>{account.postCount} post(s)</span>}
+            <div className="flex gap-2">
+              <span>{account.followers.toLocaleString()} followers</span>
+              {account.postCount > 0 && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span>{account.postCount} posts</span>
+                </>
+              )}
+            </div>
             <a
               href={account.profileUrl}
               target="_blank"

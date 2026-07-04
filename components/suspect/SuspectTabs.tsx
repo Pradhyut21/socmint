@@ -726,7 +726,7 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
           return (
             <Card key={idx} className="card-3d bg-white border-slate-200 shadow-sm overflow-hidden">
               <CardContent className="space-y-2 p-4">
-                <div className="flex items-start justify-between gap-1 flex-wrap">
+                <div className="flex items-start justify-between gap-1 flex-wrap border-b border-slate-100 pb-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-indigo-900 font-bold">{a.platform}</span>
                     <Badge variant="outline" className={`font-mono text-[8px] uppercase font-extrabold px-1.5 py-0 border ${badgeClass}`}>
@@ -740,10 +740,32 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
                     )}
                   </div>
                 </div>
-                <div className="font-mono text-sm font-semibold text-ink">
-                  {a.username ? (a.username.startsWith("@") ? a.username : "@" + a.username) : "—"}
+
+                {/* Avatar + Info side-by-side */}
+                <div className="flex items-start gap-3 pt-1">
+                  {a.profilePicUrl && (
+                    <img
+                      src={a.profilePicUrl}
+                      alt={`${a.username}'s avatar`}
+                      className="w-12 h-12 rounded-xl object-cover border border-slate-200 bg-slate-50 shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-sm font-semibold text-ink truncate">
+                      {a.username ? (a.username.startsWith("@") ? a.username : "@" + a.username) : "—"}
+                    </div>
+                    {a.displayName && a.displayName !== a.username && (
+                      <div className="text-[11px] text-slate-600 font-semibold truncate">
+                        {a.displayName}
+                      </div>
+                    )}
+                    {a.bio && <p className="text-xs text-slate-750 font-medium line-clamp-2 mt-1 leading-relaxed">{a.bio}</p>}
+                  </div>
                 </div>
-                {a.bio && <p className="text-xs text-slate-700 font-medium line-clamp-2">{a.bio}</p>}
+
                 <div className="flex justify-between border-t border-slate-200 pt-2 font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
                   <span>{a.followers?.toLocaleString() ?? "—"} followers</span>
                   <span>Last: {a.creationDate || (a as any).lastActive || "—"}</span>
@@ -753,6 +775,7 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
                     Inspect Source <ChevronRight className="w-3 h-3" />
                   </a>
                 </div>
+
 
                 {/* Confidence Explanation Breakdown */}
                 {(() => {
