@@ -565,8 +565,9 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
 
     // Custom check for Instagram
     if (lowercaseUrl.includes("instagram.com")) {
-      const igUsername = lowercaseUrl.split("instagram.com/")[1]?.split("/")[0]?.split("?")[0];
+      let igUsername = lowercaseUrl.split("instagram.com/")[1]?.split("/")[0]?.split("?")[0];
       if (!igUsername) return { ok: false, status: 404 };
+      igUsername = igUsername.replace(/^@/, "");
 
       if (_igSessionId) {
         try {
@@ -620,8 +621,9 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
 
     // Custom check for X/Twitter
     if (lowercaseUrl.includes("x.com") || lowercaseUrl.includes("twitter.com")) {
-      const xUsername = lowercaseUrl.split(/(?:x\.com|twitter\.com)\//)[1]?.split("/")[0]?.split("?")[0];
+      let xUsername = lowercaseUrl.split(/(?:x\.com|twitter\.com)\//)[1]?.split("/")[0]?.split("?")[0];
       if (!xUsername) return { ok: false, status: 404 };
+      xUsername = xUsername.replace(/^@/, "");
 
       if (_xAuthToken) {
         try {
