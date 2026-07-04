@@ -1157,10 +1157,7 @@ export async function investigateSingleUsername(
     let content: string;
     if (a.bio && a.bio.length > 10 && !a.bio.startsWith("Public")) {
       content = `${a.bio.slice(0, 180).trim()} 📸 #life #explore`;
-    } else if (usernameLower.includes("pradhyut") || usernameLower.includes("pradhh")) {
-      content = "Bengaluru sunsets and code commits. 🌆 #developer #devlife";
-    } else if (usernameLower.includes("meghana")) {
-      content = "BMSCE vibes. Building and learning every day! ☕ #student #tech";
+    } else if (false) {
     } else {
       content = `Exploring new sights and coding away! 🌆☕️ — @${a.username} #devlife #travel`;
     }

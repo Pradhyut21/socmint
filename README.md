@@ -94,7 +94,7 @@ socmint/
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/Pradhyut21/socmint.git
+git clone https://github.com/shadowtrader9921/socmint.git
 cd socmint
 
 # 2. Install dependencies
@@ -153,7 +153,7 @@ Most global OSINT tools are built for Western platforms and ignore the Indian co
 
 ## 📄 License
 
-MIT © 2025 Pradhyut21
+MIT © 2025 shadowtrader9921
 
 ---
 

@@ -343,7 +343,7 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                           type="text"
                           value={username}
                           onChange={(e) => updateUsername(index, e.target.value)}
-                          placeholder={index === 0 ? "e.g. pradd.18 (Instagram)" : index === 1 ? "e.g. pradhyut21 (GitHub)" : `Handle ${index + 1}...`}
+                          placeholder={index === 0 ? "e.g. shadowtrader99 (Instagram)" : index === 1 ? "e.g. sneha_fintech (GitHub)" : `Handle ${index + 1}...`}
                           className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-250 focus:border-blue-300 focus:ring-1 focus:ring-blue-300 outline-none text-ink text-sm font-mono placeholder:text-slate-550 transition-all font-semibold shadow-inner"
                         />
                       </div>
@@ -380,7 +380,7 @@ export default function SearchHero({ onSearch, isSearching }: SearchHeroProps) {
                       type="text"
                       value={dossierRealName}
                       onChange={(e) => setDossierRealName(e.target.value)}
-                      placeholder="e.g. K M Pradhyut"
+                      placeholder="e.g. Vikram Rathore"
                       className="w-full px-4 py-2.5 rounded-xl bg-slate-55 border border-slate-250 focus:border-cyan-300 focus:ring-1 focus:ring-cyan-300 outline-none text-ink text-sm font-mono placeholder:text-slate-500 transition-all font-semibold shadow-inner"
                     />
                   </div>

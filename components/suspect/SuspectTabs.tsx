@@ -43,8 +43,10 @@ import StylometryPanel from "@/components/StylometryPanel";
 import ManualIngestPanel from "@/components/ManualIngestPanel";
 import SearchIntelPanel from "@/components/SearchIntelPanel";
 import IntelCorrelationTab from "@/components/suspect/IntelCorrelationTab";
+import LinkedAccountsStreamTab from "@/components/suspect/LinkedAccountsStreamTab";
 import { ConfidenceTrend } from "@/components/ConfidenceTrend";
 import { KeywordTagCloud } from "@/components/KeywordTagCloud";
+import { Wifi } from "lucide-react";
 
 interface TabDef {
   id: string;
@@ -67,6 +69,7 @@ export function SuspectTabs({
     { id: "overview", label: "Overview", icon: Users, render: (p) => <OverviewTab p={p} onTabChange={onTabChange} onTriggerSearch={onTriggerSearch} /> },
     { id: "correlation-shield", label: "Intelligence Correlation", icon: Brain, badge: profile.investigationQuality ? { tone: "evidence" as const, text: `${profile.investigationQuality.score}%` } : undefined, render: (p) => <IntelCorrelationTab p={p} /> },
     { id: "accounts", label: "Linked Accounts", icon: Share2, render: (p) => <AccountsTab p={p} /> },
+    { id: "live-account-scan", label: "Live Account Scan", icon: Wifi, render: (p) => <LinkedAccountsStreamTab username={p.username.replace(/^@/, "")} /> },
 
     { id: "timeline", label: "Post Timeline", icon: MessageSquare, render: (p) => <TimelineView suspect={p} /> },
     { id: "face", label: "Face Scan", icon: ScanFace, render: (p) => <FaceScanCard suspect={p} /> },
