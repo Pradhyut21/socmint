@@ -18,7 +18,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const query = typeof body.query === "string" ? body.query.trim() : "";
-    const type = typeof body.type === "string" ? body.type : "username";
+    let type = typeof body.type === "string" ? body.type : "username";
+
+    // Auto-promote username queries with spaces to real name searches
+    if (type === "username" && query.replace(/^@/, "").includes(" ")) {
+      type = "name";
+    }
 
     // Multi-field dossier mode
     if (type === "dossier" && body.dossier) {

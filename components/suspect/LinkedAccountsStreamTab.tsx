@@ -325,7 +325,9 @@ function AccountDetailCard({ account }: { account: AccountResult }) {
                 alt={`${account.username}'s avatar`}
                 className="w-12 h-12 rounded-xl object-cover border border-slate-200 bg-slate-50 shrink-0"
                 onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(account.username)}`;
                 }}
               />
             )}

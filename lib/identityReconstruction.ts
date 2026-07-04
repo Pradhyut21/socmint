@@ -248,6 +248,13 @@ export function generateCandidates(
     addCandidate(`${u}123`, "Generated mutation (numbers)", 50);
     addCandidate(`${u}_dev`, "Generated mutation (developer)", 50);
     addCandidate(`${u}99`, "Generated mutation", 50);
+    addCandidate(`${u}_`, "Generated mutation (underscore)", 50);
+    addCandidate(`${u}offl`, "Generated mutation (official)", 50);
+    addCandidate(`${u}_official`, "Generated mutation (official)", 50);
+    addCandidate(`the${u}`, "Generated mutation (prefix)", 50);
+    addCandidate(`its${u}`, "Generated mutation (prefix)", 50);
+    addCandidate(`iam${u}`, "Generated mutation (prefix)", 50);
+    addCandidate(`${u}0`, "Generated mutation", 50);
   });
 
   return Array.from(candidatesMap.values()).sort((a, b) => b.score - a.score);
@@ -403,13 +410,13 @@ export async function runRecursiveIdentityReconstruction(
   ];
 
   for (const tier of reconstructionTiers) {
-    if (searchedUsernames.size >= 3 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
+    if (searchedUsernames.size >= 6 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
 
     console.log(`[RECONSTRUCTION] Starting ${tier.label}`);
 
     let tierCompleted = false;
     while (!tierCompleted) {
-      if (searchedUsernames.size >= 3 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
+      if (searchedUsernames.size >= 6 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
 
       scoredCandidates = generateCandidates(tokens, platformUsernames);
 
