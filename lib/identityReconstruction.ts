@@ -6,7 +6,7 @@ import {
 } from "./liveSocmint";
 import { fetchUpiFootprint } from "./fetchers/financial";
 import { fetchHibpBreaches } from "./fetchers/leaks";
-import { cleanQuery } from "./fetchers/social";
+import { cleanQuery, isSimilarUsername } from "./fetchers/social";
 import { calculateInvestigationQuality, generateEvidenceReliabilityList } from "./intelligence/correlationEngine";
 import { compareDeveloperProfiles } from "./intelligence/developerFingerprint";
 import { compareBiosSemantically } from "./intelligence/semanticSimilarity";
@@ -202,6 +202,13 @@ export function generateCandidates(
   // Priority 3 — platform handles
   if (platformUsernames) {
     platformUsernames.forEach(pu => {
+      // Prevent recursive search of completely different accounts returned by search engines
+      const isSimilar = tokens.usernames.some(seedU => isSimilarUsername(pu.username, seedU));
+      if (!isSimilar) {
+        console.log(`[RECONSTRUCTION] Skipping candidate handle "${pu.username}" because it is not similar to seed handles.`);
+        return;
+      }
+
       const score = pu.platform === "github" ? 90
         : pu.platform === "instagram" ? 85
         : pu.platform === "linkedin" ? 80

@@ -205,6 +205,26 @@ export function levenshteinDistance(a: string, b: string): number {
   return dp[la][lb];
 }
 
+export function isSimilarUsername(u1: string, u2: string): boolean {
+  const clean1 = u1.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const clean2 = u2.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!clean1 || !clean2) return false;
+
+  // If one contains the other, allow if it's not a short common substring
+  if (clean1.includes(clean2) || clean2.includes(clean1)) {
+    const minLen = Math.min(clean1.length, clean2.length);
+    if (minLen >= 4) return true;
+  }
+
+  const maxLen = Math.max(clean1.length, clean2.length);
+  if (maxLen === 0) return false;
+
+  const dist = levenshteinDistance(clean1, clean2);
+  const similarity = 1 - dist / maxLen;
+  return similarity >= 0.65;
+}
+
+
 export function extractMeta(html: string, pattern: RegExp): string {
   const match = html.match(pattern);
   return match && match[1] ? match[1].trim() : "";
@@ -2419,6 +2439,13 @@ export async function searchWebForSocialProfiles(query: string, capturedAt: stri
       
       const existsIdx = discoveredAccounts.findIndex(a => a.platform === platform && a.username.toLowerCase() === handle.toLowerCase());
       if (existsIdx === -1) {
+        // Prevent adding completely different accounts discovered via search engines
+        const isSimilar = isSimilarUsername(handle, query);
+        if (!isSimilar) {
+          console.log(`[OSINT-SEARCH] Skipping crawled handle "${handle}" because it does not match query "${query}"`);
+          continue;
+        }
+
         discoveredAccounts.push({
           id: `${platform}-${handle}-${Date.now()}`,
           platform,
