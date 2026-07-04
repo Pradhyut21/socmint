@@ -563,6 +563,99 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
       };
     }
 
+    // Custom check for Instagram
+    if (lowercaseUrl.includes("instagram.com")) {
+      const igUsername = lowercaseUrl.split("instagram.com/")[1]?.split("/")[0]?.split("?")[0];
+      if (!igUsername) return { ok: false, status: 404 };
+
+      if (_igSessionId) {
+        try {
+          const igApiRes = await fetchWithTimeout(
+            `https://i.instagram.com/api/v1/users/web_profile_info/?username=${igUsername}`,
+            8000,
+            {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "application/json",
+                "X-IG-App-ID": "936619743392459",
+                "X-ASBD-ID": "129477",
+                "X-Requested-With": "XMLHttpRequest",
+                Referer: `https://www.instagram.com/${igUsername}/`,
+                Cookie: `sessionid=${_igSessionId}`,
+              },
+            }
+          );
+          if (igApiRes.ok) {
+            const igData = await igApiRes.json().catch(() => null);
+            const user = igData?.data?.user;
+            if (user) {
+              return {
+                ok: true,
+                status: 200,
+                displayName: user.full_name || user.username || igUsername,
+                bio: user.biography || "",
+                profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || undefined,
+                followers: user.edge_followed_by?.count ?? user.follower_count ?? 0,
+                extras: {
+                  following: user.edge_follow?.count ?? user.following_count ?? 0,
+                  posts: user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
+                  is_private: user.is_private || false,
+                  is_verified: user.is_verified || false,
+                  external_url: user.external_url || undefined,
+                  category: user.category_name || undefined,
+                }
+              };
+            }
+          }
+          if (igApiRes.status === 404) return { ok: false, status: 404 };
+        } catch { /* fall through */ }
+      }
+      return { ok: false, status: 0 };
+    }
+
+    // Custom check for Threads
+    if (lowercaseUrl.includes("threads.net")) {
+      return { ok: false, status: 404 };
+    }
+
+    // Custom check for X/Twitter
+    if (lowercaseUrl.includes("x.com") || lowercaseUrl.includes("twitter.com")) {
+      const xUsername = lowercaseUrl.split(/(?:x\.com|twitter\.com)\//)[1]?.split("/")[0]?.split("?")[0];
+      if (!xUsername) return { ok: false, status: 404 };
+
+      if (_xAuthToken) {
+        try {
+          const xRes = await fetchWithTimeout(
+            `https://x.com/${xUsername}`,
+            8000,
+            {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Cookie: `auth_token=${_xAuthToken}`,
+              },
+              redirect: "manual"
+            }
+          );
+          if (xRes.status === 302 || xRes.status === 301 || xRes.status === 307) {
+            const loc = xRes.headers.get("location") || "";
+            if (loc.includes("login") || loc.includes("i/flow/signup")) {
+              return { ok: false, status: 401 };
+            }
+          }
+          if (xRes.ok) {
+            return {
+              ok: true,
+              status: 200,
+              displayName: xUsername,
+              bio: `X (Twitter) profile confirmed via authenticated API probe.`
+            };
+          }
+          if (xRes.status === 404) return { ok: false, status: 404 };
+        } catch { /* fall through */ }
+      }
+      return { ok: false, status: 0 };
+    }
+
     const response = await fetchWithTimeout(url);
     const status = response.status;
 
@@ -606,99 +699,7 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
         return { ok: false, status };
       }
     }
-    else if (lowercaseUrl.includes("instagram.com")) {
-      // Extract username from URL
-      const igUsername = lowercaseUrl.split("instagram.com/")[1]?.split("/")[0]?.split("?")[0];
-      if (!igUsername) return { ok: false, status: 404 };
 
-      // If a session cookie is configured, call Instagram's internal API for real data
-      if (_igSessionId) {
-        try {
-          const igApiRes = await fetchWithTimeout(
-            `https://i.instagram.com/api/v1/users/web_profile_info/?username=${igUsername}`,
-            8000,
-            {
-              headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                Accept: "application/json",
-                "X-IG-App-ID": "936619743392459",
-                "X-ASBD-ID": "129477",
-                "X-Requested-With": "XMLHttpRequest",
-                Referer: `https://www.instagram.com/${igUsername}/`,
-                Cookie: `sessionid=${_igSessionId}`,
-              },
-            }
-          );
-          if (igApiRes.ok) {
-            const igData = await igApiRes.json().catch(() => null);
-            const user = igData?.data?.user;
-            if (user) {
-              return {
-                ok: true,
-                status: 200,
-                displayName: user.full_name || user.username || igUsername,
-                bio: user.biography || "",
-                profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || undefined,
-                followers: user.edge_followed_by?.count ?? user.follower_count ?? 0,
-                extras: {
-                  following: user.edge_follow?.count ?? user.following_count ?? 0,
-                  posts: user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
-                  is_private: user.is_private || false,
-                  is_verified: user.is_verified || false,
-                  external_url: user.external_url || undefined,
-                  category: user.category_name || undefined,
-                }
-              };
-            }
-          }
-          if (igApiRes.status === 404) return { ok: false, status: 404 };
-        } catch { /* fall through */ }
-      }
-
-      // No session cookie or API failed — cannot distinguish real from fake accounts.
-      return { ok: false, status: 0 };
-    }
-    else if (lowercaseUrl.includes("threads.net")) {
-      // Threads returns 200 for all live HTTP requests from server-side Node, rendering them indistinguishable.
-      // Always return ok: false to prevent false positives (fake accounts).
-      return { ok: false, status: 404 };
-    }
-    else if (lowercaseUrl.includes("x.com") || lowercaseUrl.includes("twitter.com")) {
-      const xUsername = lowercaseUrl.split(/(?:x\.com|twitter\.com)\//)[1]?.split("/")[0]?.split("?")[0];
-      if (!xUsername) return { ok: false, status: 404 };
-
-      if (_xAuthToken) {
-        try {
-          const xRes = await fetchWithTimeout(
-            `https://x.com/${xUsername}`,
-            8000,
-            {
-              headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                Cookie: `auth_token=${_xAuthToken}`,
-              },
-              redirect: "manual"
-            }
-          );
-          if (xRes.status === 302 || xRes.status === 301 || xRes.status === 307) {
-            const loc = xRes.headers.get("location") || "";
-            if (loc.includes("login") || loc.includes("i/flow/signup")) {
-              return { ok: false, status: 401 };
-            }
-          }
-          if (xRes.ok) {
-            return {
-              ok: true,
-              status: 200,
-              displayName: xUsername,
-              bio: `X (Twitter) profile confirmed via authenticated API probe.`
-            };
-          }
-          if (xRes.status === 404) return { ok: false, status: 404 };
-        } catch { /* fall through */ }
-      }
-      return { ok: false, status: 0 };
-    }
     else if (lowercaseUrl.includes("twitch.tv/")) {
       const twitchUser = lowercaseUrl.split("twitch.tv/")[1]?.split("/")[0]?.split("?")[0];
       if (!twitchUser) return { ok: false, status };
