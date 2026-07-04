@@ -63,7 +63,7 @@ Return as JSON:
         Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
         "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(40000),
       body: JSON.stringify({
         model: NVIDIA_MODEL,
         temperature: 0.2,
@@ -108,6 +108,7 @@ Return as JSON:
     }
 
   } catch (error) {
+    console.error("[NEXUS ERROR]", error);
     return NextResponse.json({
       key_finding: "AI analysis encountered an error.",
       connected_signals: [],

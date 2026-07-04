@@ -45,6 +45,18 @@ export function AppShellClient({ children }: { children: React.ReactNode }) {
 
   // Load session and listen for changes
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+      setSession({
+        user: {
+          id: "bypass-analyst",
+          email: "operator@shield.ksp.gov.in",
+          user_metadata: { display_name: "Classified Bypass Analyst" },
+        },
+      });
+      setAuthLoading(false);
+      return;
+    }
+
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (active) {
@@ -74,6 +86,9 @@ export function AppShellClient({ children }: { children: React.ReactNode }) {
 
   // Redirect client to auth if unauthenticated
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+      return;
+    }
     if (!authLoading && !session && !isAuthPage) {
       router.push("/auth");
     }

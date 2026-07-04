@@ -59,6 +59,10 @@ export default function AuthPage() {
 
   // If already authenticated, bounce to /
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+      router.push("/");
+      return;
+    }
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (active && data.session) router.push("/");

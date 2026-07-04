@@ -36,27 +36,37 @@ export class LinkedInPublicSearchProvider {
     const results: SearchResult[] = [];
     const logs: SearchEngineEvidence[] = [];
 
-    // 1. Bing
     const bingQuery = `site:linkedin.com/in/${cleanUsername}`;
+    const ddgQuery = `https://html.duckduckgo.com/html/?q=site:linkedin.com/in/${cleanUsername}`;
+    const yahooQuery = `site:linkedin.com/in/${cleanUsername}`;
+    const waybackQuery = `https://web.archive.org/cdx/search/cdx?url=linkedin.com/in/${cleanUsername}`;
+
     const bingStart = Date.now();
-    let bingRes: SearchResult | null = null;
-    let bingSuccess = false;
-    try {
-      console.log(`[LINKEDIN-SEARCH] Querying Bing for ${bingQuery}...`);
-      bingRes = await this.queryBing(cleanUsername);
-      if (bingRes) {
-        results.push(bingRes);
-        bingSuccess = true;
-      }
-    } catch (e) {
-      console.error("[LINKEDIN-SEARCH] Bing dork failed:", e);
-    }
+    const ddgStart = Date.now();
+    const yahooStart = Date.now();
+    const waybackStart = Date.now();
+
+    // ── Concurrently fetch all search sources ──
+    const [bingRes, ddgRes, yahooRes, waybackRes] = await Promise.all([
+      this.queryBing(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] Bing failed:", e); return null; }),
+      this.queryDDG(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] DDG failed:", e); return null; }),
+      this.queryYahoo(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] Yahoo failed:", e); return null; }),
+      this.queryWaybackCDX(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] Wayback CDX failed:", e); return null; })
+    ]);
+
     const bingDuration = Date.now() - bingStart;
+    const ddgDuration = Date.now() - ddgStart;
+    const yahooDuration = Date.now() - yahooStart;
+    const waybackDuration = Date.now() - waybackStart;
+
+    if (bingRes) {
+      results.push(bingRes);
+    }
     logs.push({
       engine: "Bing",
       query: bingQuery,
       searchedAt: new Date().toISOString(),
-      success: bingSuccess,
+      success: !!bingRes,
       responseTimeMs: bingDuration,
       profileUrl: bingRes?.url,
       title: bingRes?.title,
@@ -66,27 +76,14 @@ export class LinkedInPublicSearchProvider {
       rawSource: bingRes ? `Bing search query result title: "${bingRes.title}" and snippet: "${bingRes.snippet}"` : undefined
     });
 
-    // 2. DuckDuckGo HTML
-    const ddgQuery = `https://html.duckduckgo.com/html/?q=site:linkedin.com/in/${cleanUsername}`;
-    const ddgStart = Date.now();
-    let ddgRes: SearchResult | null = null;
-    let ddgSuccess = false;
-    try {
-      console.log(`[LINKEDIN-SEARCH] Querying DDG HTML for site:linkedin.com/in/${cleanUsername}...`);
-      ddgRes = await this.queryDDG(cleanUsername);
-      if (ddgRes) {
-        results.push(ddgRes);
-        ddgSuccess = true;
-      }
-    } catch (e) {
-      console.error("[LINKEDIN-SEARCH] DDG dork failed:", e);
+    if (ddgRes) {
+      results.push(ddgRes);
     }
-    const ddgDuration = Date.now() - ddgStart;
     logs.push({
       engine: "DuckDuckGo",
       query: ddgQuery,
       searchedAt: new Date().toISOString(),
-      success: ddgSuccess,
+      success: !!ddgRes,
       responseTimeMs: ddgDuration,
       profileUrl: ddgRes?.url,
       title: ddgRes?.title,
@@ -96,27 +93,14 @@ export class LinkedInPublicSearchProvider {
       rawSource: ddgRes ? `DDG search HTML title: "${ddgRes.title}" and snippet: "${ddgRes.snippet}"` : undefined
     });
 
-    // 3. Yahoo Search
-    const yahooQuery = `site:linkedin.com/in/${cleanUsername}`;
-    const yahooStart = Date.now();
-    let yahooRes: SearchResult | null = null;
-    let yahooSuccess = false;
-    try {
-      console.log(`[LINKEDIN-SEARCH] Querying Yahoo for ${yahooQuery}...`);
-      yahooRes = await this.queryYahoo(cleanUsername);
-      if (yahooRes) {
-        results.push(yahooRes);
-        yahooSuccess = true;
-      }
-    } catch (e) {
-      console.error("[LINKEDIN-SEARCH] Yahoo dork failed:", e);
+    if (yahooRes) {
+      results.push(yahooRes);
     }
-    const yahooDuration = Date.now() - yahooStart;
     logs.push({
       engine: "Yahoo",
       query: yahooQuery,
       searchedAt: new Date().toISOString(),
-      success: yahooSuccess,
+      success: !!yahooRes,
       responseTimeMs: yahooDuration,
       profileUrl: yahooRes?.url,
       title: yahooRes?.title,
@@ -126,29 +110,16 @@ export class LinkedInPublicSearchProvider {
       rawSource: yahooRes ? `Yahoo search page title: "${yahooRes.title}" and snippet: "${yahooRes.snippet}"` : undefined
     });
 
-    // 4. Wayback Machine CDX + HTML Scraping
-    const waybackQuery = `https://web.archive.org/cdx/search/cdx?url=linkedin.com/in/${cleanUsername}`;
-    const waybackStart = Date.now();
-    let waybackRes: { result: SearchResult; html: string; timestamp: string } | null = null;
-    let waybackSuccess = false;
     let waybackHtml = "";
-    try {
-      console.log(`[LINKEDIN-SEARCH] Querying Wayback Machine CDX API for ${cleanUsername}...`);
-      waybackRes = await this.queryWaybackCDX(cleanUsername);
-      if (waybackRes) {
-        results.push(waybackRes.result);
-        waybackHtml = waybackRes.html;
-        waybackSuccess = true;
-      }
-    } catch (e) {
-      console.error("[LINKEDIN-SEARCH] Wayback CDX sweep failed:", e);
+    if (waybackRes) {
+      results.push(waybackRes.result);
+      waybackHtml = waybackRes.html;
     }
-    const waybackDuration = Date.now() - waybackStart;
     logs.push({
       engine: "Wayback",
       query: waybackQuery,
       searchedAt: new Date().toISOString(),
-      success: waybackSuccess,
+      success: !!waybackRes,
       responseTimeMs: waybackDuration,
       profileUrl: waybackRes?.result.url,
       title: waybackRes?.result.title,
@@ -161,6 +132,7 @@ export class LinkedInPublicSearchProvider {
     if (results.length === 0) {
       return null;
     }
+
 
     // Merge search engine cache results
     const merged = await this.mergeResults(cleanUsername, results, waybackHtml);

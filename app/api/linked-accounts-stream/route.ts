@@ -18,6 +18,7 @@ import {
   fetchSoundCloudDetails,
   fetchPastebinDetails,
   fetchDribbbleDetails,
+  fetchThreadsDetails,
   type ProbeResult,
   type LinkedinMeta,
   type InstagramMeta,
@@ -353,6 +354,32 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
     }
   }
 
+  // ── Threads Upgraded Detail-Fetch Check ─────────────────────────
+  if (platKey === "threads") {
+    try {
+      const details = await fetchThreadsDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "threads",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active Threads profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: details.followers ?? 0,
+            confidence: "PROBABLE",
+            postCount: 0,
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
   // ── Reddit: use JSON API ──────────────────────────────────────────
   if (lowercaseUrl.includes("reddit.com/user/")) {
     const redditUser = lowercaseUrl.split("reddit.com/user/")[1]?.split("/")[0]?.split("?")[0] || "";
@@ -567,7 +594,7 @@ export async function GET(request: NextRequest) {
         try {
           controller.close();
         } catch (e) {}
-      }, 15000);
+      }, 28000);
 
       const markProbeCompleted = () => {
         completedProbes++;
@@ -905,7 +932,7 @@ export async function GET(request: NextRequest) {
       };
 
       // Run probes with concurrency of 8 to prevent network bottleneck and timeouts
-      pool(LOCAL_PROBES, 8, probeWorker);
+      pool(LOCAL_PROBES, 16, probeWorker);
     },
   });
 

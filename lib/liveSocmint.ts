@@ -374,7 +374,7 @@ async function resolveHackathonWithLLM(text: string): Promise<{ eventName: strin
   if (!apiKey) return null;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  const timeout = setTimeout(() => controller.abort(), 3000);
 
   try {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
@@ -647,53 +647,20 @@ export async function investigateSingleUsername(
     }
   };
 
-  const [
-    indianKanoonRecords,
-    mcaRecords,
-    upiFootprint,
-    hibpResult,
-    newsArticles,
-    searchCrawled,
-    darkWebPastes,
-  ] = await Promise.all([
-    type === "name" || type === "username" ? fetchIndianKanoon(legalName || query) : Promise.resolve([]),
-    type === "name" || type === "username" ? fetchMcaCompanySearch(legalName || query) : Promise.resolve([]),
-    type === "phone" ? fetchUpiFootprint(query) : Promise.resolve(undefined),
-    type === "email" ? fetchHibpBreaches(query) : Promise.resolve(undefined),
-    type === "crypto" ? Promise.resolve([] as any[]) : fetchNewsArticles(type === "name" ? query : `${realName} ${username}`.trim()),
-    searchWebForSocialProfiles(query, capturedAt),
-    fetchLivePasteLeaks(query),
-  ]);
+  // ── LATENCY FIX: Run legal/search/news lookups IN PARALLEL with all platform probes
+  // Previously these were sequential: legal→T1→T2→T3 (3 waterfall waits).
+  // Now everything fires at once and we wait for ALL concurrently.
+  // Worst-case time = slowest single fetch, not sum of all fetches.
+
+  let indianKanoonRecords: any[] = [];
+  let mcaRecords: any[] = [];
+  let upiFootprint: any = undefined;
+  let hibpResult: any = undefined;
+  let newsArticles: any[] = [];
+  let searchCrawled: any = undefined;
+  let darkWebPastes: any[] = [];
 
   const accounts: PlatformAccount[] = [];
-
-  // If phone, always probe WhatsApp (Fix 8) and Truecaller (Fix 9)
-  if (type === "phone" && allowedTiers.includes(1)) {
-    try {
-      const waStatus = await probeWhatsAppExists(query);
-      logStatus("WhatsApp", waStatus, 110);
-      if (waStatus === "FOUND") {
-        accounts.push({
-          platform: "whatsapp",
-          username: query,
-          profileUrl: `https://wa.me/${query.replace(/[^\d+]/g, "")}`,
-          displayName: `WhatsApp Business/Chat (${query})`,
-          bio: "Active WhatsApp communication profile verified via redirect link signature.",
-          followers: 0,
-          confidence: "CONFIRMED",
-          capturedAt
-        });
-      }
-    } catch (e) {
-      logStatus("WhatsApp", "NOT FOUND", 110);
-    }
-
-    if (upiFootprint?.truecaller?.status === "SUCCESS") {
-      logStatus("Truecaller", "FOUND", 180);
-    } else {
-      logStatus("Truecaller", "NOT FOUND", 180);
-    }
-  }
 
   let github: { account?: Partial<PlatformAccount>; posts: Post[]; resolvedUsername?: string; errorStatus?: number } = { posts: [] };
   let redditPosts: Post[] = [];
@@ -702,164 +669,196 @@ export async function investigateSingleUsername(
   let gitLab: { account?: Partial<PlatformAccount> & { projects?: string[]; location?: string; followers?: number }; posts: Post[]; errorStatus?: number } = { posts: [] };
   const probeResults: { probe: any; normalized: string; profileUrl: string; result: any }[] = [];
 
-  // --- TIER 1 PLATFORMS ---
-  // GitHub, GitLab, LinkedIn, Instagram, Reddit, YouTube.
-  const t1_start = Date.now();
-  const t1_results = await Promise.allSettled([
-    (type === "crypto" || !allowedTiers.includes(1)) ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchGithubActivity(username, type === "name", githubToken),
-    (type === "crypto" || !allowedTiers.includes(1)) ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchGitLabActivity(username),
-    (type === "crypto" || !allowedTiers.includes(1)) ? Promise.resolve([] as Post[]) : fetchRedditActivity(username),
-    ...PLATFORM_PROBES.filter(p => p.platform === "linkedin" || p.platform === "instagram" || p.platform === "youtube").map(async (probe) => {
-      if (type === "crypto" || !allowedTiers.includes(1)) return { probe, normalized: username, profileUrl: probe.url(username), result: { ok: false, status: 404 } };
-      const normalized = probe.normalize ? probe.normalize(username) : username;
-      const profileUrl = probe.url(normalized);
-      let result: any = { ok: false };
-      try {
-        if (probe.platform === "linkedin") {
-          const provider = new LinkedInProvider();
-          const intel = await provider.fetchProfile(normalized);
-          if (intel) {
-            const ok = !!intel.fullName?.value;
-            result = {
-              ok,
-              status: ok ? 200 : 404,
-              linkedinIntel: intel,
-              linkedinMeta: {
-                fullName: intel.fullName?.value || null,
-                jobTitle: intel.currentRole?.value || null,
-                company: intel.currentCompany?.value || null,
-                education: intel.educations?.[0]?.institution?.value || null,
-                headline: intel.headline?.value || null,
-                avatar: intel.avatarUrl?.value || null,
-                profileUrl: intel.profileUrl.value,
-                summary: intel.summary?.value || null
-              }
-            };
-          }
-        } else {
-          result = await probePublicProfile(profileUrl);
-        }
-      } catch (err) {
-        console.error(`[SOCMINT] ${probe.platform} failed:`, err);
-      }
-      return { probe, normalized, profileUrl, result };
-    })
-  ]);
-  const t1_ms = Math.floor((Date.now() - t1_start) / 6);
-
-  if (allowedTiers.includes(1)) {
-    if (t1_results[0].status === "fulfilled") {
-      github = t1_results[0].value as any;
-      const isRate = github.errorStatus === 429 || github.errorStatus === 403;
-      logStatus("GitHub", isRate ? "RATE LIMITED" : (github.account ? "FOUND" : "NOT FOUND"), t1_ms, isRate ? "GitHub API Rate Limit Exceeded." : undefined);
-    }
-    if (t1_results[1].status === "fulfilled") {
-      gitLab = t1_results[1].value as any;
-      const isRate = gitLab.errorStatus === 429 || gitLab.errorStatus === 403;
-      logStatus("GitLab", isRate ? "RATE LIMITED" : (gitLab.account ? "FOUND" : "NOT FOUND"), t1_ms, isRate ? "GitLab API Rate Limit Exceeded." : undefined);
-    }
-    if (t1_results[2].status === "fulfilled") {
-      redditPosts = t1_results[2].value as any;
-      const errStatus = (redditPosts as any)._errorStatus;
-      const isRate = errStatus === 429 || errStatus === 403;
-      logStatus("Reddit", isRate ? "RATE LIMITED" : (redditPosts.length > 0 ? "FOUND" : "NOT FOUND"), t1_ms, isRate ? "Reddit JSON API Rate Limit Exceeded." : undefined);
-    }
-    for (let i = 3; i < t1_results.length; i++) {
-      const r = t1_results[i];
-      if (r.status === "fulfilled") {
-        const val = r.value as any;
-        probeResults.push(val);
-        const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
-        const isPrivate = val.result.status === 401 || (val.result.status === 403 && val.probe.platform === "instagram");
-        const isUnavailable = val.result.status >= 500;
-        const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
-        const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
-        logStatus(val.probe.label, status, t1_ms, reason);
-      }
-    }
-  }
-
-  // --- TIER 2 PLATFORMS ---
-  // Telegram, Medium, Dev.to, HackerNews, Pinterest, Quora, SoundCloud.
-  const t2_start = Date.now();
-  const t2_results = await Promise.allSettled([
-    (type === "crypto" || !allowedTiers.includes(2)) ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchDevToActivity(username),
-    (type === "crypto" || !allowedTiers.includes(2)) ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchHackerNewsActivity(username),
-    ...PLATFORM_PROBES.filter(p => p.platform === "telegram" || p.platform === "medium" || p.platform === "pinterest" || p.platform === "quora" || p.platform === "soundcloud" || p.platform === "facebook" || p.platform === "twitch" || p.platform === "duolingo" || p.platform === "freelancer" || p.platform === "leetcode" || p.platform === "threads" || p.platform === "chess" || p.platform === "picsart" || p.platform === "kaggle" || p.platform === "academia" || p.platform === "appledevelopers" || p.platform === "smule" || p.platform === "quizlet").map(async (probe) => {
-      if (type === "crypto" || !allowedTiers.includes(2)) return { probe, normalized: username, profileUrl: probe.url(username), result: { ok: false, status: 404 } };
-      const normalized = probe.normalize ? probe.normalize(username) : username;
-      const profileUrl = probe.url(normalized);
-      let result: any = { ok: false };
-      try {
-        result = await probePublicProfile(profileUrl);
-      } catch (err) {
-        console.error(`[SOCMINT] ${probe.platform} failed:`, err);
-      }
-      return { probe, normalized, profileUrl, result };
-    })
-  ]);
-  const t2_ms = Math.floor((Date.now() - t2_start) / 8);
-
-  if (allowedTiers.includes(2)) {
-    if (t2_results[0].status === "fulfilled") {
-      devTo = t2_results[0].value as any;
-      logStatus("Dev.to", devTo.account ? "FOUND" : "NOT FOUND", t2_ms);
-    }
-    if (t2_results[1].status === "fulfilled") {
-      hackerNews = t2_results[1].value as any;
-      logStatus("HackerNews", hackerNews.account ? "FOUND" : "NOT FOUND", t2_ms);
-    }
-    for (let i = 2; i < t2_results.length; i++) {
-      const r = t2_results[i];
-      if (r.status === "fulfilled") {
-        const val = r.value as any;
-        probeResults.push(val);
-        const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
-        const isPrivate = val.result.status === 401 || (val.result.status === 403 && val.probe.platform === "medium");
-        const isUnavailable = val.result.status >= 500;
-        const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
-        const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
-        logStatus(val.probe.label, status, t2_ms, reason);
-      }
-    }
-  }
-
-  // --- TIER 3 PLATFORMS ---
-  // Twitter/X, Steam, Pastebin, Tumblr, Flickr, Snapchat.
-  const t3_start = Date.now();
-  const t3_results = await Promise.allSettled(
-    PLATFORM_PROBES.filter(p => p.platform === "twitter" || p.platform === "steam" || p.platform === "pastebin" || p.platform === "tumblr" || p.platform === "snapchat" || p.platform === "tiktok").map(async (probe) => {
-      if (type === "crypto" || !allowedTiers.includes(3)) return { probe, normalized: username, profileUrl: probe.url(username), result: { ok: false, status: 404 } };
-      const normalized = probe.normalize ? probe.normalize(username) : username;
-      const profileUrl = probe.url(normalized);
-      let result: any = { ok: false };
-      try {
-        result = await probePublicProfile(profileUrl);
-      } catch (err) {
-        console.error(`[SOCMINT] ${probe.platform} failed:`, err);
-      }
-      return { probe, normalized, profileUrl, result };
-    })
+  // All T1+T2+T3 platform probes merged into a single concurrent batch
+  const ALL_TIER_PROBES = PLATFORM_PROBES.filter(p =>
+    // T1
+    p.platform === "linkedin" || p.platform === "instagram" || p.platform === "youtube" ||
+    // T2
+    p.platform === "telegram" || p.platform === "medium" || p.platform === "pinterest" ||
+    p.platform === "quora" || p.platform === "soundcloud" || p.platform === "facebook" ||
+    p.platform === "twitch" || p.platform === "duolingo" || p.platform === "freelancer" ||
+    p.platform === "leetcode" || p.platform === "threads" || p.platform === "chess" ||
+    p.platform === "picsart" || p.platform === "kaggle" || p.platform === "academia" ||
+    p.platform === "appledevelopers" || p.platform === "smule" || p.platform === "quizlet" ||
+    // T3
+    p.platform === "twitter" || p.platform === "steam" || p.platform === "pastebin" ||
+    p.platform === "tumblr" || p.platform === "snapchat" || p.platform === "tiktok"
   );
-  const t3_ms = Math.floor((Date.now() - t3_start) / 7);
 
-  if (allowedTiers.includes(3)) {
-    for (let i = 0; i < t3_results.length; i++) {
-      const r = t3_results[i];
-      if (r.status === "fulfilled") {
-        const val = r.value as any;
-        probeResults.push(val);
-        const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
-        const isPrivate = val.result.status === 401 || (val.result.status === 403 && val.probe.platform === "twitter");
-        const isUnavailable = val.result.status >= 500;
-        const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
-        const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
-        logStatus(val.probe.label, status, t3_ms, reason);
+  const probeTask = (probe: any) => async () => {
+    if (type === "crypto") return { probe, normalized: username, profileUrl: probe.url(username), result: { ok: false, status: 404 } };
+    const normalized = probe.normalize ? probe.normalize(username) : username;
+    const profileUrl = probe.url(normalized);
+    let result: any = { ok: false };
+    try {
+      if (probe.platform === "linkedin") {
+        const provider = new LinkedInProvider();
+        const intel = await provider.fetchProfile(normalized);
+        if (intel) {
+          const ok = !!intel.fullName?.value;
+          result = {
+            ok,
+            status: ok ? 200 : 404,
+            linkedinIntel: intel,
+            linkedinMeta: {
+              fullName: intel.fullName?.value || null,
+              jobTitle: intel.currentRole?.value || null,
+              company: intel.currentCompany?.value || null,
+              education: intel.educations?.[0]?.institution?.value || null,
+              headline: intel.headline?.value || null,
+              avatar: intel.avatarUrl?.value || null,
+              profileUrl: intel.profileUrl.value,
+              summary: intel.summary?.value || null,
+            },
+          };
+        }
+      } else {
+        result = await probePublicProfile(profileUrl);
       }
+    } catch (err) {
+      console.error(`[SOCMINT] ${probe.platform} failed:`, err);
+    }
+    return { probe, normalized, profileUrl, result };
+  };
+
+  const t_all_start = Date.now();
+
+  const [
+    legalSearchResults,
+    githubResult,
+    gitLabResult,
+    redditResult,
+    devToResult,
+    hackerNewsResult,
+    allProbeResults,
+    cryptoTrace,
+    waStatus,
+  ] = await Promise.all([
+    // Legal / search / news / pastes — previously ran BEFORE platform probes
+    Promise.all([
+      type === "name" || type === "username" ? fetchIndianKanoon(legalName || query) : Promise.resolve([]),
+      type === "name" || type === "username" ? fetchMcaCompanySearch(legalName || query) : Promise.resolve([]),
+      type === "phone" ? fetchUpiFootprint(query) : Promise.resolve(undefined),
+      type === "email" ? fetchHibpBreaches(query) : Promise.resolve(undefined),
+      type === "crypto" ? Promise.resolve([] as any[]) : fetchNewsArticles(type === "name" ? query : `${realName} ${username}`.trim()),
+      searchWebForSocialProfiles(query, capturedAt),
+      fetchLivePasteLeaks(query),
+    ]),
+    // GitHub rich API
+    (type === "crypto" || !allowedTiers.includes(1))
+      ? Promise.resolve({ account: undefined, posts: [] as Post[] })
+      : fetchGithubActivity(username, type === "name", githubToken).catch(err => ({ account: undefined, posts: [] as Post[], errorStatus: err?.status || 403 })),
+    // GitLab rich API
+    (type === "crypto" || !allowedTiers.includes(1))
+      ? Promise.resolve({ account: undefined, posts: [] as Post[] })
+      : fetchGitLabActivity(username).catch(() => ({ account: undefined, posts: [] as Post[] })),
+    // Reddit JSON API
+    (type === "crypto" || !allowedTiers.includes(1))
+      ? Promise.resolve([] as Post[])
+      : fetchRedditActivity(username).catch(() => [] as Post[]),
+    // Dev.to rich API
+    (type === "crypto" || !allowedTiers.includes(2))
+      ? Promise.resolve({ account: undefined, posts: [] as Post[] })
+      : fetchDevToActivity(username).catch(() => ({ account: undefined, posts: [] as Post[] })),
+    // HackerNews rich API
+    (type === "crypto" || !allowedTiers.includes(2))
+      ? Promise.resolve({ account: undefined, posts: [] as Post[] })
+      : fetchHackerNewsActivity(username).catch(() => ({ account: undefined, posts: [] as Post[] })),
+    // All platform HTTP probes — all 30+ fire simultaneously
+    Promise.allSettled(ALL_TIER_PROBES.map(p => probeTask(p)())),
+    // Crypto trace (no-op if not crypto)
+    type === "crypto" ? fetchCryptoTrace(query) : Promise.resolve(undefined),
+    // WhatsApp (phone only)
+    (type === "phone" && allowedTiers.includes(1))
+      ? probeWhatsAppExists(query).catch(() => "NOT FOUND" as const)
+      : Promise.resolve("NOT FOUND" as const),
+  ]);
+
+  const t_all_ms = Date.now() - t_all_start;
+  const t1_ms = Math.round(t_all_ms / 3); // representative per-platform timing
+  const t2_ms = t1_ms;
+  const t3_ms = t1_ms;
+
+  // Unpack legal/search results
+  [
+    indianKanoonRecords,
+    mcaRecords,
+    upiFootprint,
+    hibpResult,
+    newsArticles,
+    searchCrawled,
+    darkWebPastes,
+  ] = legalSearchResults as any[];
+
+  // Unpack rich API results
+  github = githubResult as any;
+  gitLab = gitLabResult as any;
+  redditPosts = redditResult as any;
+  devTo = devToResult as any;
+  hackerNews = hackerNewsResult as any;
+
+  // WhatsApp / Truecaller
+  if (type === "phone" && allowedTiers.includes(1)) {
+    const waStatusResolved = waStatus as any;
+    logStatus("WhatsApp", waStatusResolved, 110);
+    if (waStatusResolved === "FOUND") {
+      accounts.push({
+        platform: "whatsapp",
+        username: query,
+        profileUrl: `https://wa.me/${query.replace(/[^\d+]/g, "")}`,
+        displayName: `WhatsApp Business/Chat (${query})`,
+        bio: "Active WhatsApp communication profile verified via redirect link signature.",
+        followers: 0,
+        confidence: "CONFIRMED",
+        capturedAt,
+      });
+    }
+    if (upiFootprint?.truecaller?.status === "SUCCESS") {
+      logStatus("Truecaller", "FOUND", 180);
+    } else {
+      logStatus("Truecaller", "NOT FOUND", 180);
     }
   }
 
-  const cryptoTrace = type === "crypto" ? await fetchCryptoTrace(query) : undefined;
+  // Log rich API statuses
+  if (allowedTiers.includes(1)) {
+    const ghAny = github as any;
+    const isGhRate = ghAny.errorStatus === 429 || ghAny.errorStatus === 403;
+    logStatus("GitHub", isGhRate ? "RATE LIMITED" : (github.account ? "FOUND" : "NOT FOUND"), t1_ms, isGhRate ? "GitHub API Rate Limit Exceeded." : undefined);
+
+    const glAny = gitLab as any;
+    const isGlRate = glAny.errorStatus === 429 || glAny.errorStatus === 403;
+    logStatus("GitLab", isGlRate ? "RATE LIMITED" : (gitLab.account ? "FOUND" : "NOT FOUND"), t1_ms, isGlRate ? "GitLab API Rate Limit Exceeded." : undefined);
+
+    const errStatus = (redditPosts as any)._errorStatus;
+    const isRedditRate = errStatus === 429 || errStatus === 403;
+    logStatus("Reddit", isRedditRate ? "RATE LIMITED" : (redditPosts.length > 0 ? "FOUND" : "NOT FOUND"), t1_ms, isRedditRate ? "Reddit JSON API Rate Limit Exceeded." : undefined);
+  }
+  if (allowedTiers.includes(2)) {
+    logStatus("Dev.to", devTo.account ? "FOUND" : "NOT FOUND", t2_ms);
+    logStatus("HackerNews", hackerNews.account ? "FOUND" : "NOT FOUND", t2_ms);
+  }
+
+  // Log and collect all probe results
+  for (const r of allProbeResults) {
+    if (r.status !== "fulfilled") continue;
+    const val = r.value as any;
+    const tierOf = (plt: string) =>
+      ["linkedin","instagram","youtube"].includes(plt) ? 1 :
+      ["telegram","medium","pinterest","quora","soundcloud","facebook","twitch","duolingo","freelancer","leetcode","threads","chess","picsart","kaggle","academia","appledevelopers","smule","quizlet"].includes(plt) ? 2 : 3;
+    const tier = tierOf(val.probe.platform);
+    if (!allowedTiers.includes(tier)) continue;
+
+    probeResults.push(val);
+    const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
+    const isPrivate = val.result.status === 401 || (val.result.status === 403 && (val.probe.platform === "instagram" || val.probe.platform === "twitter" || val.probe.platform === "medium"));
+    const isUnavailable = val.result.status >= 500;
+    const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
+    const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
+    logStatus(val.probe.label, status, t_all_ms, reason);
+  }
+
+  console.log(`[SOCMINT] ✓ All ${ALL_TIER_PROBES.length} platform probes + legal/search resolved in ${t_all_ms}ms`);
 
 
   const parsedAccounts: PlatformAccount[] = (probeResults as any[])
@@ -1056,24 +1055,24 @@ export async function investigateSingleUsername(
   const primaryBio = github.account?.bio || devTo.account?.bio || "";
   if (primaryBio) {
     const bioHandles = parseHandlesFromBio(primaryBio);
-    for (const bh of bioHandles) {
-      const alreadyExists = accounts.some(
-        (a) => a.platform === bh.platform && a.username.toLowerCase() === bh.username.toLowerCase()
-      );
-      if (!alreadyExists) {
+    const newHandles = bioHandles.filter(bh => 
+      !accounts.some(a => a.platform === bh.platform && a.username.toLowerCase() === bh.username.toLowerCase())
+    );
+
+    if (newHandles.length > 0) {
+      const bioHopTasks = newHandles.map(async (bh) => {
         const probe = PLATFORM_PROBES.find(p => p.platform === bh.platform);
-        if (probe) {
-          const normalized = probe.normalize ? probe.normalize(bh.username) : bh.username;
-          const profileUrl = probe.url(normalized);
+        if (!probe) return null;
+        const normalized = probe.normalize ? probe.normalize(bh.username) : bh.username;
+        const profileUrl = probe.url(normalized);
+        try {
           const result = await probePublicProfile(profileUrl);
           if (result.ok) {
-            // Fix 2: profilePicUrl always assigned in bio-hop loop — DiceBear fallback.
-            // Removed isDemoUser() gate; all platforms get a consistent fallback.
             let profilePicUrl: string | undefined =
               probe.platform === "instagram"
                 ? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`
                 : undefined;
-            accounts.push({
+            return {
               id: `${probe.platform}-${normalized}-bio-hop`,
               platform: probe.platform,
               tier: probe.tier,
@@ -1085,12 +1084,20 @@ export async function investigateSingleUsername(
               deepfakeFlag: false,
               followers: 0,
               creationDate: new Date().toISOString().slice(0, 10),
-              confidence: "CONFIRMED",
+              confidence: "CONFIRMED" as const,
               reason: `Discovered from bio mention. Verified at ${profileUrl}.`,
               capturedAt,
-            });
+            };
           }
+        } catch (e) {
+          console.error(`[SOCMINT] Bio hop probe failed for ${profileUrl}:`, e);
         }
+        return null;
+      });
+
+      const hopResults = await Promise.all(bioHopTasks);
+      for (const res of hopResults) {
+        if (res) accounts.push(res);
       }
     }
   }
@@ -1463,6 +1470,52 @@ export async function investigateSingleUsername(
       }
     } catch (geoErr) {
       console.warn(`[GEO] Nominatim geocoding failed for "${ghLocation}":`, geoErr);
+    }
+  }
+
+  // ── LinkedIn profile location → geocode → add to locations ──────────────
+  // LinkedIn often has precise city data (e.g. "Greater Seattle Area, United States")
+  // that never appeared in GitHub or post text — geocode and surface it here.
+  const linkedinGeoAcc = accounts.find(a => a.platform === "linkedin" && (a as any).linkedinIntel);
+  const liLocation: string | undefined = (linkedinGeoAcc as any)?.linkedinIntel?.location?.value;
+  if (liLocation && liLocation.trim()) {
+    const liLocNorm = liLocation.trim();
+    // Only add if not already covered by existing location entries
+    const alreadyCovered = locations.some(l =>
+      liLocNorm.toLowerCase().includes(l.locationName.toLowerCase().slice(0, 4)) ||
+      l.locationName.toLowerCase().includes(liLocNorm.toLowerCase().slice(0, 4))
+    );
+    if (!alreadyCovered) {
+      try {
+        const liGeoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(liLocNorm)}&format=json&limit=1`;
+        const liGeoResp = await fetch(liGeoUrl, {
+          headers: { "User-Agent": "SOCMINT-Shield/1.0 (Karnataka CID Research)" },
+          signal: AbortSignal.timeout(4000),
+        });
+        if (liGeoResp.ok) {
+          const liGeoData = await liGeoResp.json();
+          if (Array.isArray(liGeoData) && liGeoData.length > 0) {
+            const geo = liGeoData[0];
+            const lat = parseFloat(geo.lat);
+            const lng = parseFloat(geo.lon);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              // Extract city-level name: first part of display_name is usually the city
+              const cityName = geo.display_name?.split(",")[0]?.trim() || liLocNorm;
+              locations.push({
+                lat,
+                lng,
+                locationName: cityName,
+                date: capturedAt.slice(0, 10),
+                source: "LinkedIn Profile",
+                details: `Location stated on LinkedIn profile: "${liLocNorm}". Geocoded via Nominatim.`,
+              });
+              console.log(`[GEO] LinkedIn location geocoded: "${liLocNorm}" → [${lat}, ${lng}] (${cityName})`);
+            }
+          }
+        }
+      } catch (liGeoErr) {
+        console.warn(`[GEO] LinkedIn location geocoding failed for "${liLocNorm}":`, liGeoErr);
+      }
     }
   }
 
@@ -2220,6 +2273,52 @@ export function mergeProfiles(profiles: SuspectProfile[], primaryName?: string):
   if (!base.upiFootprint) base.upiFootprint = profiles.find(p => p.upiFootprint)?.upiFootprint;
   if (!base.cryptoTrace) base.cryptoTrace = profiles.find(p => p.cryptoTrace)?.cryptoTrace;
   if (!base.faceScan) base.faceScan = profiles.find(p => p.faceScan)?.faceScan;
+  if (!base.waybackArchive) base.waybackArchive = profiles.find(p => p.waybackArchive)?.waybackArchive;
+  if (!base.contactDiscovery) base.contactDiscovery = profiles.find(p => p.contactDiscovery)?.contactDiscovery;
+
+  // Merge Education lists (deduplicated by institution name)
+  const allEdu: any[] = [];
+  for (const p of profiles) {
+    if (p.education) {
+      for (const edu of p.education) {
+        if (!allEdu.some(e => e.institution.toLowerCase() === edu.institution.toLowerCase())) {
+          allEdu.push(edu);
+        }
+      }
+    }
+  }
+  if (allEdu.length > 0) base.education = allEdu;
+
+  // Merge Experience lists (deduplicated by company + role)
+  const allExp: any[] = [];
+  for (const p of profiles) {
+    if (p.experience) {
+      for (const exp of p.experience) {
+        if (!allExp.some(e => e.company.toLowerCase() === exp.company.toLowerCase() && e.role.toLowerCase() === exp.role.toLowerCase())) {
+          allExp.push(exp);
+        }
+      }
+    }
+  }
+  if (allExp.length > 0) base.experience = allExp;
+
+  // Merge Hackathons list (deduplicated by name)
+  const allHacks: any[] = [];
+  for (const p of profiles) {
+    if (p.hackathons) {
+      for (const h of p.hackathons) {
+        if (!allHacks.some(e => e.name.toLowerCase() === h.name.toLowerCase())) {
+          allHacks.push(h);
+        }
+      }
+    }
+  }
+  if (allHacks.length > 0) base.hackathons = allHacks;
+
+  // Merge Resume URL
+  const bestResume = profiles.find(p => p.resumeUrl)?.resumeUrl;
+  if (bestResume) base.resumeUrl = bestResume;
+
 
   const spKeys = new Set<string>();
   base.suggestedProfiles = [];
@@ -2293,7 +2392,7 @@ async function discoverUsernameVariants(username: string): Promise<string[]> {
 Return ONLY a JSON array of strings, no explanation. Example: ["user_dev", "user123", "theuser"]`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
 
     const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",

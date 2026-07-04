@@ -13,7 +13,7 @@ import {
   Users, MessageSquare, Globe, FileText, ScanFace, EyeOff, Bitcoin,
   AlertTriangle, Gavel, Share2, MapPin, GitBranch, Bot, FileCheck, Brain,
   AlertCircle, Clock, Send, IndianRupee, PhoneCall, ShieldX, FilePlus, ExternalLink,
-  Briefcase, Building2, GraduationCap, GitCommit, Info,
+  Briefcase, Building2, GraduationCap, GitCommit, Info, Archive, Mail, Network,
 } from "lucide-react";
 
 
@@ -30,7 +30,6 @@ import ShadowAccounts from "@/components/ShadowAccounts";
 import CryptoTraceCard from "@/components/CryptoTraceCard";
 import DarkWebMonitor from "@/components/DarkWebMonitor";
 import LegalRecords from "@/components/LegalRecords";
-import NetworkGraph from "@/components/NetworkGraph";
 import EvidenceGraph from "@/components/EvidenceGraph";
 
 import LocationMap from "@/components/LocationMap";
@@ -44,6 +43,9 @@ import ManualIngestPanel from "@/components/ManualIngestPanel";
 import SearchIntelPanel from "@/components/SearchIntelPanel";
 import IntelCorrelationTab from "@/components/suspect/IntelCorrelationTab";
 import LinkedAccountsStreamTab from "@/components/suspect/LinkedAccountsStreamTab";
+import WaybackArchiveTab from "@/components/WaybackArchiveTab";
+import ContactDiscoveryTab from "@/components/ContactDiscoveryTab";
+import OSINTFrameworkGraph from "@/components/OSINTFrameworkGraph";
 import { ConfidenceTrend } from "@/components/ConfidenceTrend";
 import { KeywordTagCloud } from "@/components/KeywordTagCloud";
 import { Wifi } from "lucide-react";
@@ -85,7 +87,6 @@ export function SuspectTabs({
       render: (p) => <FinancialTab p={p} /> },
     { id: "darkweb", label: "Dark Web & Leaks", icon: AlertTriangle, render: (p) => <DarkWebMonitor suspect={p} /> },
     { id: "legal", label: "Legal & Public Records", icon: Gavel, render: (p) => <LegalRecords suspect={p} /> },
-    { id: "network", label: "Network Graph", icon: GitBranch, render: (p) => <NetworkGraph suspect={p} /> },
     { id: "evidence-graph", label: "Evidence Graph", icon: GitCommit, render: (p) => <EvidenceGraph suspect={p} /> },
     { id: "reasoning-log", label: "Reasoning Log", icon: Clock, render: (p) => <ReasoningLogView p={p} /> },
     { id: "geo", label: "Geotag Trail", icon: MapPin, render: (p) => <LocationMap suspect={p} /> },
@@ -107,7 +108,10 @@ export function SuspectTabs({
     { id: "stylometry", label: "Language Analysis", icon: Brain, render: (p) => <StylometryPanel suspect={p} /> },
     { id: "search-intel", label: "Search Intel", icon: Globe, render: (p) => <SearchIntelPanel suspect={p} key={p.caseReference} /> },
     { id: "ingest", label: "Evidence Ingest", icon: FilePlus, render: (p) => <ManualIngestPanel suspect={p} /> },
+    { id: "osint-graph", label: "OSINT Graph", icon: Network, render: (p) => <OSINTFrameworkGraph suspect={p} /> },
     { id: "chat", label: "AI Chat", icon: Bot, render: (p) => <AiChat suspect={p} /> },
+    { id: "wayback", label: "Archive Trail", icon: Archive, render: (p) => <WaybackArchiveTab suspect={p} /> },
+    { id: "contact", label: "Contact Discovery", icon: Mail, render: (p) => <ContactDiscoveryTab suspect={p} /> },
     { id: "evidence", label: "Court Certificate", icon: FileCheck, render: (p) => <EvidencePackage suspect={p} /> },
   ];
 

@@ -401,6 +401,8 @@ export interface SuspectProfile {
   domainIntel?: any;
   toolkitExecutions?: ToolkitExecution[];
   toolkitFindings?: NormalizedFinding[];
+  waybackArchive?: import("./fetchers/wayback").WaybackArchiveResult;
+  contactDiscovery?: import("./fetchers/contactDiscovery").ContactDiscoveryResult;
   evidenceGraph?: EvidenceGraphData;
   reasoningSteps?: ReasoningStep[];
   evidenceAttribution?: Record<string, FieldAttribution>;

@@ -96,7 +96,7 @@ export function displayNameFromQuery(query: string) {
     .join(" ");
 }
 
-export async function fetchWithTimeout(url: string, timeoutMs = 3500, options: RequestInit = {}): Promise<Response> {
+export async function fetchWithTimeout(url: string, timeoutMs = 3000, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -676,7 +676,7 @@ export async function fetchLeetCodeDetails(username: string): Promise<{
   let profileData: any = null;
   let statsRes: any = null;
   try {
-    const gql = await fetchWithTimeout("https://leetcode.com/graphql", 6000, {
+    const gql = await fetchWithTimeout("https://leetcode.com/graphql", 3500, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Referer": "https://leetcode.com" },
       body: JSON.stringify({
@@ -746,7 +746,7 @@ export async function fetchTwitchDetails(username: string): Promise<{
   profilePicUrl?: string;
 }> {
   try {
-    const response = await fetchWithTimeout(`https://www.twitch.tv/${username}`, 4500);
+    const response = await fetchWithTimeout(`https://www.twitch.tv/${username}`, 3000);
     if (!response.ok) return { ok: false };
     const html = await response.text();
     const ogTitle = extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
@@ -779,7 +779,7 @@ export async function fetchChessDetails(username: string): Promise<{
   profilePicUrl?: string;
 }> {
   try {
-    const profileRes = await fetchWithTimeout(`https://api.chess.com/pub/player/${username}`, 4500).then(r => r.json().catch(() => null));
+    const profileRes = await fetchWithTimeout(`https://api.chess.com/pub/player/${username}`, 3000).then(r => r.ok ? r.json() : null).catch(() => null);
     if (profileRes && profileRes.code === undefined && !profileRes.error) {
       return {
         ok: true,
@@ -801,7 +801,7 @@ export async function fetchScrapedDetails(url: string, platformLabel: string, us
   profilePicUrl?: string;
 }> {
   try {
-    const response = await fetchWithTimeout(url, 4500);
+    const response = await fetchWithTimeout(url, 3000);
     if (!response.ok) return { ok: false };
     const html = await response.text();
     
@@ -926,6 +926,79 @@ export async function fetchYoutubeDetails(username: string): Promise<{
   } catch {}
 
   return fetchScrapedDetails(`https://www.youtube.com/@${username}`, "YouTube", username);
+}
+
+export async function fetchThreadsDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+  followers?: number;
+}> {
+  // Threads requires a browser User-Agent — fetchWithTimeout already sends one.
+  // Real profiles return og:title like "SAI KISHAN A (@kishansaaai)".
+  // Non-existent handles redirect to the login page: title = "Threads • Log in".
+  try {
+    const res = await fetchWithTimeout(
+      `https://www.threads.net/@${username}`,
+      5000
+    );
+    if (!res.ok && res.status !== 200) return { ok: false };
+    const html = await res.text();
+
+    const ogTitle =
+      extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+      extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i) ||
+      extractMeta(html, /<title[^>]*>([^<]+)<\/title>/i);
+
+    const ogDesc =
+      extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+      extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+
+    const ogImage =
+      extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+      extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+
+    if (!ogTitle) return { ok: false };
+
+    const lowerTitle = ogTitle.toLowerCase();
+    // Threads login-redirect fingerprint — same title for all unauthenticated
+    // requests to non-existent handles, confirmed by real-vs-fake control-test.
+    if (
+      lowerTitle.includes("log in") ||
+      lowerTitle.includes("sign in") ||
+      lowerTitle === "threads" ||
+      lowerTitle === "threads • log in" ||
+      lowerTitle === "threads | log in"
+    ) {
+      return { ok: false };
+    }
+
+    // Parse follower count from og:description, e.g. "7 Followers · ..."
+    let followers = 0;
+    if (ogDesc) {
+      const followerMatch = ogDesc.match(/(\d[\d,]*)\s+Follower/i);
+      if (followerMatch) {
+        followers = parseInt(followerMatch[1].replace(/,/g, ""), 10);
+      }
+    }
+
+    // Strip trailing platform suffix from display name, e.g. " (@handle) • Threads"
+    const cleanName = ogTitle
+      .replace(/\s*•\s*Threads\s*$/i, "")
+      .replace(/\s*\(@[^)]+\)\s*$/, "")
+      .trim() || username;
+
+    return {
+      ok: true,
+      displayName: cleanName,
+      bio: ogDesc || undefined,
+      profilePicUrl: ogImage || undefined,
+      followers,
+    };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function probePublicProfile(url: string): Promise<ProbeResult & {
