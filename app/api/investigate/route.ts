@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { investigatePublicSubject, investigateMultiField, setIgSessionId } from "../../../lib/liveSocmint";
+import { investigatePublicSubject, investigateMultiField, setIgSessionId, setXAuthToken } from "../../../lib/liveSocmint";
 import { DossierInput } from "../../../lib/types";
 import { checkRateLimit } from "../../../lib/rateLimit";
 import fs from "fs";
@@ -132,9 +132,11 @@ export async function POST(request: NextRequest) {
     const query = typeof body.query === "string" ? body.query.trim() : "";
     const type = typeof body.type === "string" ? body.type : "username";
     const instagramSessionId = typeof body.instagramSessionId === "string" ? body.instagramSessionId.trim() : "";
+    const xAuthToken = typeof body.xAuthToken === "string" ? body.xAuthToken.trim() : "";
 
-    // Apply Instagram session cookie for this request (module-level, resets per request)
+    // Apply Instagram and X session cookies/tokens for this request (module-level, resets per request)
     setIgSessionId(instagramSessionId);
+    setXAuthToken(xAuthToken);
 
     // Multi-field dossier mode
     if (type === "dossier" && body.dossier) {

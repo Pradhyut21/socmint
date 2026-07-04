@@ -58,22 +58,34 @@ export default function InvestigatePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [igSession, setIgSession] = useState("");
   const [igSessionInput, setIgSessionInput] = useState("");
+  const [xAuthToken, setXAuthToken] = useState("");
+  const [xAuthTokenInput, setXAuthTokenInput] = useState("");
   const headerRef = useRef<HTMLDivElement>(null);
 
-  // Load stored Instagram session on mount
+  // Load stored settings on mount
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? (localStorage.getItem("ig_session_id") || "") : "";
-    setIgSession(stored);
-    setIgSessionInput(stored);
+    const storedIg = typeof window !== "undefined" ? (localStorage.getItem("ig_session_id") || "") : "";
+    setIgSession(storedIg);
+    setIgSessionInput(storedIg);
+
+    const storedX = typeof window !== "undefined" ? (localStorage.getItem("x_auth_token") || "") : "";
+    setXAuthToken(storedX);
+    setXAuthTokenInput(storedX);
   }, []);
 
-  const saveIgSession = () => {
-    const trimmed = igSessionInput.trim();
-    setIgSession(trimmed);
-    localStorage.setItem("ig_session_id", trimmed);
+  const saveSettings = () => {
+    const igTrimmed = igSessionInput.trim();
+    const xTrimmed = xAuthTokenInput.trim();
+
+    setIgSession(igTrimmed);
+    localStorage.setItem("ig_session_id", igTrimmed);
+
+    setXAuthToken(xTrimmed);
+    localStorage.setItem("x_auth_token", xTrimmed);
+
     setSettingsOpen(false);
-    toast.success(trimmed ? "Instagram session saved" : "Instagram session cleared", {
-      description: trimmed ? "Live Instagram/Threads scraping is now enabled." : "Instagram session has been removed."
+    toast.success("Scraping settings updated", {
+      description: "Instagram and X credentials have been saved locally."
     });
   };
 
@@ -96,6 +108,8 @@ export default function InvestigatePage() {
       if (isDossierMode) {
         reqBody = {
           type: "dossier",
+          instagramSessionId: igSession,
+          xAuthToken: xAuthToken,
           dossier: {
             usernames: dq.username ? [dq.username] : [],
             realName: dq.realName || "",
@@ -116,6 +130,7 @@ export default function InvestigatePage() {
           query: queryVal,
           type: queryType,
           instagramSessionId: igSession,
+          xAuthToken: xAuthToken,
         };
       }
 
@@ -168,7 +183,14 @@ export default function InvestigatePage() {
           </motion.div>
         ) : !suspect ? (
           <motion.div key="hero" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
-            <SearchHero onSearch={runSweep} error={error} onDismissError={() => setError(null)} />
+            <SearchHero
+              onSearch={runSweep}
+              error={error}
+              onDismissError={() => setError(null)}
+              igSession={igSession}
+              xAuthToken={xAuthToken}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
           </motion.div>
         ) : (
           <motion.div
@@ -217,16 +239,126 @@ export default function InvestigatePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-stamp" />
+                <h2 className="font-semibold text-base">Scraping Settings</h2>
+              </div>
+              <button onClick={() => setSettingsOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Instagram session */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Instagram Session Cookie</label>
+                  {igSession ? (
+                    <span className="flex items-center gap-1 text-[11px] text-green-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-400 inline-block" />
+                      Active
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">Not configured</span>
+                  )}
+                </div>
+                <input
+                  id="ig-session-input"
+                  type="password"
+                  value={igSessionInput}
+                  onChange={e => setIgSessionInput(e.target.value)}
+                  placeholder="Paste your Instagram sessionid cookie value…"
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-stamp/50"
+                />
+              </div>
+
+              {/* X Auth Token */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">X (Twitter) Auth Token</label>
+                  {xAuthToken ? (
+                    <span className="flex items-center gap-1 text-[11px] text-blue-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-400 inline-block" />
+                      Active
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">Not configured</span>
+                  )}
+                </div>
+                <input
+                  id="x-auth-token-input"
+                  type="password"
+                  value={xAuthTokenInput}
+                  onChange={e => setXAuthTokenInput(e.target.value)}
+                  placeholder="Paste your X auth_token cookie value…"
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-stamp/50"
+                />
+              </div>
+
+              <div className="rounded-md bg-muted/50 p-3 text-[11px] text-muted-foreground space-y-1.5">
+                <p className="font-semibold text-foreground">How to extract cookies (Instagram sessionid / X auth_token):</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Log in to the service in your browser</li>
+                  <li>Press <strong>F12</strong> → Application / Storage → Cookies</li>
+                  <li>Copy the value of <strong>sessionid</strong> (Instagram) or <strong>auth_token</strong> (X)</li>
+                  <li>Paste above and click Save Settings</li>
+                </ol>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={saveSettings}
+                  className="flex-1 rounded-md bg-stamp px-4 py-2 text-sm font-medium text-white hover:bg-stamp/90 transition-colors"
+                >
+                  Save Settings
+                </button>
+                {(igSession || xAuthToken) && (
+                  <button
+                    onClick={() => {
+                      setIgSessionInput("");
+                      setIgSession("");
+                      localStorage.removeItem("ig_session_id");
+                      setXAuthTokenInput("");
+                      setXAuthToken("");
+                      localStorage.removeItem("x_auth_token");
+                      setSettingsOpen(false);
+                      toast.success("All credentials cleared");
+                    }}
+                    className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted transition-colors"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function SearchHero({
-  onSearch, error, onDismissError,
+  onSearch, error, onDismissError, igSession, xAuthToken, onOpenSettings
 }: {
   onSearch: (dq: DossierQuery) => void;
   error: string | null;
   onDismissError: () => void;
+  igSession: string;
+  xAuthToken: string;
+  onOpenSettings: () => void;
 }) {
   const [type, setType] = useState<(typeof SEARCH_TYPES)[number]["value"]>("username");
   const [query, setQuery] = useState("");
@@ -262,12 +394,14 @@ function SearchHero({
         <div className="classified-banner px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.3em] flex items-center justify-between">
           <span>Restricted · For authorized auditors only · KSP Cyber Cell</span>
           <button
-            onClick={() => setSettingsOpen(true)}
+            onClick={onOpenSettings}
             className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] hover:bg-white/10 transition-colors"
             title="Settings"
           >
             <Settings className="h-3 w-3" />
-            Settings {igSession && <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 ml-1" title="Instagram live scraping active" />}
+            Settings 
+            {igSession && <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 ml-1" title="Instagram live scraping active" />}
+            {xAuthToken && <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-400 ml-1" title="X live scraping active" />}
           </button>
         </div>
         <div className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:p-10">
@@ -560,77 +694,6 @@ function SuspectHeader({ suspect, orbTheme, onNew, onPrint, onExportJson }: { su
           </div>
         </div>
       </div>
-      {/* Settings Modal */}
-      {settingsOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setSettingsOpen(false)}
-        >
-          <div
-            className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-stamp" />
-                <h2 className="font-semibold text-base">Scraping Settings</h2>
-              </div>
-              <button onClick={() => setSettingsOpen(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Instagram session */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Instagram Session Cookie</label>
-                {igSession ? (
-                  <span className="flex items-center gap-1 text-xs text-green-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-400 inline-block" />
-                    Live scraping active
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Not configured</span>
-                )}
-              </div>
-              <input
-                id="ig-session-input"
-                type="password"
-                value={igSessionInput}
-                onChange={e => setIgSessionInput(e.target.value)}
-                placeholder="Paste your Instagram sessionid cookie value…"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-stamp/50"
-              />
-              <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
-                <p className="font-semibold text-foreground">How to get your sessionid:</p>
-                <ol className="list-decimal list-inside space-y-0.5">
-                  <li>Open <strong>instagram.com</strong> in your browser and log in</li>
-                  <li>Press <strong>F12</strong> → Application → Cookies → www.instagram.com</li>
-                  <li>Find <strong>sessionid</strong> and copy its value</li>
-                  <li>Paste it above and click Save</li>
-                </ol>
-                <p className="mt-1 text-amber-400/80">Your cookie stays on this device only (localStorage). It is used solely for live Instagram/Threads profile lookups.</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={saveIgSession}
-                  className="flex-1 rounded-md bg-stamp px-4 py-2 text-sm font-medium text-white hover:bg-stamp/90 transition-colors"
-                >
-                  Save
-                </button>
-                {igSession && (
-                  <button
-                    onClick={() => { setIgSessionInput(""); setIgSession(""); localStorage.removeItem("ig_session_id"); setSettingsOpen(false); }}
-                    className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -9,6 +9,10 @@ import { getDemoProbeResult, getDemoGithubData, getDemoLegalRecords, getDemoNewS
 let _igSessionId = process.env.INSTAGRAM_SESSION_ID || "";
 export function setIgSessionId(id: string) { _igSessionId = id.trim(); }
 
+// ── X (Twitter) auth token ──────────────────────────────────────────────
+let _xAuthToken = process.env.X_AUTH_TOKEN || "";
+export function setXAuthToken(token: string) { _xAuthToken = token.trim(); }
+
 
 type ProbeResult = {
   ok: boolean;
@@ -194,7 +198,7 @@ async function fetchDevToActivity(username: string): Promise<{ account?: Partial
         bio: user.summary || "Dev.to profile found.",
         profilePicUrl: user.profile_image_90 || user.profile_image,
         followers: user.followers_count || 0,
-        creationDate: user.joined_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+        creationDate: user.joined_at?.slice(0, 10) || undefined,
       },
       posts,
     };
@@ -218,7 +222,7 @@ async function fetchGitLabActivity(username: string): Promise<{ account?: Partia
         bio: user.bio || "GitLab public profile found.",
         profilePicUrl: user.avatar_url,
         followers: 0,
-        creationDate: user.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+        creationDate: user.created_at?.slice(0, 10) || undefined,
       },
       posts: [],
     };
@@ -533,10 +537,10 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
           displayName: user.name || username,
           bio: `Duolingo profile. Learning language: ${user.learningLanguage || "unknown"}.`,
           profilePicUrl: user.picture ? `https:${user.picture}` : undefined,
+          creationDate: user.creationDate ? new Date(user.creationDate * 1000).toISOString() : undefined,
           extras: {
             streak: user.streak || 0,
-            xp: user.totalXp || 0,
-            creationDate: user.creationDate ? new Date(user.creationDate * 1000).toISOString() : undefined
+            xp: user.totalXp || 0
           }
         };
       }
@@ -660,9 +664,40 @@ async function probePublicProfile(url: string): Promise<ProbeResult> {
       return { ok: false, status: 404 };
     }
     else if (lowercaseUrl.includes("x.com") || lowercaseUrl.includes("twitter.com")) {
-      // Twitter/X returns 200/redirects for unauthenticated node requests.
-      // Always return ok: false to prevent false positives (fake accounts).
-      return { ok: false, status: 404 };
+      const xUsername = lowercaseUrl.split(/(?:x\.com|twitter\.com)\//)[1]?.split("/")[0]?.split("?")[0];
+      if (!xUsername) return { ok: false, status: 404 };
+
+      if (_xAuthToken) {
+        try {
+          const xRes = await fetchWithTimeout(
+            `https://x.com/${xUsername}`,
+            8000,
+            {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Cookie: `auth_token=${_xAuthToken}`,
+              },
+              redirect: "manual"
+            }
+          );
+          if (xRes.status === 302 || xRes.status === 301 || xRes.status === 307) {
+            const loc = xRes.headers.get("location") || "";
+            if (loc.includes("login") || loc.includes("i/flow/signup")) {
+              return { ok: false, status: 401 };
+            }
+          }
+          if (xRes.ok) {
+            return {
+              ok: true,
+              status: 200,
+              displayName: xUsername,
+              bio: `X (Twitter) profile confirmed via authenticated API probe.`
+            };
+          }
+          if (xRes.status === 404) return { ok: false, status: 404 };
+        } catch { /* fall through */ }
+      }
+      return { ok: false, status: 0 };
     }
     else if (lowercaseUrl.includes("twitch.tv/")) {
       const twitchUser = lowercaseUrl.split("twitch.tv/")[1]?.split("/")[0]?.split("?")[0];
@@ -900,7 +935,7 @@ async function fuzzyGithubSearch(username: string): Promise<{ account?: Partial<
         bio: user.bio || "Public GitHub profile found. No bio exposed.",
         profilePicUrl: user.avatar_url,
         followers: user.followers || 0,
-        creationDate: user.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+        creationDate: user.created_at?.slice(0, 10) || undefined,
       },
       posts,
       resolvedUsername,
@@ -949,7 +984,7 @@ async function fetchGithubActivity(username: string, isNameQuery = false): Promi
         bio: user.bio || "Public GitHub profile found. No bio exposed.",
         profilePicUrl: user.avatar_url,
         followers: user.followers || 0,
-        creationDate: user.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+        creationDate: user.created_at?.slice(0, 10) || undefined,
       },
       posts,
       resolvedUsername: user.login,
@@ -1733,7 +1768,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
         profilePicUrl: richAccount?.profilePicUrl || result.profilePicUrl,
         deepfakeFlag: false,
         followers: richAccount?.followers ?? result.followers ?? 0,
-        creationDate: richAccount?.creationDate || result.creationDate || new Date().toISOString().slice(0, 10),
+        creationDate: richAccount?.creationDate || result.creationDate || undefined,
         confidence: confidenceFor(probe.platform, queryVal, result),
         reason: `Live acquisition from ${profileUrl} → HTTP ${result.status || "?"}.`,
         capturedAt,
@@ -1790,7 +1825,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
       profilePicUrl: github.account.profilePicUrl,
       deepfakeFlag: false,
       followers: github.account.followers ?? 0,
-      creationDate: github.account.creationDate || new Date().toISOString().slice(0, 10),
+      creationDate: github.account.creationDate || undefined,
       confidence: "PROBABLE",
       reason: `Fuzzy username match: "${username}" → "${github.resolvedUsername}". Live GitHub API data verified.`,
       capturedAt,
@@ -1812,7 +1847,7 @@ export async function investigatePublicSubject(query: string, type: string): Pro
       bio: `Cryptocurrency public address trace for ${query}. Balance: ${cryptoTrace.balance} ${cryptoTrace.coin}. Mixer risk: ${cryptoTrace.associatedMixers.length > 0 ? "HIGH" : "CLEAN"}.`,
       deepfakeFlag: false,
       followers: cryptoTrace.transactions.length,
-      creationDate: cryptoTrace.transactions[cryptoTrace.transactions.length - 1]?.timestamp.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      creationDate: cryptoTrace.transactions[cryptoTrace.transactions.length - 1]?.timestamp.slice(0, 10) || undefined,
       confidence: "CONFIRMED",
       reason: "Direct cryptographic ledger trace verification.",
       capturedAt

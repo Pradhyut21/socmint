@@ -232,7 +232,7 @@ export function getDemoGithubData(
       bio: gh.bio || "Public GitHub profile found.",
       profilePicUrl: gh.pfpUrl,
       followers: gh.followers || 0,
-      creationDate: gh.createdAt || new Date().toISOString().slice(0, 10),
+      creationDate: gh.createdAt || undefined,
       extras: gh.extras || {}
     },
     posts: []
