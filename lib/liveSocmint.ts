@@ -772,8 +772,8 @@ export async function investigateSingleUsername(
         const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
         const isPrivate = val.result.status === 401 || (val.result.status === 403 && val.probe.platform === "instagram");
         const isUnavailable = val.result.status >= 500;
-        const status = isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND");
-        const reason = isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found.");
+        const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
+        const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
         logStatus(val.probe.label, status, t1_ms, reason);
       }
     }
@@ -785,7 +785,7 @@ export async function investigateSingleUsername(
   const t2_results = await Promise.allSettled([
     (type === "crypto" || !allowedTiers.includes(2)) ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchDevToActivity(username),
     (type === "crypto" || !allowedTiers.includes(2)) ? Promise.resolve({ account: undefined, posts: [] as Post[] }) : fetchHackerNewsActivity(username),
-    ...PLATFORM_PROBES.filter(p => p.platform === "telegram" || p.platform === "medium" || p.platform === "pinterest" || p.platform === "quora" || p.platform === "soundcloud" || p.platform === "facebook").map(async (probe) => {
+    ...PLATFORM_PROBES.filter(p => p.platform === "telegram" || p.platform === "medium" || p.platform === "pinterest" || p.platform === "quora" || p.platform === "soundcloud" || p.platform === "facebook" || p.platform === "twitch" || p.platform === "duolingo" || p.platform === "freelancer" || p.platform === "leetcode" || p.platform === "threads" || p.platform === "chess" || p.platform === "picsart" || p.platform === "kaggle" || p.platform === "academia" || p.platform === "appledevelopers" || p.platform === "smule" || p.platform === "quizlet").map(async (probe) => {
       if (type === "crypto" || !allowedTiers.includes(2)) return { probe, normalized: username, profileUrl: probe.url(username), result: { ok: false, status: 404 } };
       const normalized = probe.normalize ? probe.normalize(username) : username;
       const profileUrl = probe.url(normalized);
@@ -817,8 +817,8 @@ export async function investigateSingleUsername(
         const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
         const isPrivate = val.result.status === 401 || (val.result.status === 403 && val.probe.platform === "medium");
         const isUnavailable = val.result.status >= 500;
-        const status = isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND");
-        const reason = isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found.");
+        const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
+        const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
         logStatus(val.probe.label, status, t2_ms, reason);
       }
     }
@@ -852,8 +852,8 @@ export async function investigateSingleUsername(
         const isRate = val.result.status === 429 || val.result.status === 999 || val.result.status === 403;
         const isPrivate = val.result.status === 401 || (val.result.status === 403 && val.probe.platform === "twitter");
         const isUnavailable = val.result.status >= 500;
-        const status = isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND");
-        const reason = isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found.");
+        const status = val.result.reason ? "UNAVAILABLE" : (isRate ? "RATE LIMITED" : isPrivate ? "PRIVATE" : isUnavailable ? "UNAVAILABLE" : (val.result.ok ? "FOUND" : "NOT FOUND"));
+        const reason = val.result.reason || (isRate ? "HTTP 429 Rate Limit Exceeded." : isPrivate ? "Profile privacy settings restrict public access." : isUnavailable ? "HTTP 503 Service Temporarily Offline." : (val.result.ok ? "Public profile resolved successfully." : "No matching public record found."));
         logStatus(val.probe.label, status, t3_ms, reason);
       }
     }
@@ -882,13 +882,15 @@ export async function investigateSingleUsername(
       else if (probe.platform === "devto") richAccount = devTo.account;
       else if (probe.platform === "gitlab") richAccount = gitLab.account;
 
-      let profilePicUrl = richAccount?.profilePicUrl;
+      let profilePicUrl = richAccount?.profilePicUrl || result.profilePicUrl;
       if (probe.platform === "instagram" && !profilePicUrl) {
         profilePicUrl = (result as any).instagramMeta?.avatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`;
       } else if (probe.platform === "youtube" && !profilePicUrl) {
         profilePicUrl = (result as any).youtubeMeta?.avatar || "";
       } else if (probe.platform === "pinterest" && !profilePicUrl) {
         profilePicUrl = (result as any).pinterestMeta?.avatar || "";
+      } else if (!profilePicUrl) {
+        profilePicUrl = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`;
       }
 
       const resolvedUsername = result.verifiedUsername || normalized;
@@ -1793,17 +1795,21 @@ export async function investigateSingleUsername(
     });
   }
 
-  // Ensure all 20 platforms are logged to prevent silent disappearance
+  // Ensure all 33 platforms are logged to prevent silent disappearance
   const allKnownPlatforms = [
     "GitHub", "GitLab", "Reddit", "LinkedIn", "Instagram", "YouTube", 
     "Telegram", "Medium", "Dev.to", "HackerNews", "Pinterest", "Quora", 
     "SoundCloud", "Twitter / X", "Steam", "Pastebin", "Tumblr", "Flickr", 
-    "Snapchat", "WhatsApp", "Truecaller"
+    "Snapchat", "WhatsApp", "Truecaller", "Twitch", "Duolingo", "Freelancer.com",
+    "LeetCode", "Threads", "Chess", "Picsart", "Kaggle", "Academia", 
+    "AppleDevelopers", "Smule", "Quizlet"
   ];
   const PLATFORM_TIERS: Record<string, number> = {
     github: 1, gitlab: 1, linkedin: 1, instagram: 1, reddit: 1, youtube: 1,
     whatsapp: 1, truecaller: 1,
     telegram: 2, medium: 2, devto: 2, hackernews: 2, pinterest: 2, quora: 2, soundcloud: 2,
+    twitch: 2, duolingo: 2, freelancer: 2, leetcode: 2, threads: 2, chess: 2, picsart: 2,
+    kaggle: 2, academia: 2, appledevelopers: 2, smule: 2, quizlet: 2,
     twitter: 3, steam: 3, pastebin: 3, tumblr: 3, flickr: 3, snapchat: 3
   };
   allKnownPlatforms.forEach(p => {

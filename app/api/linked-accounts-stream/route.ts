@@ -8,11 +8,22 @@ import {
   fetchDevToActivity,
   fetchWithTimeout,
   extractMeta,
+  fetchLeetCodeDetails,
+  fetchDuolingoDetails,
+  fetchTwitchDetails,
+  fetchChessDetails,
+  fetchGithubDetails,
+  fetchYoutubeDetails,
+  fetchTwitterDetails,
+  fetchSoundCloudDetails,
+  fetchPastebinDetails,
+  fetchDribbbleDetails,
   type ProbeResult,
   type LinkedinMeta,
   type InstagramMeta,
 } from "../../../lib/fetchers/social";
 import type { PlatformAccount, Post } from "../../../lib/types";
+import { UNRELIABLE_PLATFORMS } from "../../../lib/unreliablePlatforms";
 
 export const runtime = "nodejs";
 
@@ -70,10 +81,272 @@ interface ProbeStatusResult {
 
 async function probePublicProfileDirect(url: string, platform: string, clean: string): Promise<ProbeStatusResult> {
   const lowercaseUrl = url.toLowerCase();
+  const platKey = platform.toLowerCase();
 
-  // ── Stack Overflow: deprecated Developer Story endpoint ───────────
-  if (platform === "stackoverflow") {
-    return { status: "ERROR", reason: "Endpoint deprecated - cannot verify by handle" };
+  // ── Intercept Unreliable Platforms ──────────────────────────────────
+  const unreliable = UNRELIABLE_PLATFORMS.find(p => p.id === platKey);
+  if (unreliable) {
+    return { status: "ERROR", reason: unreliable.reason };
+  }
+
+  // ── LeetCode Upgraded Detail-Fetch Check ────────────────────────────
+  if (platKey === "leetcode") {
+    try {
+      const details = await fetchLeetCodeDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "leetcode",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active LeetCode profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── Duolingo Upgraded Detail-Fetch Check ────────────────────────────
+  if (platKey === "duolingo") {
+    try {
+      const details = await fetchDuolingoDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "duolingo",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active Duolingo profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── Twitch Upgraded Detail-Fetch Check ──────────────────────────────
+  if (platKey === "twitch") {
+    try {
+      const details = await fetchTwitchDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "twitch",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active Twitch profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── Chess.com Upgraded Detail-Fetch Check ───────────────────────────
+  if (platKey === "chess") {
+    try {
+      const details = await fetchChessDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "chess",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active Chess.com profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── GitHub Upgraded Detail-Fetch Check ──────────────────────────────
+  if (platKey === "github") {
+    try {
+      const details = await fetchGithubDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "github",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active GitHub profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: details.followers || 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── YouTube Upgraded Detail-Fetch Check ─────────────────────────────
+  if (platKey === "youtube") {
+    try {
+      const details = await fetchYoutubeDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "youtube",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active YouTube profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── X / Twitter Upgraded Detail-Fetch Check ─────────────────────────
+  if (platKey === "twitter" || platKey === "x") {
+    try {
+      const details = await fetchTwitterDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "twitter",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active X / Twitter profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── SoundCloud Upgraded Detail-Fetch Check ──────────────────────────
+  if (platKey === "soundcloud") {
+    try {
+      const details = await fetchSoundCloudDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "soundcloud",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active SoundCloud profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── Pastebin Upgraded Detail-Fetch Check ────────────────────────────
+  if (platKey === "pastebin") {
+    try {
+      const details = await fetchPastebinDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "pastebin",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active Pastebin profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
+  }
+
+  // ── Dribbble Upgraded Detail-Fetch Check ────────────────────────────
+  if (platKey === "dribbble") {
+    try {
+      const details = await fetchDribbbleDetails(clean);
+      if (details.ok) {
+        return {
+          status: "FOUND",
+          data: {
+            platform: "dribbble",
+            username: clean,
+            displayName: details.displayName || clean,
+            bio: details.bio || "Active Dribbble profile confirmed.",
+            profileUrl: url,
+            profilePicUrl: details.profilePicUrl || null,
+            followers: 0,
+            confidence: "PROBABLE",
+            postCount: 0
+          }
+        };
+      }
+      return { status: "NOT_FOUND" };
+    } catch (err: any) {
+      return { status: "ERROR", reason: err?.message || "Connection timeout" };
+    }
   }
 
   // ── Reddit: use JSON API ──────────────────────────────────────────
@@ -207,6 +480,9 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
       return { status: "NOT_FOUND" };
     }
 
+    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+
     return {
       status: "FOUND",
       data: {
@@ -215,7 +491,7 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
         displayName: title || null,
         bio: description || null,
         profileUrl: url,
-        profilePicUrl: null,
+        profilePicUrl: ogImage || null,
         followers: 0,
         confidence: "PROBABLE",
         postCount: 0,

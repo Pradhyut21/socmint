@@ -1,5 +1,6 @@
 import { PlatformAccount, Post, SuspectProfile } from "../types";
 import { getDemoProbeResult, getDemoGithubData } from "../mock/demoData";
+import { UNRELIABLE_PLATFORMS } from "../unreliablePlatforms";
 
 export type ProbeResult = {
   ok: boolean;
@@ -8,6 +9,10 @@ export type ProbeResult = {
   description?: string;
   verifiedUsername?: string;
   verifiedUrl?: string;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+  followers?: number;
 };
 
 export type PlatformProbe = {
@@ -41,6 +46,19 @@ export const PLATFORM_PROBES: PlatformProbe[] = [
   { tier: 2, platform: "steam",     label: "Steam",      url: (u) => `https://steamcommunity.com/id/${u}` },
   { tier: 2, platform: "pastebin",  label: "Pastebin",   url: (u) => `https://pastebin.com/u/${u}` },
   { tier: 2, platform: "youtube",   label: "YouTube",    url: (u) => `https://www.youtube.com/@${u}` },
+  // Additional platforms from feature branch
+  { tier: 2, platform: "twitch",    label: "Twitch",     url: (u) => `https://www.twitch.tv/${u}` },
+  { tier: 2, platform: "duolingo",  label: "Duolingo",   url: (u) => `https://www.duolingo.com/profile/${u}` },
+  { tier: 2, platform: "freelancer",label: "Freelancer.com", url: (u) => `https://www.freelancer.com/u/${u}` },
+  { tier: 2, platform: "leetcode",  label: "LeetCode",   url: (u) => `https://leetcode.com/u/${u}` },
+  { tier: 2, platform: "threads",   label: "Threads",    url: (u) => `https://www.threads.net/@${u}` },
+  { tier: 2, platform: "chess",     label: "Chess",      url: (u) => `https://www.chess.com/member/${u}` },
+  { tier: 2, platform: "picsart",   label: "Picsart",    url: (u) => `https://picsart.com/u/${u}` },
+  { tier: 2, platform: "kaggle",    label: "Kaggle",     url: (u) => `https://www.kaggle.com/${u}` },
+  { tier: 2, platform: "academia",  label: "Academia",   url: (u) => `https://independent.academia.edu/${u}` },
+  { tier: 2, platform: "appledevelopers", label: "AppleDevelopers", url: (u) => `https://developer.apple.com/forums/profile/${u}` },
+  { tier: 2, platform: "smule",     label: "Smule",      url: (u) => `https://www.smule.com/${u}` },
+  { tier: 2, platform: "quizlet",   label: "Quizlet",    url: (u) => `https://quizlet.com/user/${u}` },
 ];
 
 export const RISK_TERMS = [
@@ -648,6 +666,266 @@ export interface InstagramMeta {
   profileUrl: string;
 }
 
+export async function fetchLeetCodeDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+  ranking?: number | null;
+}> {
+  let profileData: any = null;
+  let statsRes: any = null;
+  try {
+    const gql = await fetchWithTimeout("https://leetcode.com/graphql", 6000, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Referer": "https://leetcode.com" },
+      body: JSON.stringify({
+        query: `query getUserProfile($username: String!) {
+          matchedUser(username: $username) {
+            username
+            profile {
+              realName
+              userAvatar
+              ranking
+              aboutMe
+            }
+          }
+        }`,
+        variables: { username },
+      }),
+    }).then(r => r.json().catch(() => null));
+    profileData = gql?.data?.matchedUser;
+  } catch {}
+
+  try {
+    statsRes = await fetchWithTimeout(`https://leetcode-stats-api.herokuapp.com/${username}`, 4000)
+      .then(r => r.json().catch(() => null));
+  } catch {}
+
+  if (!profileData && !(statsRes && statsRes.status === "success")) {
+    return { ok: false };
+  }
+
+  const profile = profileData?.profile;
+  return {
+    ok: true,
+    displayName: profile?.realName || username,
+    bio: profile?.aboutMe || undefined,
+    profilePicUrl: profile?.userAvatar || `https://assets.leetcode.com/users/${username}/avatar_1780136023.png`,
+    ranking: profile?.ranking || statsRes?.ranking || null,
+  };
+}
+
+export async function fetchDuolingoDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+}> {
+  try {
+    const apiRes = await fetchWithTimeout(`https://www.duolingo.com/2017-06-30/users?username=${username}`).then(r => r.json().catch(() => null));
+    const user = apiRes?.users?.[0];
+    if (user) {
+      return {
+        ok: true,
+        displayName: user.name || username,
+        bio: `Duolingo profile. Learning language: ${user.learningLanguage || "unknown"}.`,
+        profilePicUrl: user.picture ? `https:${user.picture}` : undefined,
+      };
+    }
+    return { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function fetchTwitchDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+}> {
+  try {
+    const response = await fetchWithTimeout(`https://www.twitch.tv/${username}`, 4500);
+    if (!response.ok) return { ok: false };
+    const html = await response.text();
+    const ogTitle = extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+    const ogDesc = extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+
+    const titleLower = ogTitle?.toLowerCase() || "";
+    const userExists = titleLower.includes(username.toLowerCase()) && titleLower !== "twitch";
+
+    if (!userExists) return { ok: false };
+
+    return {
+      ok: true,
+      displayName: ogTitle?.replace(/ - Twitch.*$/i, "").trim(),
+      bio: ogDesc || undefined,
+      profilePicUrl: ogImage || undefined,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function fetchChessDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+}> {
+  try {
+    const profileRes = await fetchWithTimeout(`https://api.chess.com/pub/player/${username}`, 4500).then(r => r.json().catch(() => null));
+    if (profileRes && profileRes.code === undefined && !profileRes.error) {
+      return {
+        ok: true,
+        displayName: profileRes.title || profileRes.name || username,
+        bio: profileRes.status || "Chess.com player",
+        profilePicUrl: profileRes.avatar || "https://www.chess.com/bundles/web/images/noavatar_l.84a92436.gif",
+      };
+    }
+    return { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function fetchScrapedDetails(url: string, platformLabel: string, username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+}> {
+  try {
+    const response = await fetchWithTimeout(url, 4500);
+    if (!response.ok) return { ok: false };
+    const html = await response.text();
+    
+    const title = extractMeta(html, /<title[^>]*>([^<]+)<\/title>/i);
+    const description =
+      extractMeta(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
+      extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+
+    let exists = true;
+    const lowerHtml = html.toLowerCase();
+    const lowerTitle = title?.toLowerCase() || "";
+
+    if (platformLabel.toLowerCase() === "dribbble") {
+      if (lowerHtml.includes("whoops, that page is gone") || response.status === 404) exists = false;
+    } else if (platformLabel.toLowerCase() === "soundcloud") {
+      if (lowerHtml.includes("we can't find that") || lowerHtml.includes("soundcloud is not available") || response.status === 404) exists = false;
+    } else if (platformLabel.toLowerCase() === "pastebin") {
+      if (lowerHtml.includes("page_removed") || lowerTitle.includes("not found") || response.status === 404) exists = false;
+    } else if (platformLabel.toLowerCase() === "twitter" || platformLabel.toLowerCase() === "x") {
+      if (lowerTitle.includes("login") || lowerTitle.includes("sign in") || lowerTitle.includes("log in") || response.status === 404) exists = false;
+    }
+
+    if (!exists) return { ok: false };
+
+    let cleanName = title || username;
+    if (platformLabel.toLowerCase() === "dribbble") {
+      cleanName = title.replace(/\s*\|\s*Dribbble/i, "").trim();
+    } else if (platformLabel.toLowerCase() === "soundcloud") {
+      cleanName = title.replace(/\s*\|\s*Free Listening on SoundCloud/i, "").trim();
+    } else if (platformLabel.toLowerCase() === "pastebin") {
+      cleanName = title.replace(/\s*-\s*Pastebin\.com/i, "").trim();
+    }
+
+    return {
+      ok: true,
+      displayName: cleanName,
+      bio: description || undefined,
+      profilePicUrl: ogImage || undefined,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function fetchDribbbleDetails(username: string) {
+  return fetchScrapedDetails(`https://dribbble.com/${username}`, "Dribbble", username);
+}
+
+export async function fetchSoundCloudDetails(username: string) {
+  return fetchScrapedDetails(`https://soundcloud.com/${username}`, "SoundCloud", username);
+}
+
+export async function fetchPastebinDetails(username: string) {
+  return fetchScrapedDetails(`https://pastebin.com/u/${username}`, "Pastebin", username);
+}
+
+export async function fetchTwitterDetails(username: string) {
+  return fetchScrapedDetails(`https://x.com/${username}`, "Twitter", username);
+}
+
+export async function fetchGithubDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+  followers?: number;
+  creationDate?: string;
+}> {
+  try {
+    const token = process.env.GITHUB_TOKEN;
+    const headers: HeadersInit = {
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "Antigravity-IDE-OSINT"
+    };
+    if (token) {
+      headers["Authorization"] = `token ${token}`;
+    }
+    const res = await fetchWithTimeout(`https://api.github.com/users/${username}`, 4500, { headers });
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data) {
+        return {
+          ok: true,
+          displayName: data.name || data.login,
+          bio: data.bio || undefined,
+          profilePicUrl: data.avatar_url || undefined,
+          followers: data.followers || 0,
+          creationDate: data.created_at || undefined
+        };
+      }
+    }
+    return { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function fetchYoutubeDetails(username: string): Promise<{
+  ok: boolean;
+  displayName?: string;
+  bio?: string;
+  profilePicUrl?: string;
+}> {
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/@${username}&format=json`;
+    const res = await fetchWithTimeout(oembedUrl, 4000);
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data) {
+        return {
+          ok: true,
+          displayName: data.title || data.author_name || username,
+          profilePicUrl: data.thumbnail_url || undefined,
+          bio: `YouTube channel for @${username}.`
+        };
+      }
+    }
+  } catch {}
+
+  return fetchScrapedDetails(`https://www.youtube.com/@${username}`, "YouTube", username);
+}
+
 export async function probePublicProfile(url: string): Promise<ProbeResult & {
   linkedinMeta?: LinkedinMeta;
   instagramMeta?: InstagramMeta;
@@ -660,6 +938,238 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
   const demoResult = getDemoProbeResult(lowercaseUrl);
 
   if (demoResult) return demoResult;
+
+  // ── Intercept Unreliable Platforms ──────────────────────────────────
+  const platformName = lowercaseUrl.includes("instagram.com") ? "instagram"
+    : lowercaseUrl.includes("twitter.com") || lowercaseUrl.includes("x.com") ? "twitter"
+    : lowercaseUrl.includes("linkedin.com") ? "linkedin"
+    : lowercaseUrl.includes("t.me") ? "telegram"
+    : lowercaseUrl.includes("facebook.com") ? "facebook"
+    : lowercaseUrl.includes("youtube.com") ? "youtube"
+    : lowercaseUrl.includes("pinterest.com") ? "pinterest"
+    : lowercaseUrl.includes("steamcommunity.com") ? "steam"
+    : lowercaseUrl.includes("tiktok.com") ? "tiktok"
+    : lowercaseUrl.includes("twitch.tv") ? "twitch"
+    : lowercaseUrl.includes("threads.net") ? "threads"
+    : lowercaseUrl.includes("duolingo.com") ? "duolingo"
+    : lowercaseUrl.includes("picsart.com") ? "picsart"
+    : lowercaseUrl.includes("developer.apple.com") ? "appledevelopers"
+    : lowercaseUrl.includes("stackoverflow.com") ? "stackoverflow"
+    : "";
+
+  const unreliable = UNRELIABLE_PLATFORMS.find(p => p.id === platformName);
+  if (unreliable) {
+    return { ok: false, status: 500, reason: unreliable.reason } as any;
+  }
+
+  // ── LeetCode Upgraded Detail-Fetch Check ────────────────────────────
+  if (lowercaseUrl.includes("leetcode.com/u/") || lowercaseUrl.includes("leetcode.com/")) {
+    const parts = lowercaseUrl.split("/");
+    const username = parts[parts.indexOf("leetcode.com") + 1] === "u"
+      ? parts[parts.indexOf("leetcode.com") + 2]
+      : parts[parts.indexOf("leetcode.com") + 1];
+    if (username) {
+      const details = await fetchLeetCodeDetails(username);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName,
+          description: details.bio || "Active LeetCode profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── Duolingo Upgraded Detail-Fetch Check ────────────────────────────
+  if (lowercaseUrl.includes("duolingo.com/profile/")) {
+    const username = lowercaseUrl.split("profile/")[1]?.split("/")[0]?.split("?")[0];
+    if (username) {
+      const details = await fetchDuolingoDetails(username);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName,
+          description: details.bio || "Active Duolingo profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── Twitch Upgraded Detail-Fetch Check ──────────────────────────────
+  if (lowercaseUrl.includes("twitch.tv/")) {
+    const twitchUser = lowercaseUrl.split("twitch.tv/")[1]?.split("/")[0]?.split("?")[0];
+    if (twitchUser) {
+      const details = await fetchTwitchDetails(twitchUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || twitchUser,
+          description: details.bio || "Active Twitch profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── Chess.com Upgraded Detail-Fetch Check ───────────────────────────
+  if (lowercaseUrl.includes("chess.com/member/")) {
+    const chessUser = lowercaseUrl.split("member/")[1]?.split("/")[0]?.split("?")[0];
+    if (chessUser) {
+      const details = await fetchChessDetails(chessUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || chessUser,
+          description: details.bio || "Active Chess.com profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── GitHub Upgraded Detail-Fetch Check ──────────────────────────────
+  if (lowercaseUrl.includes("github.com/")) {
+    const gitUser = lowercaseUrl.split("github.com/")[1]?.split("/")[0]?.split("?")[0];
+    if (gitUser && !["features", "pulls", "issues", "marketplace", "explore", "trending", "pricing"].includes(gitUser)) {
+      const details = await fetchGithubDetails(gitUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || gitUser,
+          description: details.bio || "Active GitHub profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined,
+          followers: details.followers
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── YouTube Upgraded Detail-Fetch Check ─────────────────────────────
+  if (lowercaseUrl.includes("youtube.com/")) {
+    const splitAt = lowercaseUrl.includes("youtube.com/@") ? "youtube.com/@" : "youtube.com/";
+    let ytUser = lowercaseUrl.split(splitAt)[1]?.split("/")[0]?.split("?")[0];
+    if (ytUser === "user" || ytUser === "c" || ytUser === "channel") {
+      ytUser = lowercaseUrl.split("youtube.com/")[1]?.split("/")[1]?.split("?")[0] || "";
+    }
+    if (ytUser) {
+      const details = await fetchYoutubeDetails(ytUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || ytUser,
+          description: details.bio || "Active YouTube profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── X / Twitter Upgraded Detail-Fetch Check ─────────────────────────
+  if (lowercaseUrl.includes("twitter.com/") || lowercaseUrl.includes("x.com/")) {
+    const splitAt = lowercaseUrl.includes("twitter.com/") ? "twitter.com/" : "x.com/";
+    const twUser = lowercaseUrl.split(splitAt)[1]?.split("/")[0]?.split("?")[0];
+    if (twUser && !["home", "explore", "notifications", "messages", "i"].includes(twUser)) {
+      const details = await fetchTwitterDetails(twUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || twUser,
+          description: details.bio || "Active X / Twitter profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── SoundCloud Upgraded Detail-Fetch Check ──────────────────────────
+  if (lowercaseUrl.includes("soundcloud.com/")) {
+    const scUser = lowercaseUrl.split("soundcloud.com/")[1]?.split("/")[0]?.split("?")[0];
+    if (scUser && !["discover", "stream", "upload", "you"].includes(scUser)) {
+      const details = await fetchSoundCloudDetails(scUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || scUser,
+          description: details.bio || "Active SoundCloud profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── Pastebin Upgraded Detail-Fetch Check ────────────────────────────
+  if (lowercaseUrl.includes("pastebin.com/u/")) {
+    const pbUser = lowercaseUrl.split("pastebin.com/u/")[1]?.split("/")[0]?.split("?")[0];
+    if (pbUser) {
+      const details = await fetchPastebinDetails(pbUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || pbUser,
+          description: details.bio || "Active Pastebin profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── Dribbble Upgraded Detail-Fetch Check ────────────────────────────
+  if (lowercaseUrl.includes("dribbble.com/")) {
+    const drUser = lowercaseUrl.split("dribbble.com/")[1]?.split("/")[0]?.split("?")[0];
+    if (drUser && !["shots", "designers", "jobs", "stories"].includes(drUser)) {
+      const details = await fetchDribbbleDetails(drUser);
+      if (details.ok) {
+        return {
+          ok: true,
+          status: 200,
+          title: details.displayName || drUser,
+          description: details.bio || "Active Dribbble profile confirmed.",
+          displayName: details.displayName,
+          bio: details.bio,
+          profilePicUrl: details.profilePicUrl || undefined
+        };
+      }
+      return { ok: false, status: 404 };
+    }
+  }
 
   // ── Reddit: use JSON API instead of scraping JS-rendered HTML ───────────────
   if (lowercaseUrl.includes("reddit.com/user/")) {
@@ -1041,11 +1551,15 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
       };
     }
 
+    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+
     return {
       ok: !/not found|page doesn't exist|this account doesn't exist|404|no such user/i.test(`${title} ${description}`),
       status: response.status,
       title,
       description,
+      profilePicUrl: ogImage || undefined,
     };
   } catch {
     return { ok: false };
