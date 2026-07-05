@@ -2738,6 +2738,14 @@ export function mergeProfiles(profiles: SuspectProfile[], primaryName?: string):
   if (!base.upiFootprint) base.upiFootprint = profiles.find(p => p.upiFootprint)?.upiFootprint;
   if (!base.cryptoTrace) base.cryptoTrace = profiles.find(p => p.cryptoTrace)?.cryptoTrace;
   if (!base.faceScan) base.faceScan = profiles.find(p => p.faceScan)?.faceScan;
+  if (!base.emailAddress || base.emailAddress === "Not provided") {
+    const emailProf = profiles.find(p => p.emailAddress && p.emailAddress !== "Not provided");
+    if (emailProf) base.emailAddress = emailProf.emailAddress;
+  }
+  if (!base.phoneNumber || base.phoneNumber === "Not provided") {
+    const phoneProf = profiles.find(p => p.phoneNumber && p.phoneNumber !== "Not provided");
+    if (phoneProf) base.phoneNumber = phoneProf.phoneNumber;
+  }
 
   const spKeys = new Set<string>();
   base.suggestedProfiles = [];
@@ -2904,6 +2912,16 @@ export async function investigateMultiField(dossier: DossierInput): Promise<Susp
     sweepPromises.push(investigatePublicSubject(dossier.realName.trim(), "name", undefined, true, nameContext));
   }
 
+  // Perform email search in parallel if provided
+  if (dossier.email.trim()) {
+    sweepPromises.push(investigatePublicSubject(dossier.email.trim(), "email", undefined, false));
+  }
+
+  // Perform phone search in parallel if provided
+  if (dossier.phone.trim()) {
+    sweepPromises.push(investigatePublicSubject(dossier.phone.trim(), "phone", undefined, false));
+  }
+
   const profiles = await Promise.all(sweepPromises);
 
   const meaningfulProfiles = profiles.filter(p => p.accounts.length > 0);
@@ -2913,21 +2931,25 @@ export async function investigateMultiField(dossier: DossierInput): Promise<Susp
 
   if (dossier.email.trim()) {
     merged.emailAddress = dossier.email.trim();
-    try {
-      const hibp = await fetchHibpBreaches(dossier.email.trim());
-      if (hibp) merged.hibpResult = hibp;
-    } catch (e) {
-      console.error("[DOSSIER] HIBP check failed:", e);
+    if (!merged.hibpResult) {
+      try {
+        const hibp = await fetchHibpBreaches(dossier.email.trim());
+        if (hibp) merged.hibpResult = hibp;
+      } catch (e) {
+        console.error("[DOSSIER] HIBP check failed:", e);
+      }
     }
   }
 
   if (dossier.phone.trim()) {
     merged.phoneNumber = dossier.phone.trim();
-    try {
-      const upi = await fetchUpiFootprint(dossier.phone.trim());
-      if (upi) merged.upiFootprint = upi;
-    } catch (e) {
-      console.error("[DOSSIER] UPI footprint check failed:", e);
+    if (!merged.upiFootprint) {
+      try {
+        const upi = await fetchUpiFootprint(dossier.phone.trim());
+        if (upi) merged.upiFootprint = upi;
+      } catch (e) {
+        console.error("[DOSSIER] UPI footprint check failed:", e);
+      }
     }
   }
 

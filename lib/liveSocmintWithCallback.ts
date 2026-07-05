@@ -1,5 +1,5 @@
-import { SuspectProfile, PlatformAccount } from "./types";
-import { investigatePublicSubject } from "./liveSocmint";
+import { SuspectProfile, PlatformAccount, DossierInput } from "./types";
+import { investigatePublicSubject, investigateMultiField } from "./liveSocmint";
 
 export type ProgressCallback = (update: {
   type: "status" | "account_found" | "progress";
@@ -48,7 +48,8 @@ export async function investigateWithCallback(
   githubToken?: string,
   quickScan: boolean = true,
   onProgress?: ProgressCallback,
-  extraContext?: string
+  extraContext?: string,
+  dossier?: DossierInput
 ): Promise<SuspectProfile> {
   // Set the global callback
   if (onProgress) {
@@ -59,8 +60,14 @@ export async function investigateWithCallback(
     // Send initial status
     reportProgress({ type: "status", message: "Initializing investigation..." });
 
-    // Run the standard investigation
-    const profile = await investigatePublicSubject(query, type, githubToken, quickScan, extraContext);
+    // Run the standard or multi-field investigation
+    let profile: SuspectProfile;
+    if (type === "dossier" && dossier) {
+      console.log("[CALLBACK] Initiating multi-field dossier investigation with callback");
+      profile = await investigateMultiField(dossier);
+    } else {
+      profile = await investigatePublicSubject(query, type, githubToken, quickScan, extraContext);
+    }
 
     // Clear callback
     setProgressCallback(null);

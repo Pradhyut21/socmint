@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     // Optional disambiguating hint for "Real name" searches — a college, company,
     // or known username that narrows a common name down to the right LinkedIn profile.
     const extraContext = typeof body.nameContext === "string" ? body.nameContext.trim() : undefined;
+    const dossier = body.dossier || undefined;
 
     if (!query) {
       return new Response(
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
           }, 5000);
 
           // Run investigation with callback
-          const profile = await investigateWithCallback(query, type, githubToken, quickScan, onUpdate, extraContext);
+          const profile = await investigateWithCallback(query, type, githubToken, quickScan, onUpdate, extraContext, dossier);
 
           clearInterval(heartbeat);
 
