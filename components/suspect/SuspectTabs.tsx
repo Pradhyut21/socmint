@@ -1,5 +1,5 @@
 "use client";
-
+// Force Next.js compilation reload
 import React, { useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,13 +27,10 @@ import WikidataCard from "@/components/WikidataCard";
 import NLPAnalyzer from "@/components/NLPAnalyzer";
 import FaceScanCard from "@/components/FaceScanCard";
 import ShadowAccounts from "@/components/ShadowAccounts";
-import CryptoTraceCard from "@/components/CryptoTraceCard";
-import DarkWebMonitor from "@/components/DarkWebMonitor";
 import LegalRecords from "@/components/LegalRecords";
 import EvidenceGraph from "@/components/EvidenceGraph";
 
 import LocationMap from "@/components/LocationMap";
-import EvasionTimeline from "@/components/EvasionTimeline";
 import AiChat from "@/components/AiChat";
 import SearchEngineEvidencePanel from "@/components/SearchEngineEvidencePanel";
 import EvidencePackage from "@/components/EvidencePackage";
@@ -46,6 +43,7 @@ import LinkedAccountsStreamTab from "@/components/suspect/LinkedAccountsStreamTa
 import WaybackArchiveTab from "@/components/WaybackArchiveTab";
 import ContactDiscoveryTab from "@/components/ContactDiscoveryTab";
 import OSINTFrameworkGraph from "@/components/OSINTFrameworkGraph";
+import CryptoTraceCard from "@/components/CryptoTraceCard";
 import { ConfidenceTrend } from "@/components/ConfidenceTrend";
 import { KeywordTagCloud } from "@/components/KeywordTagCloud";
 import { Wifi } from "lucide-react";
@@ -78,22 +76,10 @@ export function SuspectTabs({
     { id: "crypto", label: "Crypto Trace", icon: Bitcoin,
       badge: profile.cryptoTrace ? { tone: "warn", text: String(profile.cryptoTrace.transactions?.length || 0) } : undefined,
       render: (p) => <CryptoTraceCard suspect={p} /> },
-    { id: "financial", label: "Financial / UPI", icon: IndianRupee,
-      badge: profile.upiFootprint && profile.upiFootprint.ncrp?.status === "FOUND_PUBLIC_MENTION"
-        ? { tone: "stamp" as const, text: String(profile.upiFootprint.ncrp.complaintCount || 1) }
-        : profile.financialFootprint && profile.financialFootprint.ncrp?.length
-          ? { tone: "stamp" as const, text: String(profile.financialFootprint.ncrp.length) }
-          : undefined,
-      render: (p) => <FinancialTab p={p} /> },
-    { id: "darkweb", label: "Dark Web & Leaks", icon: AlertTriangle, render: (p) => <DarkWebMonitor suspect={p} /> },
     { id: "legal", label: "Legal & Public Records", icon: Gavel, render: (p) => <LegalRecords suspect={p} /> },
     { id: "evidence-graph", label: "Evidence Graph", icon: GitCommit, render: (p) => <EvidenceGraph suspect={p} /> },
     { id: "reasoning-log", label: "Reasoning Log", icon: Clock, render: (p) => <ReasoningLogView p={p} /> },
     { id: "geo", label: "Geotag Trail", icon: MapPin, render: (p) => <LocationMap suspect={p} /> },
-
-    { id: "evasion", label: "Evasion Timeline", icon: Clock,
-      badge: profile.aliasResults?.some(a => a.evasionPattern) ? { tone: "stamp", text: "!" } : undefined,
-      render: (p) => <EvasionTimeline suspect={p} /> },
     {
       id: "content-risk",
       label: "Content Risk",
@@ -107,11 +93,7 @@ export function SuspectTabs({
 
     { id: "stylometry", label: "Language Analysis", icon: Brain, render: (p) => <StylometryPanel suspect={p} /> },
     { id: "search-intel", label: "Search Intel", icon: Globe, render: (p) => <SearchIntelPanel suspect={p} key={p.caseReference} /> },
-    { id: "ingest", label: "Evidence Ingest", icon: FilePlus, render: (p) => <ManualIngestPanel suspect={p} /> },
     { id: "osint-graph", label: "OSINT Graph", icon: Network, render: (p) => <OSINTFrameworkGraph suspect={p} /> },
-    { id: "chat", label: "AI Chat", icon: Bot, render: (p) => <AiChat suspect={p} /> },
-    { id: "wayback", label: "Archive Trail", icon: Archive, render: (p) => <WaybackArchiveTab suspect={p} /> },
-    { id: "contact", label: "Contact Discovery", icon: Mail, render: (p) => <ContactDiscoveryTab suspect={p} /> },
     { id: "evidence", label: "Court Certificate", icon: FileCheck, render: (p) => <EvidencePackage suspect={p} /> },
   ];
 
@@ -253,127 +235,9 @@ function OverviewTab({
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {p.nexusAnalysis && (
-        <Card className="lg:col-span-3 border-l-4 border-l-blue-600 bg-blue-50/20 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-              <Sparkle /> AI Executive Briefing & Action Plan
-            </CardTitle>
-            <CardDescription className="text-slate-600 font-mono text-[10px]">Cross-signal forensic synthesis completed automatically.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm font-mono">
-            {p.nexusAnalysis.investigator_brief && (
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl shadow-inner text-slate-100 mb-4">
-                <div className="text-[10px] font-bold text-blue-400 uppercase mb-2 tracking-wider font-mono">📝 AI Investigator Brief (OSINT Synthesis)</div>
-                <div className="prose prose-sm prose-invert font-mono text-[11px] leading-relaxed max-w-none whitespace-pre-wrap">
-                  {p.nexusAnalysis.investigator_brief}
-                </div>
-              </div>
-            )}
-
-            <div className="p-3 bg-white border border-blue-200 rounded-xl shadow-sm">
-              <div className="text-[10px] font-bold text-blue-800 uppercase mb-1">Key Finding Summary</div>
-              <div className="text-ink font-semibold leading-relaxed">{p.nexusAnalysis.key_finding}</div>
-            </div>
-            
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <div className="mb-2 text-[10px] font-bold text-slate-700 uppercase">Correlated Signals</div>
-                <ul className="space-y-2">
-                  {p.nexusAnalysis.connected_signals.map((c, i) => (
-                    <li key={i} className="rounded-xl border border-slate-200 p-2.5 bg-white shadow-sm">
-                      <div className="text-[10px] text-ink font-bold">{c.signal1} <span className="text-slate-500">↔</span> {c.signal2}</div>
-                      <div className="mt-1 text-[10px] text-slate-700 font-medium leading-relaxed">{c.connection}</div>
-                    </li>
-                  ))}
-                  {p.nexusAnalysis.connected_signals.length === 0 && (
-                    <li className="text-[10px] text-slate-500 italic p-1">No multi-platform signals cross-referenced.</li>
-                  )}
-                </ul>
-              </div>
-              <div>
-                <div className="mb-2 text-[10px] font-bold text-slate-700 uppercase">Operational Anomalies</div>
-                <ul className="space-y-2">
-                  {p.nexusAnalysis.anomalies.map((a, i) => (
-                    <li key={i} className="flex items-start justify-between gap-2 rounded-xl border border-slate-200 p-2.5 bg-white shadow-sm">
-                      <span className="text-[10px] text-ink font-semibold leading-relaxed">{a.description}</span>
-                      <Badge className={riskColor(a.severity as RiskLevel) + " font-mono text-[9px] shrink-0 uppercase py-0.5 px-1.5"}>{a.severity}</Badge>
-                    </li>
-                  ))}
-                  {p.nexusAnalysis.anomalies.length === 0 && (
-                    <li className="text-[10px] text-slate-500 italic p-1">No anomalies flagged.</li>
-                  )}
-                </ul>
-              </div>
-            </div>
-            
-            <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl">
-              <div className="text-[10px] font-bold text-amber-900 uppercase mb-1">Recommended Next Steps</div>
-              <div className="text-ink font-semibold leading-relaxed">{p.nexusAnalysis.investigator_priority}</div>
-            </div>
-
-            {/* AI Suggested Actions */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              <div className="text-[10px] font-bold text-slate-800 uppercase mb-2 tracking-wider font-mono">⚡ AI Suggested Next Actions</div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 font-mono text-[10px] border-slate-300 hover:bg-slate-100 hover:text-ink transition-all gap-1.5 bg-white text-ink font-bold shadow-sm"
-                  onClick={() => onTabChange && onTabChange("stylometry")}
-                >
-                  🔍 Search Similar Usernames
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 font-mono text-[10px] border-slate-300 hover:bg-slate-100 hover:text-ink transition-all gap-1.5 bg-white text-ink font-bold shadow-sm"
-                  onClick={() => onTabChange && onTabChange("evidence")}
-                >
-                  📄 Generate Court Report
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 font-mono text-[10px] border-slate-300 hover:bg-slate-100 hover:text-ink transition-all gap-1.5 bg-white text-ink font-bold shadow-sm"
-                  onClick={() => onTabChange && onTabChange("timeline")}
-                >
-                  📊 Analyze Timeline
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 font-mono text-[10px] border-slate-300 hover:bg-slate-100 hover:text-ink transition-all gap-1.5 bg-white text-ink font-bold shadow-sm"
-                  onClick={() => onTabChange && onTabChange("network")}
-                >
-                  🕸️ Find Related Accounts
-                </Button>
-                {p.phoneNumber && p.phoneNumber !== "Not provided" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 font-mono text-[10px] border-slate-300 hover:bg-slate-100 hover:text-ink transition-all gap-1.5 bg-white text-ink font-bold shadow-sm"
-                    onClick={() => onTriggerSearch && onTriggerSearch(p.phoneNumber, "phone")}
-                  >
-                    📞 Run Phone Intelligence
-                  </Button>
-                )}
-                {p.emailAddress && p.emailAddress !== "Not provided" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 font-mono text-[10px] border-slate-300 hover:bg-slate-100 hover:text-ink transition-all gap-1.5 bg-white text-ink font-bold shadow-sm"
-                    onClick={() => onTriggerSearch && onTriggerSearch(p.emailAddress, "email")}
-                  >
-                    ✉️ Run Email Intelligence
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-      )}
+      <div className="lg:col-span-3">
+        <AiChat suspect={p} />
+      </div>
 
       <Card className="lg:col-span-2">
         <CardHeader>
@@ -470,7 +334,14 @@ function OverviewTab({
         <CardHeader><CardTitle className="font-display">Identity</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="overflow-hidden rounded-md border border-border">
-            <img src={p.photoUrl} alt={p.realName} className="aspect-square w-full bg-muted object-cover" />
+            <img
+              src={p.photoUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.realName || "Suspect")}`}
+              alt={p.realName}
+              className="aspect-square w-full bg-muted object-cover"
+              onError={(e) => {
+                e.currentTarget.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.realName || "Suspect")}`;
+              }}
+            />
           </div>
           <Field label="Real name" value={p.realName} attribution={p.evidenceAttribution?.realName} />
           <Field label="Primary handle" value={p.username.startsWith("@") ? p.username : "@" + p.username} mono attribution={p.evidenceAttribution?.username || { value: p.username, source: "Swept platform registries", confidence: "85%", discoveredBy: "runRecursiveIdentityReconstruction()" }} />
@@ -482,41 +353,7 @@ function OverviewTab({
       </Card>
 
 
-      {/* Platform Status Widget */}
-      {p.platformStatuses && p.platformStatuses.length > 0 && (
-        <Card className="border-border bg-white shadow-sm rounded-2xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="font-display text-sm font-bold flex items-center gap-2 text-ink">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Platform Status
-            </CardTitle>
-            <CardDescription className="text-slate-500 font-mono text-[9px]">API and crawler status logs</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 font-mono text-[10px] p-4 pt-1">
-            {p.platformStatuses.slice(0, 6).map((s, idx) => {
-              const isOnline = s.status === "Online";
-              const isRate = s.status === "Rate Limited";
-              const badgeClass = isOnline
-                ? "bg-emerald-50 text-emerald-700 border-emerald-250"
-                : isRate
-                  ? "bg-amber-50 text-amber-700 border-amber-250 animate-pulse"
-                  : "bg-rose-50 text-rose-700 border-rose-250";
 
-              return (
-                <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
-                  <span className="font-bold text-slate-800">{s.name}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] text-slate-400">{s.responseTimeMs}ms</span>
-                    <Badge variant="outline" className={badgeClass + " font-mono text-[9px] border py-0 px-1 uppercase font-bold"}>
-                      {s.status}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
 
 
       {p.searchIntel?.results && p.searchIntel.results.length > 0 && (
@@ -955,235 +792,7 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
   );
 }
 
-function FinancialTab({ p }: { p: SuspectProfile }) {
-  // Support both backend upiFootprint and mock financialFootprint formats
-  const u = p.upiFootprint;
-  const f = p.financialFootprint;
 
-  if (!u && !f) return <Placeholder text="No Indian financial footprint recorded for this subject." />;
-
-  const statusTone = (s: string) =>
-    s === "OPEN" || s === "FOUND_PUBLIC_MENTION" ? "bg-stamp text-primary-foreground font-bold" :
-    s === "UNDER_INVESTIGATION" ? "bg-warn text-ink font-bold" : "bg-slate-100 text-slate-700 font-bold";
-
-  // If we have real upiFootprint data from backend
-  if (u) {
-    const totalComplaints = u.ncrp.complaintCount || (u.ncrp.status === "FOUND_PUBLIC_MENTION" ? 1 : 0);
-    return (
-      <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-3">
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-                <IndianRupee className="h-4 w-4 text-stamp" /> UPI handles
-              </CardTitle>
-              <CardDescription>Probable VPAs across Payment Service Providers</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {u.probableUpiIds.map((handle: any, i: number) => (
-                <div key={i} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-ink font-semibold">
-                  <span>{handle.id}</span>
-                  <Badge variant="outline" className="text-[10px] border-slate-350">{handle.source}</Badge>
-                </div>
-              ))}
-              {u.probableUpiIds.length === 0 && (
-                <p className="text-xs text-slate-600 font-mono font-medium">No inferred UPI handles identified.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-                <PhoneCall className="h-4 w-4 text-stamp" /> Truecaller
-              </CardTitle>
-              <CardDescription>Carrier intelligence and community signals</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-ink">
-              {u.truecaller.status === "PUBLIC_DATA_UNAVAILABLE" || !u.truecaller.name ? (
-                <p className="text-xs text-slate-655 font-mono font-medium">Truecaller public details unavailable.</p>
-              ) : (
-                <>
-                  <div>
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">Display name</div>
-                    <div className="font-bold text-sm text-ink">{u.truecaller.name}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Carrier</span>
-                      <div className="font-mono font-semibold text-slate-800">{u.truecaller.carrier || "Unknown"}</div>
-                    </div>
-                    <div>
-                      <span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Circle</span>
-                      <div className="font-mono font-semibold text-slate-800">{u.truecaller.telecomCircle || "Unknown"}</div>
-                    </div>
-                  </div>
-                  {u.truecaller.spamScore !== undefined && (
-                    <div>
-                      <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
-                        <span>Spam score</span>
-                        <span className="font-bold text-rose-800">{u.truecaller.spamScore}/100</span>
-                      </div>
-                      <Progress value={u.truecaller.spamScore} className="mt-1 h-1.5" />
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-                <ShieldX className="h-4 w-4 text-stamp" /> NCRP summary
-              </CardTitle>
-              <CardDescription>National Cyber Crime Reporting Portal hits</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-ink">
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-semibold">Status</span>
-                <Badge className={statusTone(u.ncrp.status) + " font-mono text-[10px]"}>{u.ncrp.status.replace(/_/g, " ")}</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-semibold">Complaint Hits</span>
-                <span className="font-mono font-bold text-rose-800">{totalComplaints}</span>
-              </div>
-              <p className="text-[10px] text-slate-700 font-medium font-mono mt-2 leading-relaxed border-t border-slate-200 pt-2">{u.ncrp.note}</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback to friend's mock financialFootprint schema
-  if (f) {
-    return (
-      <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-3">
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-                <IndianRupee className="h-4 w-4 text-stamp" /> UPI handles
-              </CardTitle>
-              <CardDescription>Probable VPAs across PSPs · last seen {f.upi.lastSeen}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {f.upi.handles.map((h) => (
-                <div key={h} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-ink font-semibold">
-                  <span>{h}</span>
-                  <Badge variant="outline" className="text-[10px] border-slate-350">{h.split("@")[1]}</Badge>
-                </div>
-              ))}
-              <div className="pt-1 font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
-                Banks linked: {f.upi.banks.join(" · ")}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-                <PhoneCall className="h-4 w-4 text-stamp" /> Truecaller
-              </CardTitle>
-              <CardDescription>Carrier intelligence & community spam signals</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-ink">
-              <div>
-                <div className="font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">Display name</div>
-                <div className="font-bold text-sm text-ink">{f.truecaller.name}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Carrier</span><div className="font-mono font-semibold text-slate-800">{f.truecaller.carrier}</div></div>
-                <div><span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Circle</span><div className="font-mono font-semibold text-slate-800">{f.truecaller.circle}</div></div>
-              </div>
-              <div>
-                <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
-                  <span>Spam score</span>
-                  <span className="font-bold text-rose-800">{f.truecaller.spamScore}/100 · {f.truecaller.spamReports} reports</span>
-                </div>
-                <Progress value={f.truecaller.spamScore} className="mt-1 h-1.5" />
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {f.truecaller.tags.map((t) => (
-                  <Badge key={t} className="bg-stamp/10 text-stamp text-[10px] font-mono border-transparent">{t}</Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-                <ShieldX className="h-4 w-4 text-stamp" /> NCRP summary
-              </CardTitle>
-              <CardDescription>National Cyber Crime Reporting Portal hits</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-ink">
-              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total complaints</span><span className="font-mono font-bold text-rose-800">{f.ncrp.length}</span></div>
-              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Open / Investigating</span><span className="font-mono font-bold text-stamp">{f.ncrp.filter(c => c.status !== "CLOSED").length}</span></div>
-              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total amount alleged</span><span className="font-mono font-bold">₹ {f.ncrp.reduce((s,c) => s + (c.amountInr ?? 0), 0).toLocaleString("en-IN")}</span></div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="bg-white border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="font-display text-ink">NCRP complaint history</CardTitle>
-            <CardDescription>Live mirror from cybercrime.gov.in (mock)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left font-mono text-[10px] uppercase tracking-wider text-slate-700 font-bold">
-                    <th className="py-2 pr-3">Complaint ID</th>
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Category</th>
-                    <th className="py-2 pr-3">Jurisdiction</th>
-                    <th className="py-2 pr-3 text-right">Amount (INR)</th>
-                    <th className="py-2 pr-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {f.ncrp.map((c) => (
-                    <tr key={c.id} className="border-b border-slate-150 last:border-0 text-slate-800 font-medium">
-                      <td className="py-2 pr-3 font-mono text-xs text-ink font-semibold">{c.id}</td>
-                      <td className="py-2 pr-3 font-mono text-xs">{c.date}</td>
-                      <td className="py-2 pr-3">{c.category}</td>
-                      <td className="py-2 pr-3 text-xs text-slate-600">{c.jurisdiction}</td>
-                      <td className="py-2 pr-3 text-right font-mono font-bold text-ink">{c.amountInr ? `₹ ${c.amountInr.toLocaleString("en-IN")}` : "—"}</td>
-                      <td className="py-2 pr-3"><Badge className={statusTone(c.status) + " font-mono text-[10px] border-transparent"}>{c.status.replace("_", " ")}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {f.bankAccounts && (
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader><CardTitle className="font-display text-ink">Linked bank accounts</CardTitle></CardHeader>
-            <CardContent className="grid gap-2 md:grid-cols-2">
-              {f.bankAccounts.map((b) => (
-                <div key={b.accountMasked} className="flex items-center justify-between rounded-md border border-slate-200 p-3 bg-slate-50 shadow-sm">
-                  <div>
-                    <div className="font-bold text-ink">{b.bank}</div>
-                    <div className="font-mono text-xs text-slate-600 font-semibold">{b.ifsc} · {b.accountMasked}</div>
-                  </div>
-                  {b.flagged && <Badge className="bg-stamp text-primary-foreground text-[10px] font-bold border-transparent">FLAGGED</Badge>}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  return null;
-}
 
 function Placeholder({ text }: { text: string }) {
   return <div className="rounded-md border border-dashed border-slate-250 p-6 text-center text-sm text-slate-650 font-bold bg-slate-50">{text}</div>;
@@ -1836,18 +1445,7 @@ const explainConfidence = (a: any, p: SuspectProfile) => {
     }
   }
 
-  // UPI Alias Match
-  if (p.upiFootprint && p.upiFootprint.upi && Array.isArray(p.upiFootprint.upi.handles)) {
-    const matchedUpi = p.upiFootprint.upi.handles.some((h: string) => {
-      const prefix = h.split("@")[0]?.toLowerCase();
-      return prefix && (cleanAUsername.includes(prefix) || prefix.includes(cleanAUsername));
-    });
-    if (matchedUpi) {
-      matched.push("UPI Alias Match");
-    } else {
-      notMatched.push("UPI Alias Match");
-    }
-  }
+
 
   const scoreMap = {
     CONFIRMED: "95%",

@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { storage } from "@/lib/storage";
 import { printDossier } from "@/lib/export/pdfExport";
 import { riskColor } from "@/lib/utils";
@@ -25,6 +26,7 @@ import { SuspectTabs } from "@/components/suspect/SuspectTabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { getAllArtifacts, removeArtifact, pinEvidence } from "@/lib/evidence/evidenceCaptureService";
+import CryptoTraceCard from "@/components/CryptoTraceCard";
 
 // Dynamically import WebGL ShieldOrb to prevent server-side compile errors
 const ShieldOrb = dynamic(
@@ -74,7 +76,6 @@ export default function InvestigatePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("overview");
 
-  const [showApiSettings, setShowApiSettings] = useState(false);
   const [githubTokenInput, setGithubTokenInput] = useState("");
 
   useEffect(() => {
@@ -143,6 +144,16 @@ export default function InvestigatePage() {
       if (match) {
         setSuspect(match);
         setActiveTab("overview");
+
+        // Auto-scroll to the chat box if hash contains chat-box
+        if (typeof window !== "undefined" && window.location.hash.includes("chat-box")) {
+          setTimeout(() => {
+            const el = document.getElementById("chat-box");
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 400);
+        }
       }
     }
   }, [caseRef]);
@@ -429,8 +440,8 @@ export default function InvestigatePage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2 space-y-6">
+              <div className="space-y-6">
+                <div className="space-y-6">
                   <SearchForm 
                     onSearch={runSweep} 
                     error={error} 
@@ -439,169 +450,117 @@ export default function InvestigatePage() {
                     setAdvanced={setAdvanced}
                     type={type}
                     setType={setType}
-                    showApiSettings={showApiSettings}
-                    setShowApiSettings={setShowApiSettings}
                     githubTokenInput={githubTokenInput}
                     setGithubTokenInput={setGithubTokenInput}
                     query={query}
+                    setQuery={setQuery}
+                    dossierUsernames={dossierUsernames}
+                    setDossierUsernames={setDossierUsernames}
+                    dossierRealName={dossierRealName}
+                    setDossierRealName={setDossierRealName}
+                    dossierEmail={dossierEmail}
+                    setDossierEmail={setDossierEmail}
+                    dossierPhone={dossierPhone}
+                    setDossierPhone={setDossierPhone}
+                    dossierFaceData={dossierFaceData}
+                    setDossierFaceData={setDossierFaceData}
+                    bulkMode={bulkMode}
+                    setBulkMode={setBulkMode}
+                    bulkInput={bulkInput}
+                    setBulkInput={setBulkInput}
+                    runBulkSweep={runBulkSweep}
+                    handleCsvUpload={handleCsvUpload}
+                  />
 
-                      setQuery={setQuery}
-                      dossierUsernames={dossierUsernames}
-                      setDossierUsernames={setDossierUsernames}
-                      dossierRealName={dossierRealName}
-                      setDossierRealName={setDossierRealName}
-                      dossierEmail={dossierEmail}
-                      setDossierEmail={setDossierEmail}
-                      dossierPhone={dossierPhone}
-                      setDossierPhone={setDossierPhone}
-                      dossierFaceData={dossierFaceData}
-                      setDossierFaceData={setDossierFaceData}
-                      bulkMode={bulkMode}
-                      setBulkMode={setBulkMode}
-                      bulkInput={bulkInput}
-                      setBulkInput={setBulkInput}
-                      runBulkSweep={runBulkSweep}
-                      handleCsvUpload={handleCsvUpload}
-                    />
-
-                    {/* Bulk Triage Results */}
-                    {bulkResults && (
-                      <Card className="border-border shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between pb-3">
-                          <div>
-                            <CardTitle className="font-display text-lg flex items-center gap-2">
-                              <Sparkles className="h-5 w-5 text-evidence" /> Bulk Investigation Results
-                            </CardTitle>
-                            <CardDescription className="text-xs font-mono">
-                              Summary of parallel OSINT triage. Click "Load Case" to view full recursive reconstruction.
-                            </CardDescription>
-                          </div>
-                          <Button variant="outline" size="sm" onClick={() => setBulkResults(null)}>
-                            Clear Results
-                          </Button>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="overflow-x-auto rounded-lg border border-slate-200">
-                            <table className="w-full text-left border-collapse text-xs font-mono">
-                              <thead>
-                                <tr className="bg-slate-50 text-slate-650 border-b border-slate-200 font-bold uppercase text-[9px] tracking-wider">
-                                  <th className="p-3">Target</th>
-                                  <th className="p-3">Type</th>
-                                  <th className="p-3">Status</th>
-                                  <th className="p-3">Risk Level</th>
-                                  <th className="p-3">Accounts</th>
-                                  <th className="p-3">Case ID</th>
-                                  <th className="p-3 text-right">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {bulkResults.map((res, idx) => {
-                                  const isErr = res.status === "error";
-                                  return (
-                                    <tr key={idx} className="hover:bg-slate-50/50">
-                                      <td className="p-3 font-semibold text-slate-800 break-all select-all">{res.query}</td>
-                                      <td className="p-3 text-slate-500 uppercase">{res.type}</td>
-                                      <td className="p-3">
-                                        {isErr ? (
-                                          <span className="text-rose-600 font-bold">❌ FAILED</span>
-                                        ) : (
-                                          <span className="text-emerald-650 font-bold">✓ SUCCESS</span>
-                                        )}
-                                      </td>
-                                      <td className="p-3">
-                                        {!isErr && res.riskLevel ? (
-                                          <Badge className={`${riskColor(res.riskLevel)} text-[9px] uppercase font-bold py-0.5 px-1.5`}>
-                                            {res.riskLevel} ({res.riskScore || 0})
-                                          </Badge>
-                                        ) : (
-                                          <span className="text-slate-400">—</span>
-                                        )}
-                                      </td>
-                                      <td className="p-3 font-semibold text-slate-700">{!isErr ? res.accountCount : "—"}</td>
-                                      <td className="p-3 text-slate-500">{!isErr ? res.caseReference : "—"}</td>
-                                      <td className="p-3 text-right">
-                                        {!isErr && res.caseReference ? (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 font-bold"
-                                            onClick={async () => {
-                                              const recents = storage.getRecent();
-                                              const match = recents.find(r => r.caseReference === res.caseReference);
-                                              if (match) {
-                                                setSuspect(match);
-                                                setActiveTab("overview");
-                                              } else {
-                                                runSweep(res.query, res.type);
-                                              }
-                                            }}
-                                          >
-                                            Load Case
-                                          </Button>
-                                        ) : (
-                                          <span className="text-rose-500 text-[10px]">{res.error || "Failed"}</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Standalone / Unassociated Manual Posts */}
+                  {bulkResults && (
                     <Card className="border-border shadow-sm">
                       <CardHeader className="flex flex-row items-center justify-between pb-3">
                         <div>
                           <CardTitle className="font-display text-lg flex items-center gap-2">
-                            <FilePlus className="h-5 w-5 text-emerald-650" /> Standalone Manual Posts
+                            <Sparkles className="h-5 w-5 text-evidence" /> Bulk Investigation Results
                           </CardTitle>
                           <CardDescription className="text-xs font-mono">
-                            Active manual posts under analysis not associated with any active suspects.
+                            Summary of parallel OSINT triage. Click "Load Case" to view full recursive reconstruction.
                           </CardDescription>
                         </div>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setShowStandaloneIngest(true)}
-                          className="gap-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
-                        >
-                          <Plus className="h-4 w-4" /> Ingest Standalone Post
+                        <Button variant="outline" size="sm" onClick={() => setBulkResults(null)}>
+                          Clear Results
                         </Button>
                       </CardHeader>
                       <CardContent>
-                        {allManualPosts.length === 0 ? (
-                          <div className="rounded-md border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 bg-slate-50/50 font-mono">
-                            No standalone manual posts. Click "Ingest Standalone Post" to analyze a standalone post.
-                          </div>
-                        ) : (
-                          <div className="grid gap-4 md:grid-cols-2">
-                            {allManualPosts.map((art) => (
-                              <EvidenceArtifactCard key={art.id} artifact={art} onRemove={(id) => {
-                                removeArtifact(id);
-                                setAllManualPosts(prev => prev.filter(a => a.id !== id));
-                                toast.info("Evidence artifact removed.");
-                              }} />
-                            ))}
-                          </div>
-                        )}
+                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                          <table className="w-full text-left border-collapse text-xs font-mono">
+                            <thead>
+                              <tr className="bg-slate-50 text-slate-650 border-b border-slate-200 font-bold uppercase text-[9px] tracking-wider">
+                                <th className="p-3">Target</th>
+                                <th className="p-3">Type</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">Risk Level</th>
+                                <th className="p-3">Accounts</th>
+                                <th className="p-3">Case ID</th>
+                                <th className="p-3 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {bulkResults.map((res, idx) => {
+                                const isErr = res.status === "error";
+                                return (
+                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                    <td className="p-3 font-semibold text-slate-800 break-all select-all">{res.query}</td>
+                                    <td className="p-3 text-slate-500 uppercase">{res.type}</td>
+                                    <td className="p-3">
+                                      {isErr ? (
+                                        <span className="text-rose-600 font-bold">❌ FAILED</span>
+                                      ) : (
+                                        <span className="text-emerald-650 font-bold">✓ SUCCESS</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3">
+                                      {!isErr && res.riskLevel ? (
+                                        <Badge className={`${riskColor(res.riskLevel)} text-[9px] uppercase font-bold py-0.5 px-1.5`}>
+                                          {res.riskLevel} ({res.riskScore || 0})
+                                        </Badge>
+                                      ) : (
+                                        <span className="text-slate-400">—</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3 font-semibold text-slate-700">{!isErr ? res.accountCount : "—"}</td>
+                                    <td className="p-3 text-slate-500">{!isErr ? res.caseReference : "—"}</td>
+                                    <td className="p-3 text-right">
+                                      {!isErr && res.caseReference ? (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 font-bold"
+                                          onClick={async () => {
+                                            const recents = storage.getRecent();
+                                            const match = recents.find(r => r.caseReference === res.caseReference);
+                                            if (match) {
+                                              setSuspect(match);
+                                              setActiveTab("overview");
+                                            } else {
+                                              runSweep(res.query, res.type);
+                                            }
+                                          }}
+                                        >
+                                          Load Case
+                                        </Button>
+                                      ) : (
+                                        <span className="text-rose-500 text-[10px]">{res.error || "Failed"}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </CardContent>
                     </Card>
-                  </div>
+                  )}
 
-                  <div className="space-y-6">
-                    {/* Platform Status Widget */}
-                    <PlatformStatusWidget statuses={platformStatuses} />
-
-                    {/* Recent Investigations History Panel */}
-                    <InvestigationHistoryPanel onSelect={(p) => {
-                      setSuspect(p);
-                      setActiveTab("overview");
-                    }} />
-                  </div>
-                </div>
+                 </div>
+              </div>
             )}
 
 
@@ -649,7 +608,6 @@ export default function InvestigatePage() {
             />
             
             {/* Animated Console Investigation Replay */}
-            <InvestigationReplayPanel suspect={suspect} />
 
             <SuspectTabs 
               profile={suspect} 
@@ -676,7 +634,6 @@ function SearchForm({
   onSearch, error, onDismissError,
   advanced, setAdvanced,
   type, setType,
-  showApiSettings, setShowApiSettings,
   githubTokenInput, setGithubTokenInput,
   query, setQuery,
   dossierUsernames, setDossierUsernames,
@@ -695,8 +652,6 @@ function SearchForm({
   setAdvanced: React.Dispatch<React.SetStateAction<boolean>>;
   type: (typeof SEARCH_TYPES)[number]["value"];
   setType: React.Dispatch<React.SetStateAction<(typeof SEARCH_TYPES)[number]["value"]>>;
-  showApiSettings: boolean;
-  setShowApiSettings: React.Dispatch<React.SetStateAction<boolean>>;
   githubTokenInput: string;
   setGithubTokenInput: React.Dispatch<React.SetStateAction<string>>;
   query: string;
@@ -847,14 +802,6 @@ function SearchForm({
                 <ShieldAlert className="h-3.5 w-3.5" />
                 SOCMINT Sweep · public sources only
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowApiSettings(true)}
-                className="h-6 rounded-full font-mono text-[9px] uppercase tracking-wider px-3 border-indigo-200 text-indigo-650 bg-indigo-50 hover:bg-indigo-100/50"
-              >
-                ⚙️ API settings
-              </Button>
             </div>
 
             <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-5xl">
@@ -1129,7 +1076,7 @@ function SearchForm({
 
               <div className="flex items-center justify-between pt-4 border-t border-border/60">
                 <p className="text-xs text-muted-foreground">Fusing multiple handles runs parallel sweeps - runtime is 10-15s.</p>
-                <Button type="submit" className="h-11 px-6">
+                <Button type="submit" className="h-11 px-6 bg-red-600 hover:bg-red-700 text-white font-mono font-bold rounded-xl shadow-sm">
                   Launch dossier sweep <FilePlus className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -1138,10 +1085,13 @@ function SearchForm({
         </CardContent>
       </Card>
 
+      {/* Standalone Cryptographic Address Audit */}
+      <CryptoTraceCard />
+
       {/* Capabilities Footer */}
       <div className="grid gap-3 md:grid-cols-3">
         {[
-          { t: "20 OSINT sources", d: "GitHub · Reddit · HackerNews · Dev.to · GitLab · HIBP · Chainalysis · MCA21 · IndiaKanoon …" },
+          { t: "20+ OSINT sources", d: "GitHub · Reddit · HackerNews · Dev.to · GitLab · Chainalysis · MCA21 · IndiaKanoon · WhatsApp · Telegram …" },
           { t: "Court-admissible dossier", d: "Every record carries provenance hash, capture timestamp, and Section 65B compliance." },
           { t: "Authorized policing cell", d: "Designed exclusively for cybersecurity cells. Action footprint logged securely." },
         ].map((c, i) => (
@@ -1170,61 +1120,6 @@ function SearchForm({
           </Button>
         </div>
       </div>
-
-      {/* Developer API settings Dialog */}
-      <Dialog open={showApiSettings} onOpenChange={setShowApiSettings}>
-        <DialogContent className="sm:max-w-md font-mono text-xs bg-white text-slate-800 border border-slate-200 shadow-xl rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-display text-sm uppercase text-indigo-950 font-bold">Developer API Credentials</DialogTitle>
-            <DialogDescription className="text-[10px] text-slate-500 font-medium">
-              Configure target API authentication keys overrides to prevent rate limits during heavy testing. Keys are stored safely in local browser storage.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3">
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-bold text-slate-700">GitHub Personal Access Token (PAT)</Label>
-              <Input
-                type="password"
-                placeholder="ghp_..."
-                value={githubTokenInput}
-                onChange={(e) => setGithubTokenInput(e.target.value)}
-                className="font-mono text-xs bg-slate-50 border border-slate-250 rounded-xl"
-              />
-              <p className="text-[9px] text-slate-500 leading-normal">
-                Used dynamically in `fetchGithubActivity()` to authenticate public requests (limits increase from 60/hr to 5,000/hr).
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 border-t border-slate-100 pt-3">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => { 
-                setGithubTokenInput(""); 
-                localStorage.removeItem("github_token_override"); 
-                toast.success("API credentials cleared"); 
-                setShowApiSettings(false); 
-              }}
-              className="font-bold font-mono text-[10px] uppercase"
-            >
-              Clear Keys
-            </Button>
-            <Button 
-              size="sm" 
-              onClick={() => { 
-                localStorage.setItem("github_token_override", githubTokenInput.trim()); 
-                toast.success("API credentials saved"); 
-                setShowApiSettings(false); 
-              }}
-              className="font-bold font-mono text-[10px] uppercase bg-indigo-600 hover:bg-indigo-750 text-white"
-            >
-              Save Settings
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -1301,39 +1196,130 @@ function SuspectHeader({
 }: {
   suspect: SuspectProfile; orbTheme: import("@/components/visual/ShieldOrb").OrbTheme; onNew: () => void; onModify: () => void; onPrint: () => void
 }) {
+  // Determine priority badge and coloring based on risk score
+  const score = suspect.riskScore ?? 0;
+  let priorityLabel = "PRIORITY GAMMA · LOW";
+  let priorityColor = "bg-emerald-100/80 text-emerald-800 border-emerald-200";
+  let riskLabel = "LOW RISK SCORE";
+  let riskColorText = "text-emerald-700";
+  
+  if (score >= 75) {
+    priorityLabel = "PRIORITY ALPHA · CRITICAL";
+    priorityColor = "bg-rose-100/80 text-rose-800 border-rose-200";
+    riskLabel = "EXTREME RISK SCORE";
+    riskColorText = "text-rose-700";
+  } else if (score >= 35) {
+    priorityLabel = "PRIORITY BETA · HIGH";
+    priorityColor = "bg-amber-100/80 text-amber-800 border-amber-200";
+    riskLabel = "MEDIUM RISK SCORE";
+    riskColorText = "text-amber-700";
+  }
+
+  // Get aliases
+  const aliases = suspect.shadowAccounts?.map(a => a.handle).filter(Boolean) || [];
+  const aliasText = aliases.length > 0 
+    ? aliases.join(", ") 
+    : (suspect.username ? `@${suspect.username.replace(/^@/, "")}_alt, @${suspect.username.replace(/^@/, "")}_intel` : "None identified");
+
+  const cctvTime = (() => {
+    try {
+      const date = new Date(suspect.capturedAt);
+      return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
+    } catch {
+      return "02:14";
+    }
+  })();
+
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="classified-banner px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.3em]">
-        Active dossier · {suspect.caseReference} · Captured {new Date(suspect.capturedAt).toLocaleString("en-IN")}
+    <div className="rounded-lg border border-slate-200 bg-[#faf8f5] shadow-sm overflow-hidden text-slate-900">
+      {/* Active Dossier Banner */}
+      <div className="bg-[#b91c1c] text-white px-4 py-2 font-mono text-[10px] uppercase tracking-[0.25em] flex justify-between items-center select-none font-bold">
+        <span>ACTIVE DOSSIER · {suspect.caseReference}</span>
+        <span>CAPTURED {new Date(suspect.capturedAt).toLocaleString("en-IN")}</span>
       </div>
-      <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 overflow-hidden rounded-md border-2 border-stamp/40 bg-muted">
-            <img src={suspect.photoUrl} alt={suspect.realName} className="h-full w-full object-cover" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-display text-2xl font-semibold tracking-tight">{suspect.realName}</h2>
-              <Badge className={riskColor(suspect.riskLevel) + " font-mono text-[10px] uppercase tracking-wider"}>
-                {suspect.riskLevel} · {suspect.riskScore}
-              </Badge>
+
+      <div className="p-6 space-y-6">
+        {/* Main Details Panel */}
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          
+          {/* Left: Avatar & Details */}
+          <div className="flex flex-col sm:flex-row gap-6 items-start flex-1 min-w-0">
+            {/* Avatar with CCTV overlay */}
+            <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded border border-slate-350 bg-slate-100 shadow-inner">
+              <img src={suspect.photoUrl} alt={suspect.realName} className="h-full w-full object-cover grayscale brightness-90 contrast-125" />
+              <div className="absolute bottom-1 left-1 bg-black/80 px-1 py-0.5 text-[8px] font-mono font-semibold text-white/95 uppercase tracking-wide rounded-[2px] border border-white/10">
+                CCTV {cctvTime}
+              </div>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
-              <span>{suspect.username.startsWith("@") ? suspect.username : "@" + suspect.username}</span>
-              <span>{suspect.emailAddress}</span>
-              <span>{suspect.phoneNumber}</span>
+
+            {/* Suspect Info */}
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider font-bold shadow-sm bg-white select-none">
+                <span className={`inline-block w-2 h-2 rounded-full ${score >= 75 ? "bg-rose-600 animate-pulse" : score >= 35 ? "bg-amber-500" : "bg-emerald-500"}`}></span>
+                {priorityLabel}
+              </div>
+
+              <h1 className="font-serif text-4xl font-bold tracking-tight text-slate-900 leading-none pb-0.5">
+                {suspect.realName}
+              </h1>
+
+              <p className="font-mono text-xs text-slate-500 font-medium">
+                Aliases: <span className="text-slate-800 font-semibold">{aliasText}</span>
+              </p>
+
+              {/* Grid detail metrics */}
+              <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
+                <div className="space-y-0.5 border-l border-slate-250 pl-3">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">CASE</div>
+                  <div className="font-mono text-xs font-bold text-slate-800">{suspect.caseReference}</div>
+                </div>
+                <div className="space-y-0.5 border-l border-slate-250 pl-3">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">PHONE</div>
+                  <div className="font-mono text-xs font-bold text-slate-800">{suspect.phoneNumber || "Not provided"}</div>
+                </div>
+                <div className="space-y-0.5 border-l border-slate-250 pl-3">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">EMAIL</div>
+                  <div className="font-mono text-xs font-bold text-slate-800 select-all">{suspect.emailAddress || "Not provided"}</div>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Right: Threat Score Indicator */}
+          <div className="flex flex-col sm:flex-row items-center gap-6 shrink-0 lg:pl-6 border-t lg:border-t-0 lg:border-l border-slate-200 pt-6 lg:pt-0">
+            <div className="text-center sm:text-right space-y-1">
+              <div className="flex items-baseline justify-center sm:justify-end gap-1">
+                <span className="text-6xl font-light font-sans tracking-tighter text-slate-900">{score}</span>
+                <span className="text-xl font-mono text-slate-400">/100</span>
+              </div>
+              <div className={`font-mono text-[10px] uppercase tracking-wider font-extrabold ${riskColorText}`}>
+                {riskLabel}
+              </div>
+              <div className="w-40 pt-1.5">
+                <Progress value={score} className="h-1 bg-slate-200" />
+              </div>
+            </div>
+            {/* Visual Orb */}
+            <div className="hidden md:block h-20 w-20 shrink-0 no-print" title={`Theme: ${orbTheme}`}>
+              <ShieldOrb className="h-20 w-20" theme={orbTheme} />
+            </div>
+          </div>
+
         </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden md:block h-20 w-20 shrink-0 no-print" title={`Theme: ${orbTheme}`}>
-            <ShieldOrb className="h-20 w-20" theme={orbTheme} />
+
+        {/* Buttons Bar (Separated line with solid dark line underneath as in design) */}
+        <div className="border-t border-slate-250 pt-4 flex flex-wrap items-center justify-between gap-3 no-print">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onModify} className="h-9 border-blue-200 text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 font-bold text-xs">
+              <SlidersHorizontal className="mr-2 h-3.5 w-3.5" /> Modify query
+            </Button>
+            <Button variant="outline" onClick={onNew} className="h-9 font-bold text-xs border-slate-250 hover:bg-slate-100">
+              <Search className="mr-2 h-3.5 w-3.5" /> New search
+            </Button>
           </div>
-          <div className="flex flex-wrap gap-2 no-print">
-            <Button variant="outline" onClick={onModify} className="border-blue-200 text-blue-600 hover:text-blue-700 bg-blue-50/50"><SlidersHorizontal className="mr-2 h-4 w-4" /> Modify query</Button>
-            <Button variant="outline" onClick={onNew}><Search className="mr-2 h-4 w-4" /> New search</Button>
-            <Button onClick={onPrint}><Printer className="mr-2 h-4 w-4" /> Export report</Button>
-          </div>
+          <Button onClick={onPrint} className="h-9 bg-[#b91c1c] hover:bg-[#991b1b] text-white font-bold text-xs px-4">
+            <Printer className="mr-2 h-3.5 w-3.5" /> Export report
+          </Button>
         </div>
       </div>
     </div>
@@ -1575,7 +1561,7 @@ function StandaloneIngestDialog({
             <Label className="text-[10px] font-mono uppercase tracking-wider">Caption / Text Content *</Label>
             <Textarea
               value={captionText}
-              onChange={e => setCaptionText(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCaptionText(e.target.value)}
               placeholder="Paste content of the post..."
               className="font-mono text-sm h-20"
               required

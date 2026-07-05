@@ -44,61 +44,7 @@ export async function POST(request: NextRequest) {
           signals: s.signals,
           detectionMethod: s.detectionMethod,
         })),
-        darkWebLogs: (() => {
-          const realLogs = profile?.darkWebPastes?.map((p: any) => ({
-            platform: p.platform,
-            title: p.title,
-            snippet: p.snippet,
-            riskTag: p.riskTag || "CREDENTIAL LEAK"
-          })) || [];
 
-          const lowerName = (profile?.realName || "").toLowerCase();
-          const lowerUser = (profile?.username || "").toLowerCase();
-          
-          // Strict checks for demo personas to prevent leaking their mock leaks to other search targets
-          const isShadowTrader = lowerUser === "shadowtrader99" || lowerName === "vikram rathore" || lowerName === "shadowtrader 99";
-          const isSneha = lowerUser === "sneha_fintech" || lowerUser === "kulkarni_sneha" || lowerName === "sneha kulkarni";
-
-          const logs = [...realLogs];
-          if (isShadowTrader) {
-            logs.push(
-              {
-                platform: "Pastebin",
-                title: `leak_vikram_rathore_creds.txt`,
-                snippet: `email: shadowtrader99@proton.me\nhash: $2y$10$v7g9L8kXwz12... (bcrypt)\nip: 103.241.12.89\nusername: shadowtrader99`,
-                riskTag: "CREDENTIAL LEAK"
-              },
-              {
-                platform: "Telegram DarkWeb channels",
-                title: "OTC Hawala & Escrow bypass log",
-                snippet: `[12:14:09] shadowtrader: need escrow bypass for BLR transaction\n[12:15:02] *user deleted u/shadow_trader_in*\n[12:16:30] admin: user log saved with hash signature`,
-                riskTag: "HAWALA / ESCROW BYPASS"
-              }
-            );
-          } else if (isSneha) {
-            logs.push(
-              {
-                platform: "Pastebin",
-                title: `leak_sneha_kulkarni_creds.txt`,
-                snippet: `email: sneha_kulkarni@proton.me\nhash: $2y$10$j8d2f7823h82... (bcrypt)\nip: 103.241.13.20\nusername: sneha_fintech`,
-                riskTag: "CREDENTIAL LEAK"
-              },
-              {
-                platform: "Onion Forum (BreachForums)",
-                title: "Karnataka Corporate KYC Database dump",
-                snippet: `Exploit vector: MCA21 designation mismatch bypass. Company: V.R. Digital Logistics Pvt Ltd.\nTarget: Sneha Kulkarni`,
-                riskTag: "KYC CORRELATION"
-              }
-            );
-          }
-          return logs;
-        })(),
-        hibpBreaches: profile?.hibpResult?.breaches?.map((b: any) => ({
-          name: b.name,
-          breachDate: b.breachDate,
-          dataClasses: b.dataClasses,
-          description: b.description,
-        })),
       },
       null,
       2

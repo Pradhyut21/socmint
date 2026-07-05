@@ -4,6 +4,8 @@ import { DossierInput } from "../../../lib/types";
 import { checkRateLimit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";

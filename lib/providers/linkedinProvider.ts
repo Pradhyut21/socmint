@@ -35,9 +35,63 @@ export class LinkedInProvider {
   }
 
   /**
+   * Helper to search for a LinkedIn profile by real name using Bing/Yahoo/DDG.
+   */
+  private async searchLinkedInByName(realName: string): Promise<string | null> {
+    const cleanName = realName.trim();
+    const parts = cleanName.split(/\s+/).filter(p => p.length > 0);
+
+    let queryTerms = `"${cleanName}"`;
+    if (parts.length >= 2) {
+      const first = parts[0];
+      const last = parts[parts.length - 1];
+      
+      const alt1 = `${last} ${parts.slice(0, -1).join(" ")}`; // e.g. "Pradhyut K M"
+      const alt2 = `${last} ${parts.slice(0, -1).join("")}`; // e.g. "Pradhyut KM"
+      const alt3 = `${parts.slice(1).join(" ")} ${first}`; // e.g. "Pradhyut K"
+      
+      queryTerms = `("${cleanName}" OR "${alt1}" OR "${alt2}" OR "${alt3}")`;
+    }
+
+    const engines = [
+      `https://www.bing.com/search?q=site:linkedin.com/in/+${encodeURIComponent(queryTerms)}`,
+      `https://search.yahoo.com/search?p=site:linkedin.com/in/+${encodeURIComponent(queryTerms)}`,
+      `https://html.duckduckgo.com/html/?q=site:linkedin.com/in/+${encodeURIComponent(queryTerms)}`
+    ];
+
+    for (const url of engines) {
+      try {
+        console.log(`[LINKEDIN-SEARCH] Searching name "${realName}" on: ${url}`);
+        const resp = await fetchWithTimeout(url, 5000, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          }
+        });
+        if (resp.ok) {
+          const html = await resp.text();
+          const match = html.match(/linkedin\.com\/in\/([a-zA-Z0-9\-_%]+)/i);
+          if (match && match[1]) {
+            let resolved = match[1].trim().toLowerCase();
+            try {
+              resolved = decodeURIComponent(resolved);
+            } catch (_) {}
+            if (resolved && resolved !== "search" && resolved !== "dir" && resolved !== "pub") {
+              console.log(`[LINKEDIN-SEARCH] Found resolved username: ${resolved} for real name: ${realName}`);
+              return resolved;
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[LINKEDIN-SEARCH] Name search engine offline: ${err.message || err}`);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Main entry point to fetch a LinkedIn profile
    */
-  public async fetchProfile(username: string): Promise<LinkedinIntelligence | null> {
+  public async fetchProfile(username: string, realName?: string): Promise<LinkedinIntelligence | null> {
     const cleanUsername = username.replace(/^in\//, "").replace(/\/$/, "").trim();
     
     // Layer 1: Authenticated Voyager API session
@@ -65,6 +119,17 @@ export class LinkedInProvider {
     const searchProfile = await searchProvider.fetchProfile(cleanUsername);
     if (searchProfile) {
       return searchProfile;
+    }
+
+    // Layer 3.5: Fallback to name search if realName is provided and is different from the handle
+    if (realName && realName.trim() && realName !== cleanUsername) {
+      console.log(`[LINKEDIN] Standard handle lookup failed. Searching by real name "${realName}"...`);
+      const resolved = await this.searchLinkedInByName(realName);
+      if (resolved && resolved !== cleanUsername) {
+        console.log(`[LINKEDIN] Found resolved handle "${resolved}" via name search. Re-fetching...`);
+        const resolvedProfile = await this.fetchProfile(resolved); // fetch without realName to avoid loops
+        if (resolvedProfile) return resolvedProfile;
+      }
     }
 
     // Layer 4: Fallback to directProfile empty shell or demo data if nothing else resolved

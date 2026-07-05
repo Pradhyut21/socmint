@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -15,6 +15,8 @@ import {
   Lock,
   UserCog,
   Terminal,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 import { storage } from "@/lib/storage";
@@ -33,12 +35,13 @@ const NAV = [
   { href: "/compliance", label: "Legal Compliance", icon: ScrollText },
 ];
 
-export function AppShellClient({ children }: { children: React.ReactNode }) {
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [analyst, setAnalystState] = useState({ name: "A. Sharma", badge: "KSP-4421", unit: "Cyber Crime Cell, Bengaluru" });
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -94,10 +97,33 @@ export function AppShellClient({ children }: { children: React.ReactNode }) {
     }
   }, [session, authLoading, isAuthPage, router]);
 
+  const [isCasesDropdownOpen, setIsCasesDropdownOpen] = useState(false);
+  const [recentCases, setRecentCases] = useState<any[]>([]);
+
   // Load analyst credentials from storage after mounting
   useEffect(() => {
     setAnalystState(storage.getAnalyst());
   }, []);
+
+  useEffect(() => {
+    setRecentCases(storage.getRecent());
+    const updateCases = () => {
+      setRecentCases(storage.getRecent());
+    };
+    window.addEventListener("recent_cases_updated", updateCases);
+    window.addEventListener("storage", updateCases);
+    return () => {
+      window.removeEventListener("recent_cases_updated", updateCases);
+      window.removeEventListener("storage", updateCases);
+    };
+  }, []);
+
+  // Keep dropdown open if on cases page
+  useEffect(() => {
+    if (pathname.startsWith("/cases")) {
+      setIsCasesDropdownOpen(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -158,30 +184,100 @@ export function AppShellClient({ children }: { children: React.ReactNode }) {
             {NAV.map((n, i) => {
               const active = n.exact ? pathname === n.href : pathname.startsWith(n.href);
               const Icon = n.icon;
+              const isCaseDirectory = n.href === "/cases";
+
               return (
-                <motion.div
-                  key={n.href}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05, duration: 0.25 }}
-                  whileHover={{ x: 3 }}
-                >
-                  <Link
-                    href={n.href}
-                    className={`group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"}`}
+                <div key={n.href} className="space-y-1">
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.25 }}
+                    whileHover={{ x: 3 }}
                   >
-                    {active && (
-                      <motion.span
-                        layoutId="nav-active"
-                        className="absolute inset-0 rounded-md bg-sidebar-accent"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                    <Icon className={`relative z-10 h-4 w-4 ${active ? "text-stamp" : ""}`} />
-                    <span className="relative z-10 flex-1">{n.label}</span>
-                    {active && <span className="relative z-10 h-1.5 w-1.5 rounded-full bg-stamp" />}
-                  </Link>
-                </motion.div>
+                    <div className="flex items-center gap-1 group relative">
+                      <Link
+                        href={n.href}
+                        onClick={() => {
+                          if (isCaseDirectory) {
+                            setIsCasesDropdownOpen(true);
+                          }
+                        }}
+                        className={`flex-1 flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors relative ${active ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"}`}
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="nav-active"
+                            className="absolute inset-0 rounded-md bg-sidebar-accent"
+                            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                          />
+                        )}
+                        <Icon className={`relative z-10 h-4 w-4 ${active ? "text-stamp" : ""}`} />
+                        <span className="relative z-10 flex-1">{n.label}</span>
+                        {active && !isCaseDirectory && <span className="relative z-10 h-1.5 w-1.5 rounded-full bg-stamp" />}
+                      </Link>
+
+                      {isCaseDirectory && recentCases.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsCasesDropdownOpen(!isCasesDropdownOpen);
+                          }}
+                          className="p-2 mr-1 rounded-md text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground relative z-10 transition-colors cursor-pointer"
+                          title="Toggle Previous Chats"
+                        >
+                          {isCasesDropdownOpen ? (
+                            <ChevronDown className="h-4.5 w-4.5 text-sidebar-foreground/70 group-hover:text-sidebar-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4.5 w-4.5 text-sidebar-foreground/70 group-hover:text-sidebar-foreground" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Dropdown collapsible list of previous chats */}
+                  {isCaseDirectory && isCasesDropdownOpen && recentCases.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="pl-8 pr-2 py-1 space-y-1 overflow-hidden"
+                    >
+                      <div className="font-mono text-[9px] text-sidebar-foreground/50 uppercase tracking-widest pl-1 mb-1">
+                        Previous Chats
+                      </div>
+                      {recentCases.map((c) => {
+                        const currentCaseParam = searchParams.get("case");
+                        const isCurrentCase = pathname === "/" && currentCaseParam === c.caseReference;
+                        return (
+                          <Link
+                            key={c.caseReference}
+                            href={`/?case=${c.caseReference}#chat-box`}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-all border ${
+                              isCurrentCase
+                                ? "bg-sidebar-accent/80 border-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                                : "border-transparent text-sidebar-foreground/75 hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground"
+                            }`}
+                          >
+                            <img
+                              src={c.photoUrl}
+                              alt={c.realName}
+                              className="w-4.5 h-4.5 rounded-full border border-sidebar-border object-cover shrink-0"
+                            />
+                            <div className="min-w-0 flex-1 truncate text-[11px]">
+                              {c.realName}
+                            </div>
+                            <span className="text-[8px] font-mono text-sidebar-foreground/40 shrink-0">
+                              {c.riskScore} BRS
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </div>
               );
             })}
           </nav>
@@ -302,5 +398,13 @@ function SettingsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function AppShellClient({ children }: { children: React.ReactNode }) {
+  return (
+    <React.Suspense fallback={null}>
+      <AppShellInner>{children}</AppShellInner>
+    </React.Suspense>
   );
 }

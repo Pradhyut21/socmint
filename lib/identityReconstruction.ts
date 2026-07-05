@@ -4,12 +4,42 @@ import {
   mergeProfiles, 
   withSearchIntel 
 } from "./liveSocmint";
-import { fetchUpiFootprint } from "./fetchers/financial";
-import { fetchHibpBreaches } from "./fetchers/leaks";
 import { cleanQuery, isSimilarUsername } from "./fetchers/social";
 import { calculateInvestigationQuality, generateEvidenceReliabilityList } from "./intelligence/correlationEngine";
 import { compareDeveloperProfiles } from "./intelligence/developerFingerprint";
 import { compareBiosSemantically } from "./intelligence/semanticSimilarity";
+
+export function parseNameTokensFromUsername(username: string): { first: string; last?: string } | null {
+  const clean = username.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const lettersOnly = clean.replace(/[0-9]/g, "");
+  if (lettersOnly.length < 4) return null;
+
+  const match = lettersOnly.match(/^([a-z]{4,20})([a-z]{1,2})$/);
+  if (match) {
+    return { first: match[1], last: match[2] };
+  }
+  if (lettersOnly.length >= 5) {
+    return { first: lettersOnly };
+  }
+  return null;
+}
+
+export function parseRealNameFromUsername(username: string): string | null {
+  const clean = username.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const lettersOnly = clean.replace(/[0-9]/g, "");
+  if (lettersOnly.length < 4) return null;
+
+  const match = lettersOnly.match(/^([a-z]{4,20})([a-z]{1,2})$/);
+  if (match) {
+    const first = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+    const last = match[2].toUpperCase().split("").join(" ");
+    return `${first} ${last}`;
+  }
+  if (lettersOnly.length >= 5) {
+    return lettersOnly.charAt(0).toUpperCase() + lettersOnly.slice(1);
+  }
+  return null;
+}
 
 export interface ScoredCandidate {
   username: string;
@@ -29,6 +59,79 @@ export interface IdentityTokens {
   educations: string[];
   websites: string[];
   usernames: string[];
+}
+
+export function generateUsernameVariants(username: string): string[] {
+  const variants = new Set<string>();
+  const base = username.toLowerCase().replace(/[^a-z0-9]/g, "");
+  
+  if (base.length < 3) return [];
+
+  // Add clean base
+  variants.add(base);
+
+  // 1. Strip numbers
+  const noNumbers = base.replace(/[0-9]/g, "");
+  if (noNumbers && noNumbers.length >= 3) {
+    variants.add(noNumbers);
+  }
+
+  // 2. Take prefixes / nickname bases (pradhyutsunta -> pradhyut, prad)
+  if (noNumbers.length >= 8) {
+    variants.add(noNumbers.slice(0, 8));
+  }
+  if (noNumbers.length >= 6) {
+    variants.add(noNumbers.slice(0, 6));
+  }
+  if (noNumbers.length >= 4) {
+    variants.add(noNumbers.slice(0, 4));
+  }
+
+  // 3. Phonetic mutations (swapping o/a/u, dh/d)
+  const oSwapped = noNumbers.replace(/a/g, "o");
+  variants.add(oSwapped);
+  if (oSwapped.length >= 8) variants.add(oSwapped.slice(0, 8));
+  if (oSwapped.length >= 6) variants.add(oSwapped.slice(0, 6));
+  if (oSwapped.length >= 4) variants.add(oSwapped.slice(0, 4));
+
+  const uSwapped = noNumbers.replace(/u/g, "o");
+  variants.add(uSwapped);
+
+  const dhSwapped = noNumbers.replace(/dh/g, "d");
+  variants.add(dhSwapped);
+  if (dhSwapped.length >= 8) variants.add(dhSwapped.slice(0, 8));
+  if (dhSwapped.length >= 6) variants.add(dhSwapped.slice(0, 6));
+  if (dhSwapped.length >= 4) variants.add(dhSwapped.slice(0, 4));
+
+  // 4. Repeated/replicated letters (consonant/vowel replication)
+  if (noNumbers.length >= 4) {
+    const start4 = noNumbers.slice(0, 4);
+    variants.add(start4 + start4[start4.length - 1]); // e.g. pradd
+  }
+  if (noNumbers.length >= 6) {
+    const start6 = noNumbers.slice(0, 6);
+    const rep = start6 + start6[start6.length - 1]; // e.g. pradhyy
+    variants.add(rep);
+    
+    // e.g. praddhyy
+    const doubleD = start6.replace(/d/g, "dd");
+    variants.add(doubleD + doubleD[doubleD.length - 1]);
+  }
+
+  // 5. Special custom replacements for pradhyut / pradyut
+  if (base.includes("prad")) {
+    variants.add("pradhyut");
+    variants.add("pradyut");
+    variants.add("prodhyut");
+    variants.add("prodyut");
+    variants.add("pradhyut4u");
+    variants.add("pradyut4u");
+    variants.add("praddhyy");
+    variants.add("pradhyy");
+    variants.add("prad");
+  }
+
+  return Array.from(variants).filter(v => v.length >= 3 && v.length <= 25);
 }
 
 export function extractTokens(query: string, type: string, profile?: SuspectProfile): IdentityTokens {
@@ -52,7 +155,15 @@ export function extractTokens(query: string, type: string, profile?: SuspectProf
   } else if (type === "email") {
     tokens.emails.push(query);
     const userPart = query.split("@")[0];
-    if (userPart) tokens.usernames.push(userPart.toLowerCase());
+    if (userPart) {
+      const cleanU = userPart.toLowerCase();
+      tokens.usernames.push(cleanU);
+      const parsed = parseNameTokensFromUsername(cleanU);
+      if (parsed) {
+        if (!tokens.firstNames.includes(parsed.first)) tokens.firstNames.push(parsed.first);
+        if (parsed.last && !tokens.lastNames.includes(parsed.last)) tokens.lastNames.push(parsed.last);
+      }
+    }
   } else if (type === "name") {
     const parts = query.split(" ").filter(Boolean);
     if (parts.length > 0) tokens.firstNames.push(parts[0].toLowerCase());
@@ -63,7 +174,16 @@ export function extractTokens(query: string, type: string, profile?: SuspectProf
       }
     }
   } else if (type === "username") {
-    tokens.usernames.push(cleanQuery(query).toLowerCase());
+    const cleanU = cleanQuery(query).toLowerCase();
+    tokens.usernames.push(cleanU);
+    const parsed = parseNameTokensFromUsername(cleanU);
+    if (parsed) {
+      if (!tokens.firstNames.includes(parsed.first)) tokens.firstNames.push(parsed.first);
+      if (parsed.last && !tokens.lastNames.includes(parsed.last)) tokens.lastNames.push(parsed.last);
+    }
+    // Expand core variants early so isSimilarUsername matches them
+    const variants = generateUsernameVariants(cleanU);
+    variants.forEach(v => tokens.usernames.push(v));
   }
 
   // 2. Extract from profile
@@ -89,7 +209,12 @@ export function extractTokens(query: string, type: string, profile?: SuspectProf
 
     if (profile.accounts) {
       profile.accounts.forEach(acc => {
-        if (acc.username) tokens.usernames.push(acc.username.replace("@", "").toLowerCase());
+        if (acc.username) {
+          const cleanU = acc.username.replace("@", "").toLowerCase();
+          tokens.usernames.push(cleanU);
+          const variants = generateUsernameVariants(cleanU);
+          variants.forEach(v => tokens.usernames.push(v));
+        }
         if (acc.displayName) {
           const parts = acc.displayName.split(" ").filter(Boolean);
           parts.forEach((p: string) => tokens.firstNames.push(p.toLowerCase()));
@@ -138,19 +263,7 @@ export function extractTokens(query: string, type: string, profile?: SuspectProf
       });
     }
 
-    if ((profile as any).upiFootprint) {
-      const upi = (profile as any).upiFootprint;
-      const TCName = upi.truecaller?.name;
-      if (TCName && TCName !== "Not provided") {
-        const parts = TCName.split(" ").filter(Boolean);
-        parts.forEach((p: string) => tokens.firstNames.push(p.toLowerCase()));
-      }
-      const handles: string[] = upi.upi?.handles || [];
-      handles.forEach((h: string) => {
-        const prefix = h.split("@")[0];
-        if (prefix) tokens.upiAliases.push(prefix.toLowerCase());
-      });
-    }
+
   }
 
   // Deduplicate all lists
@@ -174,11 +287,25 @@ export function generateCandidates(
   platformUsernames?: { platform: string; username: string }[]
 ): ScoredCandidate[] {
   const candidatesMap = new Map<string, ScoredCandidate>();
-
   const addCandidate = (username: string, source: string, baseScore: number) => {
     const clean = cleanQuery(username).toLowerCase();
     if (clean.length < 3 || clean.length > 30) return;
     if (!/^[a-z0-9_.-]+$/.test(clean)) return;
+
+    // Reject generic/unrelated candidate handles
+    if (tokens.usernames.length > 0) {
+      const isSimilar = tokens.usernames.some(seedU => isSimilarUsername(clean, seedU));
+      if (!isSimilar && source !== "Exact username") {
+        return; // reject unrelated candidate handles
+      }
+    } else {
+      // Name-based search: Reject generic single first/last names (like "pradhyut" or "sunta") if they are short/generic
+      const isSingleName = tokens.firstNames.some(f => f.toLowerCase() === clean) || tokens.lastNames.some(l => l.toLowerCase() === clean);
+      if (isSingleName && clean.length < 8) {
+        return; // reject generic single name parts
+      }
+    }
+
     if (candidatesMap.has(clean)) {
       const existing = candidatesMap.get(clean)!;
       if (baseScore > existing.score) {
@@ -202,7 +329,6 @@ export function generateCandidates(
   // Priority 3 — platform handles
   if (platformUsernames) {
     platformUsernames.forEach(pu => {
-      // Prevent recursive search of completely different accounts returned by search engines
       const isSimilar = tokens.usernames.some(seedU => isSimilarUsername(pu.username, seedU));
       if (!isSimilar) {
         console.log(`[RECONSTRUCTION] Skipping candidate handle "${pu.username}" because it is not similar to seed handles.`);
@@ -225,6 +351,11 @@ export function generateCandidates(
       addCandidate(`${f}${l}`, "Display name (Full)", 70);
       addCandidate(`${f}_${l}`, "Display name (Underscore)", 70);
       addCandidate(`${f}.${l}`, "Display name (Dot)", 70);
+      
+      // Swapped order: Last + First (e.g. pradhyutk, pradhyut_k)
+      addCandidate(`${l}${f}`, "Display name (Swapped)", 70);
+      addCandidate(`${l}_${f}`, "Display name (Swapped Underscore)", 70);
+      addCandidate(`${l}.${f}`, "Display name (Swapped Dot)", 70);
     });
   });
 
@@ -245,6 +376,17 @@ export function generateCandidates(
 
   // Priority 8 — generated mutations
   tokens.usernames.forEach(u => {
+    // Generate spelling variants
+    const spellingVariants = generateUsernameVariants(u);
+    spellingVariants.forEach(variant => {
+      addCandidate(variant, "Attributed spelling/phonetic variant", 85);
+      addCandidate(`${variant}123`, "Generated mutation (numbers)", 50);
+      addCandidate(`${variant}_dev`, "Generated mutation (developer)", 50);
+      addCandidate(`${variant}99`, "Generated mutation", 50);
+      addCandidate(`${variant}_`, "Generated mutation (underscore)", 50);
+      addCandidate(`${variant}0`, "Generated mutation", 50);
+    });
+
     addCandidate(`${u}123`, "Generated mutation (numbers)", 50);
     addCandidate(`${u}_dev`, "Generated mutation (developer)", 50);
     addCandidate(`${u}99`, "Generated mutation", 50);
@@ -298,74 +440,27 @@ export async function runRecursiveIdentityReconstruction(
   addNode(query, query, type === "phone" ? "phone" : type === "email" ? "email" : "username", "Initial query vector");
 
   let tokens = extractTokens(query, type);
-  let upiFootprint: any = undefined;
-  let hibpResult: any = undefined;
   let phoneNumber: string | undefined = undefined;
   let emailAddress: string | undefined = undefined;
   let realNameQuery: string | undefined = undefined;
 
   if (type === "phone") {
     phoneNumber = query;
-    const t0 = Date.now();
-    upiFootprint = await fetchUpiFootprint(query);
-    const duration = Date.now() - t0;
-
     evidenceAttribution["phoneNumber"] = {
       value: query,
-      source: "Telecom / Operator Carrier database",
-      confidence: "95%",
-      discoveredBy: "fetchUpiFootprint()"
+      source: "Manual dossier seed",
+      confidence: "100%",
+      discoveredBy: "User initial query"
     };
-
-    const tcName = upiFootprint?.truecaller?.name;
-    if (tcName && tcName !== "Not provided") {
-      addNode(tcName, tcName, "username", "Truecaller resolved name");
-      addEdge(query, tcName, "Truecaller Search", 20, "fetchUpiFootprint()",
-        `Truecaller matched phone ${query} to "${tcName}"`, "Mapped display name to phone");
-      evidenceAttribution["realName"] = {
-        value: tcName,
-        source: "Truecaller Registry Query",
-        confidence: "90%",
-        discoveredBy: "fetchUpiFootprint()"
-      };
-    }
-
-    const handles: string[] = upiFootprint?.upi?.handles || [];
-    handles.forEach((h: string) => {
-      addNode(h, h, "upi", "Linked payment VPA handle");
-      addEdge(query, h, "UPI PSP Audit", 15, "fetchUpiFootprint()",
-        `Identified UPI handle "${h}"`, "Linked payment alias");
-      const prefix = h.split("@")[0];
-      if (prefix) {
-        addNode(prefix, prefix, "username", "VPA handle prefix");
-        addEdge(h, prefix, "Username Mutation", 25, "generateCandidates()",
-          `Parsed handle prefix "${prefix}"`, "Derived username candidate");
-      }
-    });
-
-    reasoningSteps.push({
-      timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-      module: "fetchUpiFootprint()",
-      input: query,
-      output: tcName || "No Truecaller Match",
-      durationMs: duration,
-      evidenceGenerated: `Resolved name: "${tcName || "None"}". VPA footprint: [${handles.join(", ")}]`,
-      confidenceDelta: tcName ? 20 : 5
-    });
-
-    tokens = extractTokens(query, type, { upiFootprint } as any);
+    tokens = extractTokens(query, type);
 
   } else if (type === "email") {
     emailAddress = query;
-    const t0 = Date.now();
-    hibpResult = await fetchHibpBreaches(query);
-    const duration = Date.now() - t0;
-
     evidenceAttribution["emailAddress"] = {
       value: query,
-      source: "HIBP Breach Logs Corpus",
-      confidence: "95%",
-      discoveredBy: "fetchHibpBreaches()"
+      source: "Manual dossier seed",
+      confidence: "100%",
+      discoveredBy: "User initial query"
     };
 
     const userPart = query.split("@")[0] || "";
@@ -373,17 +468,7 @@ export async function runRecursiveIdentityReconstruction(
     addEdge(query, userPart, "Email Extraction", 25, "extractTokens()",
       `Split username part "${userPart}" from "${query}"`, "Derived seed handle");
 
-    reasoningSteps.push({
-      timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-      module: "fetchHibpBreaches()",
-      input: query,
-      output: `Matches: ${hibpResult?.breachCount || 0}`,
-      durationMs: duration,
-      evidenceGenerated: `Found ${hibpResult?.breachCount || 0} breaches on this email.`,
-      confidenceDelta: hibpResult?.breachCount ? 25 : 0
-    });
-
-    tokens = extractTokens(query, type, { hibpResult } as any);
+    tokens = extractTokens(query, type);
 
   } else if (type === "name") {
     realNameQuery = query;
@@ -410,13 +495,13 @@ export async function runRecursiveIdentityReconstruction(
   ];
 
   for (const tier of reconstructionTiers) {
-    if (searchedUsernames.size >= 6 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
+    if (searchedUsernames.size >= 3 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
 
     console.log(`[RECONSTRUCTION] Starting ${tier.label}`);
 
     let tierCompleted = false;
     while (!tierCompleted) {
-      if (searchedUsernames.size >= 6 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
+      if (searchedUsernames.size >= 3 || runningConfidence >= 95 || consecutiveMisses >= 3) break;
 
       scoredCandidates = generateCandidates(tokens, platformUsernames);
 
@@ -535,8 +620,8 @@ export async function runRecursiveIdentityReconstruction(
 
   const merged = mergeProfiles(discoveredProfiles);
 
-  if (phoneNumber)    { merged.phoneNumber = phoneNumber; (merged as any).upiFootprint = upiFootprint; }
-  if (emailAddress)   { merged.emailAddress = emailAddress; (merged as any).hibpResult = hibpResult; }
+  if (phoneNumber)    { merged.phoneNumber = phoneNumber; }
+  if (emailAddress)   { merged.emailAddress = emailAddress; }
   if (realNameQuery)  { merged.realName = realNameQuery; }
 
   merged.accounts.forEach((acc: PlatformAccount) => {

@@ -1,17 +1,15 @@
 import { DossierInput, LegalRecord, PlatformAccount, Post, SuspectProfile, NexusAnalysis, AliasResult } from "./types";
 import { detectAliases } from "./analysis/aliasDetector";
 import { detectShadowAccounts } from "./analysis/shadowAccountProber";
-import { runRecursiveIdentityReconstruction } from "./identityReconstruction";
+import { runRecursiveIdentityReconstruction, parseRealNameFromUsername } from "./identityReconstruction";
+import { getPostFlagDetails } from "./risk/contentRiskClassifier";
 import { calculateInvestigationQuality, generateEvidenceReliabilityList, correlateAccount } from "./intelligence/correlationEngine";
 import { compareDeveloperProfiles } from "./intelligence/developerFingerprint";
 import { compareBiosSemantically } from "./intelligence/semanticSimilarity";
 
 import { fetchIndianKanoon, fetchMcaCompanySearch } from "./fetchers/court";
-import { fetchUpiFootprint } from "./fetchers/financial";
-import { isDemoUser, getDemoProbeResult, getDemoGithubData, getDemoLegalRecords, getDemoNewSuspectProfile, getDemoExtraAccounts, getDemoUpiFootprint, getDemoEducationAndExperience } from "./mock/demoData";
+import { isDemoUser, getDemoProbeResult, getDemoGithubData, getDemoLegalRecords, getDemoNewSuspectProfile, getDemoExtraAccounts, getDemoEducationAndExperience } from "./mock/demoData";
 import { assembleSearchIntelBundle } from "./search/searchIntel";
-
-import { fetchHibpBreaches, fetchLivePasteLeaks } from "./fetchers/leaks";
 import {
   PLATFORM_PROBES,
   cleanQuery,
@@ -352,8 +350,7 @@ export function generateNewSuspectProfile(photoUrl: string, capturedAt: string):
     profile.aliasResults,
     profile.shadowAccounts || [],
     profile.locations,
-    profile.cryptoTrace,
-    profile.hibpResult
+    profile.cryptoTrace
   );
   (profile as any).platformStatuses = [
     { name: "GitHub API", status: "Online", responseTimeMs: 140 },
@@ -433,8 +430,7 @@ function generateNexusAnalysis(
   aliasResults: AliasResult[],
   shadowAccounts: any[],
   locations: any[],
-  cryptoTrace: any,
-  hibpResult: any
+  cryptoTrace: any
 ): NexusAnalysis {
   const risk = deriveRisk(accounts, posts, legalRecords);
   const courtCases = legalRecords.filter(r => r.recordType === "Court Case" || r.recordType === "Court Judgment");
@@ -468,12 +464,6 @@ function generateNexusAnalysis(
   }
 
   const anomalies = [];
-  if (hibpResult && hibpResult.status === "FOUND") {
-    anomalies.push({
-      description: `Target email credentials compromised in ${hibpResult.breachCount} public data breach(es).`,
-      severity: "MEDIUM" as const
-    });
-  }
   if (flaggedPosts.length > 0) {
     anomalies.push({
       description: `${flaggedPosts.length} posts flagged for security/risk keyword matches.`,
@@ -513,7 +503,6 @@ function generateNexusAnalysis(
     shadowAccounts,
     locations,
     cryptoTrace,
-    hibpResult,
     risk
   );
 
@@ -536,7 +525,6 @@ function buildLocalInvestigatorBrief(
   shadowAccounts: any[],
   locations: any[],
   cryptoTrace: any,
-  hibpResult: any,
   risk: any
 ): string {
   const parts: string[] = [];
@@ -559,14 +547,14 @@ function buildLocalInvestigatorBrief(
   parts.push(`### Risk Evolution\nThreat score evolved from base: subscore Language (**${risk.riskSubscores.language}**), Behavioral (**${risk.riskSubscores.behavioral}**), Network (**${risk.riskSubscores.network}**), and Legal (**${risk.riskSubscores.legal}**).`);
 
   // Modules Used
-  parts.push(`### Modules Used\nEngaged core OSINT components: \`runRecursiveIdentityReconstruction()\`, \`fetchUpiFootprint()\`, \`fetchHibpBreaches()\`, \`probePublicProfile()\`, and \`deriveRisk()\`.`);
+  parts.push(`### Modules Used\nEngaged core OSINT components: \`runRecursiveIdentityReconstruction()\`, \`probePublicProfile()\`, and \`deriveRisk()\`.`);
 
   // Remaining Unknowns
   parts.push(`### Remaining Unknowns\nSpecific educational records or company affiliations that require manual eCourts and social handle validation.`);
 
   // Recommended Next Steps
   if (legalRecords.length > 0) {
-    parts.push(`### Recommended Next Steps\nFile Section 65B forensic report. Audit linked UPI accounts and request complete court details from eCourts.`);
+    parts.push(`### Recommended Next Steps\nFile Section 65B forensic report and request complete court details from eCourts.`);
   } else {
     parts.push(`### Recommended Next Steps\nTrack primary and shadow profiles for updates. Manually verify cross-platform display names.`);
   }
@@ -628,7 +616,12 @@ export async function investigateSingleUsername(
   allowedTiers: number[] = [1, 2, 3]
 ): Promise<SuspectProfile> {
   const username = cleanQuery(query);
-  let realName = type === "crypto" ? `Crypto Custodian (${query.slice(0, 8)}...)` : type === "name" ? query.trim() : displayNameFromQuery(username);
+  const parsedName = parseRealNameFromUsername(username);
+  let realName = type === "crypto" 
+    ? `Crypto Custodian (${query.slice(0, 8)}...)` 
+    : type === "name" 
+      ? query.trim() 
+      : parsedName || displayNameFromQuery(username);
   const legalName = type === "name" ? realName : displayNameFromQuery(username);
 
 
@@ -654,11 +647,8 @@ export async function investigateSingleUsername(
 
   let indianKanoonRecords: any[] = [];
   let mcaRecords: any[] = [];
-  let upiFootprint: any = undefined;
-  let hibpResult: any = undefined;
   let newsArticles: any[] = [];
   let searchCrawled: any = undefined;
-  let darkWebPastes: any[] = [];
 
   const accounts: PlatformAccount[] = [];
 
@@ -693,7 +683,7 @@ export async function investigateSingleUsername(
     try {
       if (probe.platform === "linkedin") {
         const provider = new LinkedInProvider();
-        const intel = await provider.fetchProfile(normalized);
+        const intel = await provider.fetchProfile(normalized, realName);
         if (intel) {
           const ok = !!intel.fullName?.value;
           result = {
@@ -707,7 +697,7 @@ export async function investigateSingleUsername(
               education: intel.educations?.[0]?.institution?.value || null,
               headline: intel.headline?.value || null,
               avatar: intel.avatarUrl?.value || null,
-              profileUrl: intel.profileUrl.value,
+              profileUrl: intel.profileUrl?.value || "",
               summary: intel.summary?.value || null,
             },
           };
@@ -738,11 +728,8 @@ export async function investigateSingleUsername(
     Promise.all([
       type === "name" || type === "username" ? fetchIndianKanoon(legalName || query) : Promise.resolve([]),
       type === "name" || type === "username" ? fetchMcaCompanySearch(legalName || query) : Promise.resolve([]),
-      type === "phone" ? fetchUpiFootprint(query) : Promise.resolve(undefined),
-      type === "email" ? fetchHibpBreaches(query) : Promise.resolve(undefined),
       type === "crypto" ? Promise.resolve([] as any[]) : fetchNewsArticles(type === "name" ? query : `${realName} ${username}`.trim()),
       searchWebForSocialProfiles(query, capturedAt),
-      fetchLivePasteLeaks(query),
     ]),
     // GitHub rich API
     (type === "crypto" || !allowedTiers.includes(1))
@@ -783,11 +770,8 @@ export async function investigateSingleUsername(
   [
     indianKanoonRecords,
     mcaRecords,
-    upiFootprint,
-    hibpResult,
     newsArticles,
     searchCrawled,
-    darkWebPastes,
   ] = legalSearchResults as any[];
 
   // Unpack rich API results
@@ -813,11 +797,7 @@ export async function investigateSingleUsername(
         capturedAt,
       });
     }
-    if (upiFootprint?.truecaller?.status === "SUCCESS") {
-      logStatus("Truecaller", "FOUND", 180);
-    } else {
-      logStatus("Truecaller", "NOT FOUND", 180);
-    }
+
   }
 
   // Log rich API statuses
@@ -863,7 +843,8 @@ export async function investigateSingleUsername(
 
   const parsedAccounts: PlatformAccount[] = (probeResults as any[])
     .filter(({ probe, result }: { probe: any; result: any }) => {
-      if (!result.ok) return false;
+      const isPrivate = result.status === 401 || (result.status === 403 && (probe.platform === "instagram" || probe.platform === "twitter" || probe.platform === "medium"));
+      if (!result.ok && !isPrivate) return false;
       if (probe.platform === "github" && !github.account && result.status !== 200) return false;
       if (probe.platform === "hackernews" && !hackerNews.account && result.status !== 200) return false;
       if (probe.platform === "devto" && !devTo.account && result.status !== 200) return false;
@@ -884,6 +865,10 @@ export async function investigateSingleUsername(
       let profilePicUrl = richAccount?.profilePicUrl || result.profilePicUrl;
       if (probe.platform === "instagram" && !profilePicUrl) {
         profilePicUrl = (result as any).instagramMeta?.avatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`;
+      } else if (probe.platform === "telegram" && !profilePicUrl) {
+        profilePicUrl = (result as any).telegramMeta?.avatar || "";
+      } else if (probe.platform === "linkedin" && !profilePicUrl) {
+        profilePicUrl = (result as any).linkedinMeta?.avatar || "";
       } else if (probe.platform === "youtube" && !profilePicUrl) {
         profilePicUrl = (result as any).youtubeMeta?.avatar || "";
       } else if (probe.platform === "pinterest" && !profilePicUrl) {
@@ -905,8 +890,8 @@ export async function investigateSingleUsername(
         tier: probe.tier,
         username: resolvedUsername,
         profileUrl: resolvedProfileUrl,
-        displayName: richAccount?.displayName || (result as any).instagramMeta?.displayName || (result as any).youtubeMeta?.channelName || (result as any).pinterestMeta?.displayName || (result as any).linkedinMeta?.fullName || result.title?.split("|")[0]?.trim().slice(0, 60) || `${probe.label} profile`,
-        bio: richAccount?.bio || (result as any).instagramMeta?.bio || (result as any).youtubeMeta?.description || (result as any).pinterestMeta?.bio || result.description || `Public ${probe.label} profile confirmed during live acquisition.`,
+        displayName: richAccount?.displayName || (result as any).instagramMeta?.displayName || (result as any).telegramMeta?.displayName || (result as any).youtubeMeta?.channelName || (result as any).pinterestMeta?.displayName || (result as any).linkedinMeta?.fullName || result.title?.split("|")[0]?.trim().slice(0, 60) || `${probe.label} profile`,
+        bio: richAccount?.bio || (result as any).instagramMeta?.bio || (result as any).telegramMeta?.bio || (result as any).youtubeMeta?.description || (result as any).pinterestMeta?.bio || result.description || `Public ${probe.label} profile confirmed during live acquisition.`,
         profilePicUrl,
         deepfakeFlag: false,
         followers: richAccount?.followers ?? (instagramFollowers || youtubeFollowers || pinterestFollowers || 0),
@@ -1008,25 +993,40 @@ export async function investigateSingleUsername(
     if (redditAcc) redditAcc.redditIntel = redditIntelData;
   }
 
-  const hasGithubAccount = accounts.some(a => a.platform === "github");
-  if (!hasGithubAccount && github.account && github.resolvedUsername) {
-    const resolvedUrl = `https://github.com/${github.resolvedUsername}`;
-    accounts.unshift({
-      id: `github-fuzzy-${github.resolvedUsername}`,
-      platform: "github",
-      tier: 1,
-      username: github.resolvedUsername,
-      profileUrl: resolvedUrl,
-      displayName: github.account.displayName || github.resolvedUsername,
-      bio: github.account.bio || "Public GitHub profile found via fuzzy username matching.",
-      profilePicUrl: github.account.profilePicUrl,
-      deepfakeFlag: false,
-      followers: github.account.followers ?? 0,
-      creationDate: github.account.creationDate || new Date().toISOString().slice(0, 10),
-      confidence: "PROBABLE",
-      reason: `Fuzzy username match: "${username}" → "${github.resolvedUsername}". Live GitHub API data verified.`,
-      capturedAt,
-    });
+  // Find or create the GitHub account in the accounts array and attach the live API githubIntel
+  const githubIdx = accounts.findIndex(a => a.platform === "github");
+  if (github.account && github.resolvedUsername) {
+    if (githubIdx !== -1) {
+      accounts[githubIdx] = {
+        ...accounts[githubIdx],
+        displayName: github.account.displayName || accounts[githubIdx].displayName,
+        bio: (github.account.bio && github.account.bio !== "Public GitHub profile found. No bio exposed." ? github.account.bio : accounts[githubIdx].bio) || "",
+        profilePicUrl: github.account.profilePicUrl || accounts[githubIdx].profilePicUrl,
+        followers: github.account.followers || accounts[githubIdx].followers,
+        creationDate: github.account.creationDate || accounts[githubIdx].creationDate || new Date().toISOString().slice(0, 10),
+        githubIntel: github.account.githubIntel,
+      };
+    } else {
+      // Add a new fuzzy account
+      const resolvedUrl = `https://github.com/${github.resolvedUsername}`;
+      accounts.unshift({
+        id: `github-fuzzy-${github.resolvedUsername}`,
+        platform: "github",
+        tier: 1,
+        username: github.resolvedUsername,
+        profileUrl: resolvedUrl,
+        displayName: github.account.displayName || github.resolvedUsername,
+        bio: github.account.bio || "Public GitHub profile found via fuzzy username matching.",
+        profilePicUrl: github.account.profilePicUrl,
+        deepfakeFlag: false,
+        followers: github.account.followers ?? 0,
+        creationDate: github.account.creationDate || new Date().toISOString().slice(0, 10),
+        confidence: "PROBABLE",
+        reason: `Fuzzy username match: "${username}" → "${github.resolvedUsername}". Live GitHub API data verified.`,
+        capturedAt,
+        githubIntel: github.account.githubIntel,
+      });
+    }
 
     if (github.account.displayName && type !== "name" && type !== "crypto") {
       realName = github.account.displayName;
@@ -1052,53 +1052,66 @@ export async function investigateSingleUsername(
     }
   }
 
-  const primaryBio = github.account?.bio || devTo.account?.bio || "";
-  if (primaryBio) {
-    const bioHandles = parseHandlesFromBio(primaryBio);
-    const newHandles = bioHandles.filter(bh => 
-      !accounts.some(a => a.platform === bh.platform && a.username.toLowerCase() === bh.username.toLowerCase())
-    );
+  // Scan bios of ALL discovered accounts for cross-platform handles (Telegram, LinkedIn, GitHub, etc.)
+  const allBios = accounts.map(a => a.bio).filter(Boolean) as string[];
+  const newHandlesMap = new Map<string, { platform: string; username: string }>();
 
-    if (newHandles.length > 0) {
-      const bioHopTasks = newHandles.map(async (bh) => {
-        const probe = PLATFORM_PROBES.find(p => p.platform === bh.platform);
-        if (!probe) return null;
-        const normalized = probe.normalize ? probe.normalize(bh.username) : bh.username;
-        const profileUrl = probe.url(normalized);
-        try {
-          const result = await probePublicProfile(profileUrl);
-          if (result.ok) {
-            let profilePicUrl: string | undefined =
-              probe.platform === "instagram"
-                ? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`
-                : undefined;
-            return {
-              id: `${probe.platform}-${normalized}-bio-hop`,
-              platform: probe.platform,
-              tier: probe.tier,
-              username: normalized,
-              profileUrl,
-              displayName: result.title?.split("|")[0]?.trim().slice(0, 60) || `${probe.label} profile`,
-              bio: result.description || `Public ${probe.label} profile confirmed via bio cross-reference.`,
-              profilePicUrl,
-              deepfakeFlag: false,
-              followers: 0,
-              creationDate: new Date().toISOString().slice(0, 10),
-              confidence: "CONFIRMED" as const,
-              reason: `Discovered from bio mention. Verified at ${profileUrl}.`,
-              capturedAt,
-            };
-          }
-        } catch (e) {
-          console.error(`[SOCMINT] Bio hop probe failed for ${profileUrl}:`, e);
-        }
-        return null;
-      });
-
-      const hopResults = await Promise.all(bioHopTasks);
-      for (const res of hopResults) {
-        if (res) accounts.push(res);
+  for (const bio of allBios) {
+    const bioHandles = parseHandlesFromBio(bio);
+    for (const bh of bioHandles) {
+      const key = `${bh.platform}:${bh.username.toLowerCase()}`;
+      const exists = accounts.some(a => a.platform === bh.platform && a.username.toLowerCase() === bh.username.toLowerCase());
+      if (!exists && !newHandlesMap.has(key)) {
+        newHandlesMap.set(key, bh);
       }
+    }
+  }
+
+  const newHandles = Array.from(newHandlesMap.values());
+
+  if (newHandles.length > 0) {
+    const bioHopTasks = newHandles.map(async (bh) => {
+      const probe = PLATFORM_PROBES.find(p => p.platform === bh.platform);
+      if (!probe) return null;
+      const normalized = probe.normalize ? probe.normalize(bh.username) : bh.username;
+      const profileUrl = probe.url(normalized);
+      try {
+        const result = await probePublicProfile(profileUrl);
+        const isPrivate = result.status === 401 || (result.status === 403 && (probe.platform === "instagram" || probe.platform === "twitter" || probe.platform === "medium"));
+        if (result.ok || isPrivate) {
+          let profilePicUrl: string | undefined = result.profilePicUrl;
+          if (probe.platform === "instagram" && !profilePicUrl) {
+            profilePicUrl = (result as any).instagramMeta?.avatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`;
+          } else if (!profilePicUrl) {
+            profilePicUrl = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(normalized)}`;
+          }
+
+          return {
+            id: `${probe.platform}-${normalized}-bio-hop`,
+            platform: probe.platform,
+            tier: probe.tier,
+            username: normalized,
+            profileUrl,
+            displayName: (result as any).instagramMeta?.displayName || result.title?.split("|")[0]?.trim().slice(0, 60) || `${probe.label} profile`,
+            bio: (result as any).instagramMeta?.bio || result.description || `Public ${probe.label} profile confirmed via bio cross-reference.`,
+            profilePicUrl,
+            deepfakeFlag: false,
+            followers: (result as any).instagramMeta?.followers ? parseInt(String((result as any).instagramMeta.followers).replace(/[^\d]/g, "")) : 0,
+            creationDate: new Date().toISOString().slice(0, 10),
+            confidence: "CONFIRMED" as const,
+            reason: `Discovered from bio mention. Verified at ${profileUrl}.`,
+            capturedAt,
+          };
+        }
+      } catch (e) {
+        console.error(`[SOCMINT] Bio hop probe failed for ${profileUrl}:`, e);
+      }
+      return null;
+    });
+
+    const hopResults = await Promise.all(bioHopTasks);
+    for (const res of hopResults) {
+      if (res) accounts.push(res);
     }
   }
 
@@ -1147,12 +1160,14 @@ export async function investigateSingleUsername(
       content = `Excited to share my latest thoughts on technology and software. Let's connect and build something great together! — ${a.displayName || a.username}`;
     }
 
+    const flagInfo = getPostFlagDetails(content);
     return {
       id: `linkedin-post-${a.username || "user"}-${idx}`,
       platform: "linkedin",
       content,
       postedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-      flagLevel: "NORMAL" as const,
+      flagLevel: flagInfo.flagLevel,
+      flagReason: flagInfo.flagReason,
       capturedAt,
     };
   });
@@ -1171,12 +1186,14 @@ export async function investigateSingleUsername(
       content = `Exploring new sights and coding away! 🌆☕️ — @${a.username} #devlife #travel`;
     }
 
+    const flagInfo = getPostFlagDetails(content);
     return {
       id: `instagram-post-${a.username || "user"}-${idx}`,
       platform: "instagram",
       content,
       postedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-      flagLevel: "NORMAL" as const,
+      flagLevel: flagInfo.flagLevel,
+      flagReason: flagInfo.flagReason,
       capturedAt,
     };
   });
@@ -1591,21 +1608,36 @@ export async function investigateSingleUsername(
     shadowResults.length > 0
       ? `${shadowResults.length} shadow/backup account candidate(s) flagged via Levenshtein handle analysis and bio cross-reference.`
       : "Shadow account prober found no suspicious variant handles in this sweep.",
-    hibpResult && hibpResult.status === "FOUND"
-      ? `⚠️ Email found in ${hibpResult.breachCount} data breach(es) via HIBP — credentials may be compromised.`
-      : "Data breach check: not performed (email not provided or API not configured).",
+
     cryptoTrace && cryptoTrace.associatedMixers && cryptoTrace.associatedMixers.length > 0 && cryptoTrace.address
       ? `⚠️ Crypto ledger address ${cryptoTrace.address.slice(0, 10)}... linked to mixing service: ${cryptoTrace.associatedMixers.join(", ")}.`
       : "Cryptocurrency ledger trace shows no active mixer integrations.",
     "All evidence sourced from public OSINT only. DPDP Act 2023 & Section 65B IEA compliant.",
   ];
 
-  const instagramAccount = accounts.find(a => a.platform === "instagram" && a.profilePicUrl);
-  const primaryPhoto = instagramAccount?.profilePicUrl
-    || github.account?.profilePicUrl
-    || devTo.account?.profilePicUrl
-    || gitLab.account?.profilePicUrl
-    || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(realName)}`;
+  const sanitizePhotoUrl = (url?: string, seed?: string): string => {
+    if (!url) return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(seed || "Suspect")}`;
+    const l = url.toLowerCase();
+    if (l.includes("akamaihd.net") || l.includes("anonymoususer") || l.includes("placeholder")) {
+      return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(seed || "Suspect")}`;
+    }
+    return url;
+  };
+
+  accounts.forEach(a => {
+    a.profilePicUrl = sanitizePhotoUrl(a.profilePicUrl, a.username);
+  });
+
+  const instagramAccount = accounts.find(a => a.platform === "instagram" && a.profilePicUrl && !a.profilePicUrl.includes("dicebear"));
+  const linkedinAccount = accounts.find(a => a.platform === "linkedin" && a.profilePicUrl && !a.profilePicUrl.includes("dicebear"));
+  const primaryPhoto = sanitizePhotoUrl(
+    instagramAccount?.profilePicUrl
+      || linkedinAccount?.profilePicUrl
+      || github.account?.profilePicUrl
+      || devTo.account?.profilePicUrl
+      || gitLab.account?.profilePicUrl,
+    realName
+  );
 
   const nodes: import("./types").NetworkNode[] = [
     { id: realName, label: `${realName}\n(Query Subject)`, group: "suspect", val: 30 }
@@ -1646,21 +1678,7 @@ export async function investigateSingleUsername(
     });
   });
 
-  if (hibpResult && hibpResult.status === "FOUND") {
-    const nodeId = `email:${hibpResult.email}`;
-    nodes.push({
-      id: nodeId,
-      label: `EMAIL LEAK\n${hibpResult.email}`,
-      group: "mule",
-      val: 14
-    });
-    links.push({
-      source: realName,
-      target: nodeId,
-      type: "OWNS",
-      weight: 4
-    });
-  }
+
 
   aliasResults.forEach((alias) => {
     const nodeId = `alias:${alias.handle}`;
@@ -1893,8 +1911,7 @@ export async function investigateSingleUsername(
     posts,
     legalRecords,
     aliasResults,
-    upiFootprint: upiFootprint || getDemoUpiFootprint(username),
-    hibpResult,
+
     newsArticles,
     shadowAccounts: shadowResults,
     cryptoTrace,
@@ -1904,7 +1921,7 @@ export async function investigateSingleUsername(
       links,
     },
     locations,
-    darkWebPastes,
+
     nexusAnalysis: generateNexusAnalysis(
       username,
       realName,
@@ -1914,8 +1931,7 @@ export async function investigateSingleUsername(
       aliasResults,
       shadowResults,
       locations,
-      cryptoTrace,
-      hibpResult
+      cryptoTrace
     ),
     caseReference: `LIVE-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
     capturedAt,
@@ -1990,7 +2006,6 @@ export async function investigateSingleUsername(
       shadowResults,
       locations,
       cryptoTrace,
-      hibpResult,
       risk
     ),
     platformStatuses,
@@ -2027,7 +2042,6 @@ function buildInvestigationSteps(
   shadowResults: any[],
   locations: any[],
   cryptoTrace: any,
-  hibpResult: any,
   risk: any
 ): string[] {
   const steps: string[] = [];
@@ -2058,18 +2072,7 @@ function buildInvestigationSteps(
     }
   });
 
-  // HIBP step
-  if (hibpResult && hibpResult.status === "FOUND") {
-    steps.push(`Scanning HIBP breach corpus... status: Compromised (${hibpResult.breachCount} breach(es) found).`);
-  } else {
-    steps.push("Scanning HIBP breach corpus... status: Clean / Not configured.");
-  }
 
-  // UPI step
-  const upiAcc = accounts.find(a => a.platform === "upi");
-  if (upiAcc) {
-    steps.push("Tracing UPI footprints & Truecaller circle data... status: Found.");
-  }
 
   // Crypto step
   if (cryptoTrace && cryptoTrace.address) {
@@ -2269,8 +2272,7 @@ export function mergeProfiles(profiles: SuspectProfile[], primaryName?: string):
   const bestPhoto = profiles.find(p => p.photoUrl && !p.photoUrl.includes("dicebear"))?.photoUrl;
   if (bestPhoto) base.photoUrl = bestPhoto;
 
-  if (!base.hibpResult) base.hibpResult = profiles.find(p => p.hibpResult)?.hibpResult;
-  if (!base.upiFootprint) base.upiFootprint = profiles.find(p => p.upiFootprint)?.upiFootprint;
+
   if (!base.cryptoTrace) base.cryptoTrace = profiles.find(p => p.cryptoTrace)?.cryptoTrace;
   if (!base.faceScan) base.faceScan = profiles.find(p => p.faceScan)?.faceScan;
   if (!base.waybackArchive) base.waybackArchive = profiles.find(p => p.waybackArchive)?.waybackArchive;
@@ -2417,13 +2419,17 @@ Return ONLY a JSON array of strings, no explanation. Example: ["user_dev", "user
     
     const match = text.match(/\[[\s\S]*?\]/);
     if (match) {
-      const parsed = JSON.parse(match[0]);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter((v: unknown): v is string => typeof v === "string")
-          .map(v => v.trim().replace(/^@/, ""))
-          .filter(v => v.length > 0 && v.toLowerCase() !== username.toLowerCase())
-          .slice(0, 5);
+      try {
+        const parsed = JSON.parse(match[0]);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((v: unknown): v is string => typeof v === "string")
+            .map(v => v.trim().replace(/^@/, ""))
+            .filter(v => v.length > 0 && v.toLowerCase() !== username.toLowerCase())
+            .slice(0, 5);
+        }
+      } catch (jsonErr) {
+        console.warn("JSON parsing of NIM username variants failed:", jsonErr);
       }
     }
   } catch (err) {
@@ -2478,7 +2484,41 @@ export async function investigateMultiField(dossier: DossierInput): Promise<Susp
     sweepPromises.push(investigatePublicSubject(dossier.realName.trim(), "name"));
   }
 
+  if (dossier.email.trim()) {
+    sweepPromises.push(investigatePublicSubject(dossier.email.trim(), "email"));
+  }
+
+  if (dossier.phone.trim()) {
+    sweepPromises.push(investigatePublicSubject(dossier.phone.trim(), "phone"));
+  }
+
   const profiles = await Promise.all(sweepPromises);
+
+  if (profiles.length === 0) {
+    const fallbackProfile: SuspectProfile = {
+      username: usernames.map(u => `@${u}`).join(", ") || "new_suspect",
+      realName: dossier.realName.trim() || "Unknown Suspect",
+      phoneNumber: dossier.phone.trim() || "Not provided",
+      emailAddress: dossier.email.trim() || "Not provided",
+      photoUrl: dossier.faceData || "",
+      riskScore: 0,
+      riskLevel: "LOW" as const,
+      riskSubscores: { language: 0, behavioral: 0, network: 0, legal: 0 },
+      riskSignals: [],
+      accounts: [],
+      posts: [],
+      legalRecords: [],
+      aliasResults: [],
+      network: { nodes: [], links: [] },
+      locations: [],
+      caseReference: `DOSSIER-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      capturedAt: new Date().toISOString(),
+    };
+    if (dossier.faceData) {
+      fallbackProfile.faceScan = generateFaceScanResult(dossier.faceData, fallbackProfile.realName);
+    }
+    return withSearchIntel(fallbackProfile);
+  }
 
   const meaningfulProfiles = profiles.filter(p => p.accounts.length > 0);
   const finalProfiles = meaningfulProfiles.length > 0 ? meaningfulProfiles : [profiles[0]];
@@ -2487,22 +2527,10 @@ export async function investigateMultiField(dossier: DossierInput): Promise<Susp
 
   if (dossier.email.trim()) {
     merged.emailAddress = dossier.email.trim();
-    try {
-      const hibp = await fetchHibpBreaches(dossier.email.trim());
-      if (hibp) merged.hibpResult = hibp;
-    } catch (e) {
-      console.error("[DOSSIER] HIBP check failed:", e);
-    }
   }
 
   if (dossier.phone.trim()) {
     merged.phoneNumber = dossier.phone.trim();
-    try {
-      const upi = await fetchUpiFootprint(dossier.phone.trim());
-      if (upi) merged.upiFootprint = upi;
-    } catch (e) {
-      console.error("[DOSSIER] UPI footprint check failed:", e);
-    }
   }
 
   if (dossier.faceData) {

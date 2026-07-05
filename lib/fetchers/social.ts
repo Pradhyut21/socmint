@@ -2,6 +2,8 @@ import { PlatformAccount, Post, SuspectProfile } from "../types";
 import { getDemoProbeResult, getDemoGithubData } from "../mock/demoData";
 import { UNRELIABLE_PLATFORMS } from "../unreliablePlatforms";
 
+import { getPostFlagDetails } from "../risk/contentRiskClassifier";
+
 export type ProbeResult = {
   ok: boolean;
   status?: number;
@@ -152,15 +154,17 @@ export function parseHandlesFromBio(bio: string): { platform: string; username: 
         const match = after.match(/(?:[:\s\-@=]+)((?:[a-zA-Z0-9_\-\s]+|[.,](?!\s|$))+)/);
         if (match && match[1]) {
           let resolved = match[1].trim();
-          const stopWords = [" and ", " at ", " in ", " for ", " on ", " - ", " | "];
-          for (const stop of stopWords) {
-            const stopIdx = resolved.toLowerCase().indexOf(stop);
-            if (stopIdx !== -1) {
-              resolved = resolved.slice(0, stopIdx).trim();
-            }
-          }
+          
+          // Split by whitespace to extract only the first word (the handle)
+          resolved = resolved.split(/\s+/)[0];
+
+          // Strip any leading @ if still present
+          resolved = resolved.replace(/^@/, "");
+
           resolved = resolved.replace(/[.,|()]+$/, "").trim();
-          if (resolved && resolved.length > 2 && !["com", "http", "https"].includes(resolved.toLowerCase())) {
+          
+          // Validate using standard username characters (letters, numbers, underscores, dots, hyphens)
+          if (resolved && resolved.length > 2 && !["com", "http", "https"].includes(resolved.toLowerCase()) && /^[a-zA-Z0-9_.-]+$/.test(resolved)) {
             found.push({ platform: plat.name, username: resolved });
           }
         }
@@ -178,7 +182,7 @@ export function buildExpandedSearchQuery(query: string): string {
     return cleaned;
   }
 
-  const parts = cleaned.split(/[_\-\s]+/);
+  const parts = cleaned.split(/[._\-\s]+/);
   if (parts.length > 1) {
     const spaceVariant = parts.join(" ");
     const hyphenVariant = parts.join("-");
@@ -210,18 +214,26 @@ export function isSimilarUsername(u1: string, u2: string): boolean {
   const clean2 = u2.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!clean1 || !clean2) return false;
 
-  // If one contains the other, allow if it's not a short common substring
-  if (clean1.includes(clean2) || clean2.includes(clean1)) {
-    const minLen = Math.min(clean1.length, clean2.length);
-    if (minLen >= 4) return true;
+  // If very short, they must match exactly at the beginning
+  if (clean1.length < 4 || clean2.length < 4) {
+    return clean1.slice(0, 3) === clean2.slice(0, 3);
   }
 
-  const maxLen = Math.max(clean1.length, clean2.length);
-  if (maxLen === 0) return false;
+  // "starting from 4 letter matching" — must share the first 4 letters as prefix (or Levenshtein diff of at most 1 character)
+  const prefix1 = clean1.slice(0, 4);
+  const prefix2 = clean2.slice(0, 4);
 
-  const dist = levenshteinDistance(clean1, clean2);
-  const similarity = 1 - dist / maxLen;
-  return similarity >= 0.65;
+  const prefixDist = levenshteinDistance(prefix1, prefix2);
+  if (prefixDist <= 1) {
+    // Additionally, verify overall similarity is high
+    const maxLen = Math.max(clean1.length, clean2.length);
+    const dist = levenshteinDistance(clean1, clean2);
+    const similarity = 1 - dist / maxLen;
+    // Lower threshold of 0.48 since they already share the prefix!
+    return similarity >= 0.48;
+  }
+
+  return false;
 }
 
 
@@ -252,8 +264,8 @@ export async function fetchProfileViaSearchEngineAndWayback(
       html = await resp.text();
       searchEngine = "yahoo";
     }
-  } catch (e) {
-    console.error(`[OSINT-SEARCH] Yahoo search failed for ${platform}:${username}`, e);
+  } catch (e: any) {
+    console.warn(`[OSINT-SEARCH] Yahoo search query offline for ${platform}:${username}: ${e.message || e}`);
   }
   
   if (!html) {
@@ -265,8 +277,8 @@ export async function fetchProfileViaSearchEngineAndWayback(
         html = await resp.text();
         searchEngine = "bing";
       }
-    } catch (e) {
-      console.error(`[OSINT-SEARCH] Bing search failed for ${platform}:${username}`, e);
+    } catch (e: any) {
+      console.warn(`[OSINT-SEARCH] Bing search query offline for ${platform}:${username}: ${e.message || e}`);
     }
   }
   
@@ -328,8 +340,8 @@ export async function fetchProfileViaSearchEngineAndWayback(
         }
       }
     }
-  } catch (e) {
-    console.error(`[OSINT-SEARCH] Wayback CDX failed for ${platform}:${username}`, e);
+  } catch (e: any) {
+    console.warn(`[OSINT-SEARCH] Wayback CDX offline for ${platform}:${username}: ${e.message || e}`);
   }
 
   if (waybackHtml) {
@@ -1287,6 +1299,53 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
     }
   }
 
+  // ── Telegram: fetch public preview page and parse name/bio ──────────────────
+  if (lowercaseUrl.includes("t.me/")) {
+    const tgUser = lowercaseUrl.split("t.me/")[1]?.split("/")[0]?.split("?")[0] || "";
+    if (tgUser && !["share", "addstickers", "setlanguage", "contact", "s"].includes(tgUser)) {
+      try {
+        console.log(`[TELEGRAM] Querying public profile for "${tgUser}"...`);
+        const resp = await fetchWithTimeout(`https://t.me/${tgUser}`, 5000);
+        if (resp.ok) {
+          const html = await resp.text();
+          
+          const ogTitle = extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+            || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+          
+          const ogDesc = extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+            || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+
+          const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+
+          const exists = ogTitle && !ogTitle.includes("Telegram: Contact") && !html.includes("If you have Telegram, you can contact");
+          const hasBio = ogDesc && !ogDesc.includes("Telegram is a cloud-based") && !ogDesc.includes("You can contact");
+          const hasTitle = ogTitle && ogTitle.trim() && ogTitle !== `Contact @${tgUser}`;
+
+          if (exists || hasBio || hasTitle) {
+            console.log(`[TELEGRAM] ✓ Found active Telegram profile: "${ogTitle || tgUser}"`);
+            const telegramMeta = {
+              username: tgUser,
+              displayName: ogTitle || tgUser,
+              bio: ogDesc || null,
+              avatar: ogImage || null,
+              profileUrl: url,
+            };
+            return {
+              ok: true,
+              status: 200,
+              title: ogTitle || tgUser,
+              description: ogDesc || `Telegram profile for @${tgUser}`,
+              telegramMeta,
+            } as any;
+          }
+        }
+        return { ok: false, status: 404 };
+      } catch (e: any) {
+        console.warn(`[TELEGRAM] Error probing: ${e.message || e}`);
+      }
+    }
+  }
+
   // ── Instagram: use internal web API to bypass the login wall ─────────────────
   // Instagram's web app makes this call itself — no auth required, just the app ID.
   if (lowercaseUrl.includes("instagram.com/") && !lowercaseUrl.includes("/p/") && !lowercaseUrl.includes("/reel/")) {
@@ -1684,12 +1743,15 @@ export function formatGithubEvent(event: any): Post {
     content = `${event.payload?.action || "Opened"} issue #${event.payload?.issue?.number || ""} in ${event.repo?.name || "repository"}`;
   }
   
+  const flagInfo = getPostFlagDetails(content);
+  
   return {
     id: `github-${event.id}`,
     platform: "github",
     content,
     postedAt: event.created_at,
-    flagLevel: "NORMAL",
+    flagLevel: flagInfo.flagLevel,
+    flagReason: flagInfo.flagReason,
     capturedAt: new Date().toISOString(),
   };
 }
@@ -1920,8 +1982,8 @@ export async function fetchGithubActivity(username: string, isNameQuery = false,
     // Last resort: fuzzy username search
     return await fuzzyGithubSearch(username);
 
-  } catch (err) {
-    console.error(`[GITHUB] Network error for "${username}":`, err);
+  } catch (err: any) {
+    console.warn(`[GITHUB] Network error for "${username}": ${err.message || err}`);
     // On network failure, try demo data
     const demoData = getDemoGithubData(username);
     if (demoData) return demoData;
@@ -2041,10 +2103,11 @@ export async function fetchRedditActivity(username: string): Promise<Post[]> {
         platform:  "reddit",
         content:   [child.data.title, child.data.selftext].filter(Boolean).join(" - ").slice(0, 420),
         postedAt:  new Date(child.data.created_utc * 1000).toISOString(),
-        flagLevel: scoreText(child.data.title + " " + (child.data.selftext || "")) > 0
-          ? "SUSPICIOUS"
-          : "NORMAL",
-        flagReason:  "Keyword match in public Reddit submission.",
+        ...(() => {
+          const contentText = [child.data.title, child.data.selftext].filter(Boolean).join(" - ").slice(0, 420);
+          const flagInfo = getPostFlagDetails(contentText);
+          return { flagLevel: flagInfo.flagLevel, flagReason: flagInfo.flagReason || "Keyword match in public Reddit submission." };
+        })(),
         capturedAt:  new Date().toISOString(),
         // Attach intel to the first post so liveSocmint can pick it up
         ...(child === children[0] && redditIntel ? { _redditIntel: redditIntel } : {}),
@@ -2084,8 +2147,10 @@ export async function fetchHackerNewsActivity(username: string): Promise<{ accou
           platform: "hackernews",
           content,
           postedAt: new Date((item.time || 0) * 1000).toISOString(),
-          flagLevel: scoreText(content) > 0 ? "SUSPICIOUS" : "NORMAL",
-          flagReason: scoreText(content) > 0 ? "Risk keyword match in HackerNews submission." : undefined,
+          ...(() => {
+            const flagInfo = getPostFlagDetails(content);
+            return { flagLevel: flagInfo.flagLevel, flagReason: flagInfo.flagReason || (flagInfo.flagLevel !== "NORMAL" ? "Risk keyword match in HackerNews submission." : undefined) };
+          })(),
           capturedAt: new Date().toISOString(),
         };
       });
@@ -2120,8 +2185,11 @@ export async function fetchDevToActivity(username: string): Promise<{ account?: 
           platform: "devto",
           content: `${a.title}${a.description ? ` — ${a.description}` : ""}`,
           postedAt: a.published_at || new Date().toISOString(),
-          flagLevel: scoreText(a.title + " " + (a.description || "")) > 0 ? "SUSPICIOUS" : "NORMAL",
-          flagReason: "Risk keyword in Dev.to article.",
+          ...(() => {
+            const contentText = `${a.title}${a.description ? ` — ${a.description}` : ""}`;
+            const flagInfo = getPostFlagDetails(contentText);
+            return { flagLevel: flagInfo.flagLevel, flagReason: flagInfo.flagReason || (flagInfo.flagLevel !== "NORMAL" ? "Risk keyword in Dev.to article." : undefined) };
+          })(),
           capturedAt: new Date().toISOString(),
         }))
       : [];
@@ -2208,8 +2276,8 @@ export async function searchWebForSocialProfiles(query: string, capturedAt: stri
       if (resp.ok) {
         html = await resp.text();
       }
-    } catch (e) {
-      console.error(`[OSINT-SEARCH] Yahoo search query failed:`, e);
+    } catch (e: any) {
+      console.warn(`[OSINT-SEARCH] Yahoo search query offline: ${e.message || e}`);
     }
     
     let blocks = html ? html.split(/<div[^>]*class="[^"]*algo[^"]*"/gi) : [];
@@ -2225,8 +2293,8 @@ export async function searchWebForSocialProfiles(query: string, capturedAt: stri
           html = await resp.text();
           blocks = html.split(/<li[^>]*class="[^"]*b_algo[^"]*"/gi);
         }
-      } catch (e) {
-        console.error(`[OSINT-SEARCH] Fallback Bing search query failed:`, e);
+      } catch (e: any) {
+        console.warn(`[OSINT-SEARCH] Fallback Bing search query offline: ${e.message || e}`);
       }
     }
 

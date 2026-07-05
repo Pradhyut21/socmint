@@ -22,12 +22,19 @@ export const storage = {
     const list = storage.getRecent().filter((x) => x.username !== p.username);
     list.unshift(p);
     localStorage.setItem(KEYS.recent, JSON.stringify(list.slice(0, 24)));
+    window.dispatchEvent(new Event("recent_cases_updated"));
   },
   setRecent(list: SuspectProfile[]) {
     if (typeof window === "undefined") return;
     localStorage.setItem(KEYS.recent, JSON.stringify(list));
+    window.dispatchEvent(new Event("recent_cases_updated"));
   },
-  clearRecent() { if (typeof window !== "undefined") localStorage.removeItem(KEYS.recent); },
+  clearRecent() { 
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(KEYS.recent);
+      window.dispatchEvent(new Event("recent_cases_updated"));
+    }
+  },
 
   getAlerts(): AlertItem[] {
     return safe(() => JSON.parse(localStorage.getItem(KEYS.alerts) || "[]"), []);

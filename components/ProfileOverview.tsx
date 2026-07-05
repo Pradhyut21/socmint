@@ -2,7 +2,7 @@
 
 import React from "react";
 import { SuspectProfile, PlatformAccount } from "../lib/types";
-import { ShieldAlert, ShieldCheck, Mail, Phone, Calendar, ArrowUpRight, Award, Trash2, GraduationCap, Briefcase, Trophy, Globe, Building2 } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Mail, Phone, Calendar, ArrowUpRight, Award, Trash2, GraduationCap, Briefcase, Trophy, Globe, Building2, Instagram, Github, Linkedin, Youtube, Twitter } from "lucide-react";
 
 interface ProfileOverviewProps {
   suspect: SuspectProfile;
@@ -10,6 +10,25 @@ interface ProfileOverviewProps {
 }
 
 export default function ProfileOverview({ suspect, onSelectTab }: ProfileOverviewProps) {
+  const renderPlatformIcon = (platform: string) => {
+    const iconSize = "w-4 h-4";
+    switch (platform.toLowerCase()) {
+      case "instagram":
+        return <Instagram className={iconSize} />;
+      case "github":
+        return <Github className={iconSize} />;
+      case "linkedin":
+        return <Linkedin className={iconSize} />;
+      case "twitter":
+      case "x":
+        return <Twitter className={iconSize} />;
+      case "youtube":
+        return <Youtube className={iconSize} />;
+      default:
+        return <Globe className={iconSize} />;
+    }
+  };
+
   // SVG gauge constants
   const radius = 50;
   const strokeWidth = 10;
@@ -59,9 +78,12 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
           <div className="flex flex-col items-center text-center">
             <div className="relative mb-4">
               <img
-                src={suspect.photoUrl}
+                src={suspect.photoUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(suspect.realName || "Suspect")}`}
                 alt={suspect.realName}
                 className="w-24 h-24 rounded-2xl object-cover border-2 border-slate-800 shadow-lg"
+                onError={(e) => {
+                  e.currentTarget.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(suspect.realName || "Suspect")}`;
+                }}
               />
               <span className={`absolute -bottom-2 -right-2 px-2 py-0.5 text-[10px] font-bold border rounded-md font-mono ${getRiskColor(suspect.riskLevel)}`}>
                 {suspect.riskLevel}
@@ -234,7 +256,7 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
 
                 <div className="flex items-start gap-3">
                   <div className={`p-2 border rounded-lg uppercase text-xs font-bold font-mono ${getPlatformIconColor(acc.platform)}`}>
-                    {acc.platform.substring(0, 2)}
+                    {renderPlatformIcon(acc.platform)}
                   </div>
                   <div className="flex flex-col min-w-0 pr-8">
                     <div className="flex items-center gap-1.5">
@@ -285,120 +307,7 @@ export default function ProfileOverview({ suspect, onSelectTab }: ProfileOvervie
 
         </div>
 
-        {/* Financial Footprint (Phone Search) */}
-        {suspect.upiFootprint && (
-          <div className="glass-panel p-6 rounded-2xl border border-slate-800 mt-6">
-            <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase mb-4">
-              Financial Footprint
-            </h4>
-            
-            <div className="space-y-4 font-mono text-xs">
-              <div className="flex items-start gap-4">
-                <div className="w-1/3 text-slate-500">Phone Queried</div>
-                <div className="w-2/3 text-slate-300">{suspect.upiFootprint.phone}</div>
-              </div>
 
-              <div className="flex items-start gap-4">
-                <div className="w-1/3 text-slate-500">NCRP Database</div>
-                <div className="w-2/3">
-                  {suspect.upiFootprint.ncrp.status === "FOUND_PUBLIC_MENTION" ? (
-                    <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30">
-                      Found {suspect.upiFootprint.ncrp.complaintCount} Complaint(s)
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">Not publicly mentioned</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="w-1/3 text-slate-500">Truecaller Data</div>
-                <div className="w-2/3">
-                  {suspect.upiFootprint.truecaller.name ? (
-                    <div className="space-y-1">
-                      <div className="text-white font-bold">{suspect.upiFootprint.truecaller.name}</div>
-                      {suspect.upiFootprint.truecaller.spamScore && (
-                        <div className="text-rose-400 text-[10px]">Spam Score: {suspect.upiFootprint.truecaller.spamScore}</div>
-                      )}
-                      <div className="text-slate-400 text-[10px]">
-                        {suspect.upiFootprint.truecaller.carrier} • {suspect.upiFootprint.truecaller.telecomCircle}
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="text-slate-400">No public data available</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="border-t border-slate-900 pt-4 mt-4">
-                <div className="text-slate-500 mb-2">Probable UPI IDs (Inferred)</div>
-                <div className="flex flex-wrap gap-2">
-                  {suspect.upiFootprint.probableUpiIds.map((upi: any) => (
-                    <span key={upi.id} className="bg-slate-950/40 border border-slate-800 text-slate-300 px-2 py-1 rounded text-[10px]">
-                      {upi.id}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* HIBP Breach Card (Email Search) */}
-        {suspect.hibpResult && suspect.hibpResult.status !== "NOT_CONFIGURED" && (
-          <div className={`glass-panel p-6 rounded-2xl border mt-6 ${
-            suspect.hibpResult.status === "FOUND"
-              ? "border-rose-500/30 bg-rose-950/5"
-              : "border-emerald-500/20 bg-emerald-950/5"
-          }`}>
-            <div className="flex items-center gap-2 mb-4">
-              {suspect.hibpResult.status === "FOUND" ? (
-                <ShieldAlert className="w-5 h-5 text-rose-400" />
-              ) : (
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              )}
-              <h4 className="text-sm font-semibold text-white font-mono tracking-wider uppercase">
-                Email Breach Intelligence (HIBP)
-              </h4>
-              <span className={`ml-auto text-[9px] font-bold font-mono px-2 py-0.5 rounded border ${
-                suspect.hibpResult.status === "FOUND"
-                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                  : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              }`}>
-                {suspect.hibpResult.status === "FOUND" ? `${suspect.hibpResult.breachCount} BREACHES FOUND` : "CLEAN"}
-              </span>
-            </div>
-
-            <p className="text-[11px] text-slate-400 font-mono mb-4">{suspect.hibpResult.note}</p>
-
-            {suspect.hibpResult.breaches.length > 0 && (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {suspect.hibpResult.breaches.map((breach: any, idx: number) => (
-                  <div key={idx} className="p-3 bg-rose-950/10 border border-rose-500/15 rounded-xl font-mono text-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-rose-300">{breach.name}</span>
-                      <span className="text-[9px] text-slate-500">{breach.breachDate}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {breach.dataClasses.slice(0, 4).map((dc: any, i: number) => (
-                        <span key={i} className="text-[8px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded">
-                          {dc}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1 truncate">{breach.description}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {suspect.hibpResult.pasteCount > 0 && (
-              <div className="mt-3 text-[10px] text-amber-400 font-mono bg-amber-500/5 border border-amber-500/20 px-3 py-2 rounded-lg">
-                ⚠️ Found in {suspect.hibpResult.pasteCount} public paste(s). Credentials may be publicly exposed.
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── LinkedIn Intelligence: College / Work / Hackathons ──────── */}
         {((suspect.education && suspect.education.length > 0) || (suspect.experience && suspect.experience.length > 0) || (suspect.hackathons && suspect.hackathons.length > 0)) && (

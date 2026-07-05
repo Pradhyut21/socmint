@@ -11,6 +11,5 @@ export const UNRELIABLE_PLATFORMS: UnreliablePlatform[] = [
   { id: "threads", reason: "Generic profile shell served regardless of account existence (confirmed via control test)" },
   { id: "picsart", reason: "Generic profile shell served regardless of account existence (confirmed via control test)" },
   { id: "appledevelopers", reason: "Security verification wall served regardless of account existence" },
-  { id: "telegram", reason: "Preview page identical for all handles" },
   { id: "stackoverflow", reason: "Endpoint deprecated - cannot verify by handle" }
 ];

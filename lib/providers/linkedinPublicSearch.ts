@@ -48,10 +48,10 @@ export class LinkedInPublicSearchProvider {
 
     // ── Concurrently fetch all search sources ──
     const [bingRes, ddgRes, yahooRes, waybackRes] = await Promise.all([
-      this.queryBing(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] Bing failed:", e); return null; }),
-      this.queryDDG(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] DDG failed:", e); return null; }),
-      this.queryYahoo(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] Yahoo failed:", e); return null; }),
-      this.queryWaybackCDX(cleanUsername).catch(e => { console.error("[LINKEDIN-SEARCH] Wayback CDX failed:", e); return null; })
+      this.queryBing(cleanUsername).catch(e => { console.warn(`[LINKEDIN-SEARCH] Bing query offline: ${e.message || e}`); return null; }),
+      this.queryDDG(cleanUsername).catch(e => { console.warn(`[LINKEDIN-SEARCH] DDG query offline: ${e.message || e}`); return null; }),
+      this.queryYahoo(cleanUsername).catch(e => { console.warn(`[LINKEDIN-SEARCH] Yahoo query offline: ${e.message || e}`); return null; }),
+      this.queryWaybackCDX(cleanUsername).catch(e => { console.warn(`[LINKEDIN-SEARCH] Wayback CDX offline: ${e.message || e}`); return null; })
     ]);
 
     const bingDuration = Date.now() - bingStart;

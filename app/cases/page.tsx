@@ -112,7 +112,14 @@ export default function CasesPage() {
                 <Card className="h-full transition-shadow hover:shadow-md">
                   <CardContent className="space-y-3 p-4">
                     <div className="flex items-start gap-3">
-                      <img src={p.photoUrl} alt={p.realName} className="h-12 w-12 rounded-md border border-border bg-muted object-cover" />
+                      <img
+                        src={p.photoUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.realName || "Suspect")}`}
+                        alt={p.realName}
+                        className="h-12 w-12 rounded-md border border-border bg-muted object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.realName || "Suspect")}`;
+                        }}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="font-display text-base font-semibold leading-tight">{p.realName}</div>
                         <div className="font-mono text-xs text-muted-foreground">@{p.username ? p.username.replace(/^@/, "") : ""}</div>

@@ -23,6 +23,7 @@ import {
   type LinkedinMeta,
   type InstagramMeta,
 } from "../../../lib/fetchers/social";
+import { LinkedInPublicSearchProvider } from "../../../lib/providers/linkedinPublicSearch";
 import type { PlatformAccount, Post } from "../../../lib/types";
 import { UNRELIABLE_PLATFORMS } from "../../../lib/unreliablePlatforms";
 
@@ -568,7 +569,18 @@ export async function GET(request: NextRequest) {
     .map((u) => cleanQuery(u))
     .filter(Boolean);
 
-  if (usernames.length === 0) {
+  // ── Expand username variants (dots/underscores → hyphens, stripped) ──────
+  const baseUsername = usernames[0] || "";
+  const variantSet = new Set<string>(usernames);
+  // vibha.s.prasad → vibha-s-prasad
+  variantSet.add(baseUsername.replace(/[._]+/g, "-"));
+  // vibha.s.prasad → vibhasprasad
+  variantSet.add(baseUsername.replace(/[._]+/g, ""));
+  // vibha.s.prasad → vibha_s_prasad
+  variantSet.add(baseUsername.replace(/[.]+/g, "_"));
+  const expandedUsernames = Array.from(variantSet).filter(Boolean);
+
+  if (expandedUsernames.length === 0) {
     return new Response("No valid usernames provided", { status: 400 });
   }
 
@@ -587,7 +599,7 @@ export async function GET(request: NextRequest) {
       enqueue({ type: "ping", usernames });
 
       let completedProbes = 0;
-      const totalProbes = 5 + LOCAL_PROBES.length; // 37
+      const totalProbes = 6 + LOCAL_PROBES.length; // 5 rich APIs + LinkedIn + local probes
 
       const safetyTimeout = setTimeout(() => {
         enqueue({ type: "done" });
@@ -607,8 +619,43 @@ export async function GET(request: NextRequest) {
         }
       };
 
+      // ── LinkedIn (search-engine based, avoids login wall) ───────────
+      (async () => {
+        try {
+          const linkedinProvider = new LinkedInPublicSearchProvider();
+          for (const u of expandedUsernames) {
+            const normalizedSlug = u.replace(/[\s_.]+/g, "-").toLowerCase();
+            const intel = await linkedinProvider.fetchProfile(normalizedSlug);
+            if (intel && intel.fullName?.value) {
+              enqueue({
+                type: "result",
+                platform: "linkedin",
+                status: "FOUND",
+                data: {
+                  platform: "linkedin",
+                  username: normalizedSlug,
+                  displayName: intel.fullName.value,
+                  bio: intel.headline?.value || intel.summary?.value || null,
+                  profileUrl: intel.profileUrl?.value || `https://www.linkedin.com/in/${normalizedSlug}`,
+                  profilePicUrl: intel.avatarUrl?.value || null,
+                  followers: 0,
+                  confidence: "PROBABLE",
+                  postCount: 0,
+                },
+              });
+              markProbeCompleted();
+              return;
+            }
+          }
+          enqueue({ type: "result", platform: "linkedin", status: "NOT_FOUND" });
+        } catch (e: any) {
+          enqueue({ type: "result", platform: "linkedin", status: "ERROR", reason: e.message || "Search engine lookup failed" });
+        }
+        markProbeCompleted();
+      })();
+
       // ── GitHub (rich API) ───────────────────────────────────────────
-      Promise.all(usernames.map(u => fetchGithubActivity(u, false, process.env.GITHUB_TOKEN).catch((err) => {
+      Promise.all(expandedUsernames.map(u => fetchGithubActivity(u, false, process.env.GITHUB_TOKEN).catch((err) => {
         return { account: undefined, posts: [], errorStatus: err?.status || 403 };
       })))
         .then(async (results) => {
@@ -898,7 +945,7 @@ export async function GET(request: NextRequest) {
 
       // ── Remaining platforms via HTTP probe ──────────────────────────
       const probeWorker = async (probe: LocalProbe) => {
-        const probePromises = usernames.map(async (u) => {
+        const probePromises = expandedUsernames.map(async (u) => {
           const normalized = probe.normalize ? probe.normalize(u) : u;
           const profileUrl = probe.url(normalized);
           try {
@@ -931,8 +978,8 @@ export async function GET(request: NextRequest) {
         markProbeCompleted();
       };
 
-      // Run probes with concurrency of 8 to prevent network bottleneck and timeouts
-      pool(LOCAL_PROBES, 16, probeWorker);
+      // Run probes with concurrency of 16, exclude linkedin (handled above via search engine)
+      pool(LOCAL_PROBES.filter(p => p.platform !== "linkedin"), 16, probeWorker);
     },
   });
 

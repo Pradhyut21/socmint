@@ -237,8 +237,6 @@ interface LayoutNode {
   collapsed: boolean;
 }
 
-const RADII = [0, 160, 280, 380, 460];
-
 function buildLayout(
   tree: OsintNode,
   collapsedIds: Set<string>,
@@ -247,22 +245,36 @@ function buildLayout(
 ): LayoutNode[] {
   const allNodes: LayoutNode[] = [];
 
+  function countLeaves(node: OsintNode): number {
+    const collapsed = collapsedIds.has(node.id);
+    if (!node.children || node.children.length === 0 || collapsed) {
+      return 1;
+    }
+    return node.children.reduce((sum, child) => sum + countLeaves(child), 0);
+  }
+
+  const leafCount = countLeaves(tree);
+  const rowSpacing = 40;
+  const depthSpacing = 220;
+  const startX = cx - 350;
+  const startY = cy - ((leafCount - 1) * rowSpacing) / 2;
+
+  let rowCounter = 0;
+
   function place(
     node: OsintNode,
     depth: number,
-    angleStart: number,
-    angleEnd: number,
     parent?: LayoutNode
   ): LayoutNode {
-    const angle = (angleStart + angleEnd) / 2;
-    const r = RADII[Math.min(depth, RADII.length - 1)];
-    const x = depth === 0 ? cx : cx + Math.cos(angle) * r;
-    const y = depth === 0 ? cy : cy + Math.sin(angle) * r;
     const collapsed = collapsedIds.has(node.id);
+    const x = startX + depth * depthSpacing;
 
     const layoutNode: LayoutNode = {
       node,
-      x, y, angle, depth,
+      x,
+      y: 0,
+      angle: 0, // not used in straight layout
+      depth,
       parent,
       children: [],
       collapsed,
@@ -271,19 +283,22 @@ function buildLayout(
 
     const kids = node.children;
     if (kids && kids.length > 0 && !collapsed) {
-      const span = angleEnd - angleStart;
-      kids.forEach((child, i) => {
-        const childStart = angleStart + (i / kids.length) * span;
-        const childEnd   = angleStart + ((i + 1) / kids.length) * span;
-        const childLayout = place(child, depth + 1, childStart, childEnd, layoutNode);
+      kids.forEach((child) => {
+        const childLayout = place(child, depth + 1, layoutNode);
         layoutNode.children.push(childLayout);
       });
+
+      const sumY = layoutNode.children.reduce((sum, c) => sum + c.y, 0);
+      layoutNode.y = sumY / layoutNode.children.length;
+    } else {
+      layoutNode.y = startY + rowCounter * rowSpacing;
+      rowCounter++;
     }
 
     return layoutNode;
   }
 
-  place(tree, 0, -Math.PI, Math.PI);
+  place(tree, 0);
   return allNodes;
 }
 
@@ -458,10 +473,9 @@ export default function OSINTFrameworkGraph({ suspect, standalone }: Props) {
         ctx.beginPath();
         ctx.moveTo(x1, y1);
 
-        // Curved bezier link
+        // Curved horizontal step-wise link
         const mx = (x1 + x2) / 2;
-        const my = (y1 + y2) / 2;
-        ctx.quadraticCurveTo(mx, my, x2, y2);
+        ctx.bezierCurveTo(mx, y1, mx, y2, x2, y2);
 
         ctx.strokeStyle = isHighlighted ? COLORS.searchHighlight :
           ln.node.scanStatus === "FOUND" ? `rgba(34,197,94,0.5)` : COLORS.link;
@@ -471,8 +485,8 @@ export default function OSINTFrameworkGraph({ suspect, standalone }: Props) {
 
       // Draw nodes
       layoutNodes.forEach(ln => {
-        const nx = tx(ln.node.type === "root" ? size.w / 2 : ln.x);
-        const ny = ty(ln.node.type === "root" ? size.h / 2 : ln.y);
+        const nx = tx(ln.x);
+        const ny = ty(ln.y);
         const col = TYPE_COLORS[ln.node.type];
         const r   = col.radius * zoom;
         const isHighlighted = searchHighlightIds.has(ln.node.id);
@@ -548,15 +562,14 @@ export default function OSINTFrameworkGraph({ suspect, standalone }: Props) {
             ln.node.type === "category" ? 10 * zoom : 8 * zoom
           );
           ctx.font = `${ln.node.type === "root" || ln.node.type === "category" ? "600" : "400"} ${fontSize}px 'Inter', system-ui, sans-serif`;
-          ctx.textAlign = ln.node.type === "root" ? "center" : (ln.angle > Math.PI / 2 && ln.angle < (3 * Math.PI) / 2) ? "right" : "left";
+          ctx.textAlign = ln.node.type === "root" ? "right" : "left";
           ctx.textBaseline = "middle";
           ctx.fillStyle = isHighlighted ? COLORS.searchHighlight :
             isHovered ? "#e2e8f0" : col.text;
 
           const labelOffset = (r + 5 * zoom);
-          const lx = ln.node.type === "root" ? nx :
-            ctx.textAlign === "right" ? nx - labelOffset : nx + labelOffset;
-          const ly = ln.node.type === "root" ? ny + r + fontSize + 2 : ny;
+          const lx = ln.node.type === "root" ? nx - labelOffset : nx + labelOffset;
+          const ly = ny;
 
           // Text shadow
           ctx.shadowColor = "rgba(0,0,0,0.8)";

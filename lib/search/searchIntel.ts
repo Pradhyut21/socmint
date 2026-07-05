@@ -221,22 +221,7 @@ export function detectAndGenerateAllDorks(profile: SuspectProfile): SearchIntelQ
     addQueries(generateDorks("company", profile.realName));
   }
 
-  // 7. Process UPI Handles
-  const upiHandles: string[] = [];
-  if (profile.upiFootprint?.probableUpiIds) {
-    for (const idObj of profile.upiFootprint.probableUpiIds) {
-      if (idObj.id) upiHandles.push(idObj.id);
-    }
-  }
-  if (profile.financialFootprint?.upi?.handles) {
-    for (const h of profile.financialFootprint.upi.handles) {
-      if (h) upiHandles.push(h);
-    }
-  }
 
-  for (const upi of upiHandles) {
-    addQueries(generateDorks("upi_handle", upi));
-  }
 
   return allQueries;
 }
@@ -428,25 +413,7 @@ export function seedInitialFindings(profile: SuspectProfile, queries: SearchInte
     }
   }
 
-  // 2. Map Darkweb paste leaks
-  if (profile.darkWebPastes) {
-    for (const paste of profile.darkWebPastes) {
-      const queryId = findMatchingQueryId(queries, paste.url, paste.platform, "forums_pastes");
-      results.push({
-        id: `seed-paste-${paste.id}`,
-        title: paste.title,
-        url: paste.url,
-        snippet: paste.snippet,
-        source: paste.platform,
-        matchedQueryIds: [queryId],
-        categories: ["forums_pastes"],
-        confidence: "medium",
-        riskTags: [paste.riskTag || "EXPOSED DATA"],
-        origin: "seed",
-        executedAt: ts
-      });
-    }
-  }
+
 
   // 3. Map Court/Public references
   if (profile.legalRecords) {

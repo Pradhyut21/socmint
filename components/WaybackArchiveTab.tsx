@@ -29,7 +29,11 @@ const PLATFORMS = WAYBACK_PLATFORM_PATTERNS
 export default function WaybackArchiveTab({ suspect }: { suspect: SuspectProfile }) {
   const username = suspect.username.replace(/^@/, "");
 
-  const [platform, setPlatform] = useState<string>("twitter");
+  const defaultPlatform = suspect.accounts
+    .map((a) => a.platform.toLowerCase())
+    .find((p) => WAYBACK_PLATFORM_PATTERNS.some((pat) => pat.id === p)) || "twitter";
+
+  const [platform, setPlatform] = useState<string>(defaultPlatform);
   const [customUrl, setCustomUrl] = useState<string>("");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<WaybackArchiveResult | null>(suspect.waybackArchive ?? null);
@@ -67,6 +71,44 @@ export default function WaybackArchiveTab({ suspect }: { suspect: SuspectProfile
       setScanning(false);
     }
   };
+
+  React.useEffect(() => {
+    if (!result && !scanning && !error) {
+      const autoScan = async () => {
+        setScanning(true);
+        setError(null);
+        setResult(null);
+
+        try {
+          const body = {
+            platform: defaultPlatform,
+            username,
+            maxSamples: 8
+          };
+
+          const resp = await fetch("/api/wayback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${resp.status}`);
+          }
+
+          const data = await resp.json();
+          setResult(data.result as WaybackArchiveResult);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Archive scan failed.");
+        } finally {
+          setScanning(false);
+        }
+      };
+
+      autoScan();
+    }
+  }, []);
 
   return (
     <div className="space-y-5 font-mono text-xs">

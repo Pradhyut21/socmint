@@ -107,8 +107,8 @@ Return as JSON:
       });
     }
 
-  } catch (error) {
-    console.error("[NEXUS ERROR]", error);
+  } catch (error: any) {
+    console.warn("[NEXUS ERROR]", error.message || error);
     return NextResponse.json({
       key_finding: "AI analysis encountered an error.",
       connected_signals: [],
