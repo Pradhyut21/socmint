@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
           authorHandle: item.authorHandle ?? null,
         });
 
-        // NIM enhancement when opted in by user, bypass heuristic threshold guard
-        if (useNim && apiKey) {
+        // NIM enhancement for MEDIUM+ risk when opted in
+        if (useNim && result.scores.overall >= 25 && apiKey) {
           result = await enhanceWithNim(result, apiKey, model);
         }
 

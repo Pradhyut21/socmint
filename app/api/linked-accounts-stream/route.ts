@@ -8,24 +8,13 @@ import {
   fetchDevToActivity,
   fetchWithTimeout,
   extractMeta,
-  fetchLeetCodeDetails,
-  fetchDuolingoDetails,
-  fetchTwitchDetails,
-  fetchChessDetails,
-  fetchGithubDetails,
-  fetchYoutubeDetails,
-  fetchTwitterDetails,
-  fetchSoundCloudDetails,
-  fetchPastebinDetails,
-  fetchDribbbleDetails,
-  fetchThreadsDetails,
   type ProbeResult,
   type LinkedinMeta,
   type InstagramMeta,
 } from "../../../lib/fetchers/social";
-import { LinkedInPublicSearchProvider } from "../../../lib/providers/linkedinPublicSearch";
 import type { PlatformAccount, Post } from "../../../lib/types";
-import { UNRELIABLE_PLATFORMS } from "../../../lib/unreliablePlatforms";
+import { generateUsernameVariations } from "../../../lib/utils/usernameVariations";
+import { calculateConfidenceScore } from "../../../lib/utils/confidenceScoring";
 
 export const runtime = "nodejs";
 
@@ -79,306 +68,15 @@ interface ProbeStatusResult {
   status: "FOUND" | "NOT_FOUND" | "ERROR";
   reason?: string;
   data?: any;
+  confidenceScore?: number; // 0-100 percentage
 }
 
 async function probePublicProfileDirect(url: string, platform: string, clean: string): Promise<ProbeStatusResult> {
   const lowercaseUrl = url.toLowerCase();
-  const platKey = platform.toLowerCase();
 
-  // ── Intercept Unreliable Platforms ──────────────────────────────────
-  const unreliable = UNRELIABLE_PLATFORMS.find(p => p.id === platKey);
-  if (unreliable) {
-    return { status: "ERROR", reason: unreliable.reason };
-  }
-
-  // ── LeetCode Upgraded Detail-Fetch Check ────────────────────────────
-  if (platKey === "leetcode") {
-    try {
-      const details = await fetchLeetCodeDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "leetcode",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active LeetCode profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── Duolingo Upgraded Detail-Fetch Check ────────────────────────────
-  if (platKey === "duolingo") {
-    try {
-      const details = await fetchDuolingoDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "duolingo",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active Duolingo profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── Twitch Upgraded Detail-Fetch Check ──────────────────────────────
-  if (platKey === "twitch") {
-    try {
-      const details = await fetchTwitchDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "twitch",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active Twitch profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── Chess.com Upgraded Detail-Fetch Check ───────────────────────────
-  if (platKey === "chess") {
-    try {
-      const details = await fetchChessDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "chess",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active Chess.com profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── GitHub Upgraded Detail-Fetch Check ──────────────────────────────
-  if (platKey === "github") {
-    try {
-      const details = await fetchGithubDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "github",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active GitHub profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: details.followers || 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      const failStatus = details.status || 404;
-      if (failStatus === 403 || failStatus === 429) {
-        return { status: "ERROR", reason: "GitHub API Rate Limit Exceeded." };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── YouTube Upgraded Detail-Fetch Check ─────────────────────────────
-  if (platKey === "youtube") {
-    try {
-      const details = await fetchYoutubeDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "youtube",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active YouTube profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── X / Twitter Upgraded Detail-Fetch Check ─────────────────────────
-  if (platKey === "twitter" || platKey === "x") {
-    try {
-      const details = await fetchTwitterDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "twitter",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active X / Twitter profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── SoundCloud Upgraded Detail-Fetch Check ──────────────────────────
-  if (platKey === "soundcloud") {
-    try {
-      const details = await fetchSoundCloudDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "soundcloud",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active SoundCloud profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── Pastebin Upgraded Detail-Fetch Check ────────────────────────────
-  if (platKey === "pastebin") {
-    try {
-      const details = await fetchPastebinDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "pastebin",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active Pastebin profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── Dribbble Upgraded Detail-Fetch Check ────────────────────────────
-  if (platKey === "dribbble") {
-    try {
-      const details = await fetchDribbbleDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "dribbble",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active Dribbble profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: 0,
-            confidence: "PROBABLE",
-            postCount: 0
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
-  }
-
-  // ── Threads Upgraded Detail-Fetch Check ─────────────────────────
-  if (platKey === "threads") {
-    try {
-      const details = await fetchThreadsDetails(clean);
-      if (details.ok) {
-        return {
-          status: "FOUND",
-          data: {
-            platform: "threads",
-            username: clean,
-            displayName: details.displayName || clean,
-            bio: details.bio || "Active Threads profile confirmed.",
-            profileUrl: url,
-            profilePicUrl: details.profilePicUrl || null,
-            followers: details.followers ?? 0,
-            confidence: "PROBABLE",
-            postCount: 0,
-          }
-        };
-      }
-      return { status: "NOT_FOUND" };
-    } catch (err: any) {
-      return { status: "ERROR", reason: err?.message || "Connection timeout" };
-    }
+  // ── Stack Overflow: deprecated Developer Story endpoint ───────────
+  if (platform === "stackoverflow") {
+    return { status: "ERROR", reason: "Endpoint deprecated - cannot verify by handle" };
   }
 
   // ── Reddit: use JSON API ──────────────────────────────────────────
@@ -429,7 +127,11 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
           4500,
           {
             headers: {
+              // Mobile app UA bypasses the login-wall checkpoint that blocks desktop UAs
+              "User-Agent": "Instagram 219.0.0.12.117 Android (28/9; 411dpi; 1080x2241; Xiaomi; Mi A2; jasmine_sprout; qcom; en_US; 302733750)",
               "x-ig-app-id": "936619743392459",
+              "X-ASBD-ID": "129477",
+              "X-IG-WWW-Claim": "0",
               "x-requested-with": "XMLHttpRequest",
               Referer: "https://www.instagram.com/",
               Accept: "application/json",
@@ -454,7 +156,7 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
                 displayName: user.full_name || null,
                 bio: user.biography || null,
                 profileUrl: url,
-                profilePicUrl: user.profile_pic_url || null,
+                profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || null,
                 followers: user.edge_followed_by?.count || 0,
                 confidence: "PROBABLE",
                 postCount: 0,
@@ -512,9 +214,6 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
       return { status: "NOT_FOUND" };
     }
 
-    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-
     return {
       status: "FOUND",
       data: {
@@ -523,7 +222,7 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
         displayName: title || null,
         bio: description || null,
         profileUrl: url,
-        profilePicUrl: ogImage || null,
+        profilePicUrl: null,
         followers: 0,
         confidence: "PROBABLE",
         postCount: 0,
@@ -536,6 +235,39 @@ async function probePublicProfileDirect(url: string, platform: string, clean: st
     }
     return { status: "ERROR", reason };
   }
+}
+
+/** Structural shape of a discovered account as used by this streaming route. */
+type AccountResult = {
+  username: string;
+  displayName?: string | null;
+  bio?: string | null;
+  profilePicUrl?: string | null;
+  [key: string]: any;
+};
+
+/**
+ * Calculate confidence score for a found account
+ */
+function addConfidenceScore(
+  account: AccountResult, 
+  originalQuery: string,
+  matchedUsername: string
+): AccountResult & { confidenceScore: number } {
+  
+  const score = calculateConfidenceScore(originalQuery, {
+    name: account.displayName || account.username,
+    headline: account.bio || undefined,
+    location: undefined,
+    username: matchedUsername,
+    photoUrl: account.profilePicUrl || undefined,
+    currentPositions: []
+  });
+  
+  return {
+    ...account,
+    confidenceScore: score.overall
+  };
 }
 
 async function pool<T, R>(
@@ -564,23 +296,21 @@ export async function GET(request: NextRequest) {
     return new Response("Missing username parameter", { status: 400 });
   }
 
-  const usernames = rawUsername
-    .split(",")
-    .map((u) => cleanQuery(u))
-    .filter(Boolean);
+  // Clean the input username
+  const cleanedUsername = cleanQuery(rawUsername);
+  
+  // Generate username variations (top 5)
+  const variations = generateUsernameVariations(cleanedUsername);
+  const topVariations = variations.slice(0, 5).map(v => v.username);
+  
+  // Combine original + variations
+  const usernames = [cleanedUsername, ...topVariations].filter(Boolean);
+  
+  console.log(`[LIVE-SCAN] Searching for: "${cleanedUsername}"`);
+  console.log(`[LIVE-SCAN] Generated ${topVariations.length} variations: ${topVariations.join(', ')}`);
+  console.log(`[LIVE-SCAN] Total usernames to search: ${usernames.length}`);
 
-  // ── Expand username variants (dots/underscores → hyphens, stripped) ──────
-  const baseUsername = usernames[0] || "";
-  const variantSet = new Set<string>(usernames);
-  // vibha.s.prasad → vibha-s-prasad
-  variantSet.add(baseUsername.replace(/[._]+/g, "-"));
-  // vibha.s.prasad → vibhasprasad
-  variantSet.add(baseUsername.replace(/[._]+/g, ""));
-  // vibha.s.prasad → vibha_s_prasad
-  variantSet.add(baseUsername.replace(/[.]+/g, "_"));
-  const expandedUsernames = Array.from(variantSet).filter(Boolean);
-
-  if (expandedUsernames.length === 0) {
+  if (usernames.length === 0) {
     return new Response("No valid usernames provided", { status: 400 });
   }
 
@@ -599,14 +329,14 @@ export async function GET(request: NextRequest) {
       enqueue({ type: "ping", usernames });
 
       let completedProbes = 0;
-      const totalProbes = 6 + LOCAL_PROBES.length; // 5 rich APIs + LinkedIn + local probes
+      const totalProbes = 5 + LOCAL_PROBES.length; // 37
 
       const safetyTimeout = setTimeout(() => {
         enqueue({ type: "done" });
         try {
           controller.close();
         } catch (e) {}
-      }, 28000);
+      }, 15000);
 
       const markProbeCompleted = () => {
         completedProbes++;
@@ -619,43 +349,8 @@ export async function GET(request: NextRequest) {
         }
       };
 
-      // ── LinkedIn (search-engine based, avoids login wall) ───────────
-      (async () => {
-        try {
-          const linkedinProvider = new LinkedInPublicSearchProvider();
-          for (const u of expandedUsernames) {
-            const normalizedSlug = u.replace(/[\s_.]+/g, "-").toLowerCase();
-            const intel = await linkedinProvider.fetchProfile(normalizedSlug);
-            if (intel && intel.fullName?.value) {
-              enqueue({
-                type: "result",
-                platform: "linkedin",
-                status: "FOUND",
-                data: {
-                  platform: "linkedin",
-                  username: normalizedSlug,
-                  displayName: intel.fullName.value,
-                  bio: intel.headline?.value || intel.summary?.value || null,
-                  profileUrl: intel.profileUrl?.value || `https://www.linkedin.com/in/${normalizedSlug}`,
-                  profilePicUrl: intel.avatarUrl?.value || null,
-                  followers: 0,
-                  confidence: "PROBABLE",
-                  postCount: 0,
-                },
-              });
-              markProbeCompleted();
-              return;
-            }
-          }
-          enqueue({ type: "result", platform: "linkedin", status: "NOT_FOUND" });
-        } catch (e: any) {
-          enqueue({ type: "result", platform: "linkedin", status: "ERROR", reason: e.message || "Search engine lookup failed" });
-        }
-        markProbeCompleted();
-      })();
-
       // ── GitHub (rich API) ───────────────────────────────────────────
-      Promise.all(expandedUsernames.map(u => fetchGithubActivity(u, false, process.env.GITHUB_TOKEN).catch((err) => {
+      Promise.all(usernames.map(u => fetchGithubActivity(u, false, process.env.GITHUB_TOKEN).catch((err) => {
         return { account: undefined, posts: [], errorStatus: err?.status || 403 };
       })))
         .then(async (results) => {
@@ -663,21 +358,28 @@ export async function GET(request: NextRequest) {
           if (foundResult && foundResult.account) {
             const index = results.indexOf(foundResult);
             const resolvedUser = foundResult.resolvedUsername ?? usernames[index];
+            const matchedUsername = usernames[index];
+            
+            const accountData = {
+              platform: "github",
+              username: resolvedUser,
+              displayName: foundResult.account.displayName ?? null,
+              bio: foundResult.account.bio ?? null,
+              profileUrl: `https://github.com/${resolvedUser}`,
+              profilePicUrl: foundResult.account.profilePicUrl ?? null,
+              followers: foundResult.account.followers ?? 0,
+              confidence: "CONFIRMED" as const,
+              postCount: foundResult.posts.length,
+            };
+            
+            const withConfidence = addConfidenceScore(accountData, cleanedUsername, matchedUsername);
+            
             enqueue({
               type: "result",
               platform: "github",
               status: "FOUND",
-              data: {
-                platform: "github",
-                username: resolvedUser,
-                displayName: foundResult.account.displayName ?? null,
-                bio: foundResult.account.bio ?? null,
-                profileUrl: `https://github.com/${resolvedUser}`,
-                profilePicUrl: foundResult.account.profilePicUrl ?? null,
-                followers: foundResult.account.followers ?? 0,
-                confidence: "CONFIRMED",
-                postCount: foundResult.posts.length,
-              },
+              data: withConfidence,
+              confidenceScore: withConfidence.confidenceScore,
             });
           } else {
             let finalStatus: "FOUND" | "NOT_FOUND" | "ERROR" = "NOT_FOUND";
@@ -945,7 +647,7 @@ export async function GET(request: NextRequest) {
 
       // ── Remaining platforms via HTTP probe ──────────────────────────
       const probeWorker = async (probe: LocalProbe) => {
-        const probePromises = expandedUsernames.map(async (u) => {
+        const probePromises = usernames.map(async (u) => {
           const normalized = probe.normalize ? probe.normalize(u) : u;
           const profileUrl = probe.url(normalized);
           try {
@@ -959,11 +661,19 @@ export async function GET(request: NextRequest) {
         const results = await Promise.all(probePromises);
         const foundResult = results.find(r => r.result.status === "FOUND");
         if (foundResult) {
+          // Calculate confidence score
+          const accountWithConfidence = addConfidenceScore(
+            foundResult.result.data,
+            cleanedUsername,
+            foundResult.username
+          );
+          
           enqueue({
             type: "result",
             platform: probe.platform,
             status: "FOUND",
-            data: foundResult.result.data,
+            data: accountWithConfidence,
+            confidenceScore: accountWithConfidence.confidenceScore,
           });
         } else {
           const hasError = results.some(r => r.result.status === "ERROR");
@@ -978,8 +688,8 @@ export async function GET(request: NextRequest) {
         markProbeCompleted();
       };
 
-      // Run probes with concurrency of 16, exclude linkedin (handled above via search engine)
-      pool(LOCAL_PROBES.filter(p => p.platform !== "linkedin"), 16, probeWorker);
+      // Run probes with concurrency of 8 to prevent network bottleneck and timeouts
+      pool(LOCAL_PROBES, 8, probeWorker);
     },
   });
 

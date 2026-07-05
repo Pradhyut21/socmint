@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -14,9 +14,7 @@ import {
   X,
   Lock,
   UserCog,
-  Terminal,
-  ChevronDown,
-  ChevronRight,
+  Bot,
 } from "lucide-react";
 
 import { storage } from "@/lib/storage";
@@ -25,42 +23,44 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, isDevMode } from "@/lib/supabaseClient";
 
 const NAV = [
   { href: "/", label: "Investigate Sweep", icon: Search, exact: true },
-  { href: "/toolkit", label: "OSINT Toolkit", icon: Terminal },
   { href: "/alerts", label: "Alerts Center", icon: Bell },
   { href: "/cases", label: "Case Directory", icon: FolderClosed },
   { href: "/compliance", label: "Legal Compliance", icon: ScrollText },
 ];
 
-function AppShellInner({ children }: { children: React.ReactNode }) {
+export function AppShellClient({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [analyst, setAnalystState] = useState({ name: "A. Sharma", badge: "KSP-4421", unit: "Cyber Crime Cell, Bengaluru" });
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Log dev mode status for debugging
+  useEffect(() => {
+    console.log("🔍 Dev Mode Status:", isDevMode);
+    console.log("🔍 NODE_ENV:", process.env.NODE_ENV);
+    console.log("🔍 Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+  }, []);
+
   // Load session and listen for changes
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
-      setSession({
-        user: {
-          id: "bypass-analyst",
-          email: "operator@shield.ksp.gov.in",
-          user_metadata: { display_name: "Classified Bypass Analyst" },
-        },
-      });
+    let active = true;
+    
+    // Development mode bypass
+    if (isDevMode) {
+      console.log("✅ DEV MODE: Bypassing authentication");
+      setSession({ user: { email: "dev@localhost" } });
       setAuthLoading(false);
       return;
     }
-
-    let active = true;
+    
     supabase.auth.getSession().then(({ data }) => {
       if (active) {
         setSession(data.session);
@@ -87,43 +87,17 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   const isAuthPage = pathname === "/auth";
 
-  // Redirect client to auth if unauthenticated
+  // Redirect client to auth if unauthenticated (skip in dev mode)
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
-      return;
-    }
-    if (!authLoading && !session && !isAuthPage) {
+    if (!authLoading && !session && !isAuthPage && !isDevMode) {
       router.push("/auth");
     }
   }, [session, authLoading, isAuthPage, router]);
-
-  const [isCasesDropdownOpen, setIsCasesDropdownOpen] = useState(false);
-  const [recentCases, setRecentCases] = useState<any[]>([]);
 
   // Load analyst credentials from storage after mounting
   useEffect(() => {
     setAnalystState(storage.getAnalyst());
   }, []);
-
-  useEffect(() => {
-    setRecentCases(storage.getRecent());
-    const updateCases = () => {
-      setRecentCases(storage.getRecent());
-    };
-    window.addEventListener("recent_cases_updated", updateCases);
-    window.addEventListener("storage", updateCases);
-    return () => {
-      window.removeEventListener("recent_cases_updated", updateCases);
-      window.removeEventListener("storage", updateCases);
-    };
-  }, []);
-
-  // Keep dropdown open if on cases page
-  useEffect(() => {
-    if (pathname.startsWith("/cases")) {
-      setIsCasesDropdownOpen(true);
-    }
-  }, [pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -133,7 +107,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex w-full bg-background text-foreground">
         {children}
-        <Toaster position="top-right" richColors />
       </div>
     );
   }
@@ -154,7 +127,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex w-full bg-background text-foreground">
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+      {/* Development mode banner */}
+      {isDevMode && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-yellow-500/90 text-black px-4 py-2 text-center font-mono text-xs font-bold tracking-wider">
+          ⚠️ DEV MODE: Authentication bypassed. Set up Supabase for production!
+        </div>
+      )}
+      
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden no-print" onClick={() => setMobileOpen(false)} />
@@ -162,9 +142,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 transform border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 md:static md:translate-x-0 no-print ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        className={`fixed inset-y-0 left-0 z-50 w-72 transform border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 md:static md:translate-x-0 no-print ${isDevMode ? 'pt-10' : ''} ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-sidebar-border px-5 py-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-stamp text-primary-foreground">
@@ -184,107 +164,56 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             {NAV.map((n, i) => {
               const active = n.exact ? pathname === n.href : pathname.startsWith(n.href);
               const Icon = n.icon;
-              const isCaseDirectory = n.href === "/cases";
-
               return (
-                <div key={n.href} className="space-y-1">
-                  <motion.div
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.25 }}
-                    whileHover={{ x: 3 }}
+                <motion.div
+                  key={n.href}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05, duration: 0.25 }}
+                  whileHover={{ x: 3 }}
+                >
+                  <Link
+                    href={n.href}
+                    className={`group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"}`}
                   >
-                    <div className="flex items-center gap-1 group relative">
-                      <Link
-                        href={n.href}
-                        onClick={() => {
-                          if (isCaseDirectory) {
-                            setIsCasesDropdownOpen(true);
-                          }
-                        }}
-                        className={`flex-1 flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors relative ${active ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"}`}
-                      >
-                        {active && (
-                          <motion.span
-                            layoutId="nav-active"
-                            className="absolute inset-0 rounded-md bg-sidebar-accent"
-                            transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                          />
-                        )}
-                        <Icon className={`relative z-10 h-4 w-4 ${active ? "text-stamp" : ""}`} />
-                        <span className="relative z-10 flex-1">{n.label}</span>
-                        {active && !isCaseDirectory && <span className="relative z-10 h-1.5 w-1.5 rounded-full bg-stamp" />}
-                      </Link>
-
-                      {isCaseDirectory && recentCases.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setIsCasesDropdownOpen(!isCasesDropdownOpen);
-                          }}
-                          className="p-2 mr-1 rounded-md text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground relative z-10 transition-colors cursor-pointer"
-                          title="Toggle Previous Chats"
-                        >
-                          {isCasesDropdownOpen ? (
-                            <ChevronDown className="h-4.5 w-4.5 text-sidebar-foreground/70 group-hover:text-sidebar-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4.5 w-4.5 text-sidebar-foreground/70 group-hover:text-sidebar-foreground" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </motion.div>
-
-                  {/* Dropdown collapsible list of previous chats */}
-                  {isCaseDirectory && isCasesDropdownOpen && recentCases.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="pl-8 pr-2 py-1 space-y-1 overflow-hidden"
-                    >
-                      <div className="font-mono text-[9px] text-sidebar-foreground/50 uppercase tracking-widest pl-1 mb-1">
-                        Previous Chats
-                      </div>
-                      {recentCases.map((c) => {
-                        const currentCaseParam = searchParams.get("case");
-                        const isCurrentCase = pathname === "/" && currentCaseParam === c.caseReference;
-                        return (
-                          <Link
-                            key={c.caseReference}
-                            href={`/?case=${c.caseReference}#chat-box`}
-                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-all border ${
-                              isCurrentCase
-                                ? "bg-sidebar-accent/80 border-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
-                                : "border-transparent text-sidebar-foreground/75 hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground"
-                            }`}
-                          >
-                            <img
-                              src={c.photoUrl}
-                              alt={c.realName}
-                              className="w-4.5 h-4.5 rounded-full border border-sidebar-border object-cover shrink-0"
-                            />
-                            <div className="min-w-0 flex-1 truncate text-[11px]">
-                              {c.realName}
-                            </div>
-                            <span className="text-[8px] font-mono text-sidebar-foreground/40 shrink-0">
-                              {c.riskScore} BRS
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </div>
+                    {active && (
+                      <motion.span
+                        layoutId="nav-active"
+                        className="absolute inset-0 rounded-md bg-sidebar-accent"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <Icon className={`relative z-10 h-4 w-4 ${active ? "text-stamp" : ""}`} />
+                    <span className="relative z-10 flex-1">{n.label}</span>
+                    {active && <span className="relative z-10 h-1.5 w-1.5 rounded-full bg-stamp" />}
+                  </Link>
+                </motion.div>
               );
             })}
           </nav>
 
+          {/* AI Chat floating button */}
+          <div className="px-3 pb-2">
+            <a
+              href="/?tab=chat"
+              className="flex w-full items-center justify-center gap-2 border border-ember/40 bg-ember/10 px-4 py-2.5 font-mono text-xs font-bold uppercase tracking-widest text-ember transition-colors hover:bg-ember/20"
+              onClick={(e) => {
+                // If already on the investigate page, dispatch a tab-switch event
+                // rather than navigating away (avoids losing the current investigation).
+                if (typeof window !== "undefined" && window.location.pathname === "/") {
+                  e.preventDefault();
+                  window.dispatchEvent(new CustomEvent("switch-tab", { detail: "chat" }));
+                }
+              }}
+            >
+              <Bot className="h-4 w-4" />
+              AI Chat
+            </a>
+          </div>
+
           <button
             onClick={() => setSettingsOpen(true)}
-            className="m-3 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-3 text-left text-sm hover:bg-sidebar-accent"
+            className="m-3 border border-sidebar-border bg-sidebar-accent/40 p-3 text-left text-sm hover:bg-sidebar-accent"
           >
             <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-sidebar-foreground/60">
               <UserCog className="h-3.5 w-3.5" /> Auditor profile
@@ -297,7 +226,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`flex min-w-0 flex-1 flex-col overflow-hidden ${isDevMode ? 'pt-10' : ''}`}>
         <TopHeader onMenu={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
@@ -381,16 +310,18 @@ function SettingsDialog({
           <div className="space-y-1.5"><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
-          <Button
-            variant="destructive"
-            className="sm:mr-auto rounded-none font-mono text-[10px] tracking-wider"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              onOpenChange(false);
-            }}
-          >
-            END SECURE SESSION
-          </Button>
+          {!isDevMode && (
+            <Button
+              variant="destructive"
+              className="sm:mr-auto rounded-none font-mono text-[10px] tracking-wider"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                onOpenChange(false);
+              }}
+            >
+              END SECURE SESSION
+            </Button>
+          )}
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button onClick={() => { onSave(form); onOpenChange(false); }}>Save credentials</Button>
@@ -398,13 +329,5 @@ function SettingsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function AppShellClient({ children }: { children: React.ReactNode }) {
-  return (
-    <React.Suspense fallback={null}>
-      <AppShellInner>{children}</AppShellInner>
-    </React.Suspense>
   );
 }

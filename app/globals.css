@@ -11,13 +11,14 @@
  */
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Sharp-edged brutalist geometry — every rounded-* resolves to 0px */
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -46,6 +47,19 @@
   --color-evidence: var(--evidence);
   --color-warn: var(--warn);
   --color-critical: var(--critical);
+  --color-success: var(--success);
+  --color-brand: var(--stamp);
+  --color-teal: var(--primary);
+
+  /* Warm Terracotta named palette — usable as bg-*, text-*, border-* utilities */
+  --color-ivory: var(--ivory);
+  --color-forest: var(--forest);
+  --color-forest-2: var(--forest-2);
+  --color-emerald: var(--terracotta);
+  --color-emerald-glow: var(--ember);
+  --color-terracotta: var(--terracotta);
+  --color-ember: var(--ember);
+  --color-rust: var(--rust);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -63,63 +77,75 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Inter", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0;   /* brutalist: sharp corners everywhere */
 
-  /* Paper + ink */
-  --paper: oklch(0.975 0.004 80);          /* #f5f5f4 warm paper */
-  --ink: oklch(0.205 0.012 50);            /* near-black */
-  --background: var(--paper);
-  --foreground: var(--ink);
+  /* ══ "Warm Terracotta" — editorial forensic dossier meets terminal ══ */
+  --ivory: #faf9f5;          /* warm cream body background */
+  --paper: #f0ede4;          /* card / secondary surface */
+  --forest: #1f1e1c;         /* deep warm ink */
+  --forest-2: #2d2a26;       /* elevated dark surface */
+  --terracotta: #c15f3c;     /* accent on light (AA 4.6:1) */
+  --ember: #d97757;          /* brighter Claude orange — accent on dark */
+  --rust: #a94a26;           /* destructive / high-risk */
 
-  --card: oklch(1 0 0);
-  --card-foreground: var(--ink);
-  --popover: oklch(1 0 0);
-  --popover-foreground: var(--ink);
+  --background: var(--ivory);
+  --foreground: var(--forest);
+  --ink: var(--forest);
 
-  /* Stamp red — primary action / alerts */
-  --stamp: oklch(0.567 0.215 27);          /* ~#dc2626 */
-  --primary: var(--stamp);
-  --primary-foreground: oklch(0.985 0.002 80);
+  --card: #fdfcf7;           /* warm near-white so cards lift off the cream */
+  --card-foreground: var(--forest);
+  --popover: #fdfcf7;
+  --popover-foreground: var(--forest);
 
-  /* Evidence teal — data / accent */
-  --evidence: oklch(0.62 0.115 220);       /* ~#0891b2 */
-  --accent: var(--evidence);
-  --accent-foreground: oklch(0.985 0.002 80);
+  /* Terracotta — primary action / accent on light surfaces */
+  --primary: var(--terracotta);
+  --primary-foreground: #faf9f5;
 
-  --secondary: oklch(0.94 0.005 80);
-  --secondary-foreground: var(--ink);
-  --muted: oklch(0.93 0.005 80);
-  --muted-foreground: oklch(0.45 0.012 50);
+  /* 'stamp' + 'evidence' repurposed to the warm ember family so existing
+     accents across the app recolor cohesively. */
+  --stamp: var(--terracotta);
+  --evidence: #b06a4a;       /* muted ember for data chrome */
 
-  --warn: oklch(0.78 0.16 75);             /* amber */
-  --critical: var(--stamp);
+  --accent: var(--paper);    /* warm hover tint on light surfaces */
+  --accent-foreground: var(--forest);
 
-  --destructive: var(--stamp);
-  --destructive-foreground: oklch(0.985 0.002 80);
+  --secondary: var(--paper);
+  --secondary-foreground: var(--forest);
+  --muted: var(--paper);
+  --muted-foreground: var(--forest-2); /* muted text (hierarchy via opacity) */
 
-  --border: oklch(0.86 0.008 60);
-  --input: oklch(0.86 0.008 60);
-  --ring: var(--stamp);
+  --warn: var(--ember);      /* warn folds into ember (no yellow in palette) */
+  --success: var(--terracotta); /* success folds into terracotta (no green) */
+  --critical: var(--rust);
 
-  --chart-1: oklch(0.567 0.215 27);
-  --chart-2: oklch(0.62 0.115 220);
-  --chart-3: oklch(0.55 0.04 50);
-  --chart-4: oklch(0.78 0.16 75);
-  --chart-5: oklch(0.45 0.05 220);
+  --destructive: var(--rust);
+  --destructive-foreground: #faf9f5;
 
-  --sidebar: oklch(0.205 0.012 50);
-  --sidebar-foreground: oklch(0.92 0.005 80);
-  --sidebar-primary: var(--stamp);
-  --sidebar-primary-foreground: oklch(0.985 0.002 80);
-  --sidebar-accent: oklch(0.28 0.012 50);
-  --sidebar-accent-foreground: oklch(0.97 0.005 80);
-  --sidebar-border: oklch(0.32 0.012 50);
-  --sidebar-ring: var(--stamp);
+  --border: oklch(0.35 0.04 60 / 0.18); /* warm hairline */
+  --input: oklch(0.35 0.04 60 / 0.22);
+  --ring: var(--terracotta);
+
+  /* Chart ramp — palette-only: terracotta, ember, rust, forest-2, forest */
+  --chart-1: var(--terracotta);
+  --chart-2: var(--ember);
+  --chart-3: var(--rust);
+  --chart-4: var(--forest-2);
+  --chart-5: var(--forest);
+
+  /* Deep warm-ink sidebar / dark panels */
+  --sidebar: var(--forest);
+  --sidebar-foreground: #ded8cc;
+  --sidebar-primary: var(--ember);
+  --sidebar-primary-foreground: #1f1e1c;
+  --sidebar-accent: var(--forest-2);
+  --sidebar-accent-foreground: #f0ede4;
+  --sidebar-border: oklch(0.85 0.03 60 / 0.12);
+  --sidebar-ring: var(--ember);
 }
 
 .dark {
@@ -148,6 +174,12 @@
   * {
     border-color: var(--color-border);
   }
+  /* Full brutalism: square everything, including normally-circular elements
+     (avatars, status dots, pills, badges). Switch thumbs are exempted so the
+     toggle still reads clearly. */
+  .rounded-full:not([role="switch"] *):not([data-slot="switch-thumb"]) {
+    border-radius: 0 !important;
+  }
   html, body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -170,8 +202,8 @@
 }
 
 .glass-panel-hover:hover {
-  border-color: var(--color-stamp);
-  box-shadow: 0 0 20px rgba(220, 38, 38, 0.1);
+  border-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  box-shadow: 0 0 22px color-mix(in oklab, var(--primary) 18%, transparent);
   transition: all 0.3s ease;
 }
 
@@ -194,42 +226,78 @@
   background: var(--muted-foreground);
 }
 
-/* Leaflet Map overrides for dark theme */
+/* Leaflet Map overrides — Warm Terracotta palette */
 .leaflet-container {
-  background: #080c16 !important;
+  background: var(--forest) !important;
 }
 
 .leaflet-tile {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) !important;
+  /* warm sepia treatment so map tiles sit in the palette rather than cool blue */
+  filter: grayscale(100%) sepia(35%) brightness(92%) contrast(92%) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: #0d152b !important;
-  color: #e2e8f0 !important;
-  border: 1px solid rgba(59, 130, 246, 0.2) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+  background: var(--forest-2) !important;
+  color: var(--ivory) !important;
+  border: 1px solid color-mix(in oklab, var(--ember) 30%, transparent) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--forest) 55%, transparent) !important;
 }
 
 .leaflet-popup-tip {
-  background: #0d152b !important;
+  background: var(--forest-2) !important;
 }
 
-/* Custom indicator glows */
+/* Custom indicator glows (Lagoon palette) */
 .glow-blue {
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--evidence) 45%, transparent);
+}
+
+.glow-teal {
+  box-shadow: 0 0 16px color-mix(in oklab, var(--primary) 45%, transparent);
 }
 
 .glow-red {
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--stamp) 50%, transparent);
 }
 
 .glow-green {
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--success) 45%, transparent);
 }
 
 .glow-amber {
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--warn) 45%, transparent);
+}
+
+/* Premium soft card shadow + colorful gradient utilities */
+@utility card-elevated {
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--ink) 6%, transparent),
+    0 10px 30px -14px color-mix(in oklab, var(--ink) 14%, transparent);
+}
+
+@utility gradient-brand {
+  background-image: linear-gradient(
+    135deg,
+    var(--primary) 0%,
+    color-mix(in oklab, var(--primary) 60%, var(--evidence)) 55%,
+    var(--evidence) 100%
+  );
+}
+
+@utility gradient-warm {
+  background-image: linear-gradient(
+    135deg,
+    var(--stamp) 0%,
+    color-mix(in oklab, var(--stamp) 70%, var(--warn)) 100%
+  );
+}
+
+@utility text-gradient-brand {
+  background-image: linear-gradient(120deg, var(--primary), var(--evidence) 60%, var(--stamp));
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
 }
 
 /* Dossier paper texture utility */
@@ -420,4 +488,172 @@
   .anim-float-3d, .anim-flip-in, .anim-unfold, .anim-rise-3d { animation: none; }
   .card-3d, .card-3d:hover, .card-3d:active { transform: none; }
   .sheen-sweep::before { display: none; }
+}
+
+
+/* ============================================================
+ * WARM TERRACOTTA — signature texture & motion
+ * ============================================================ */
+
+/* Warm oxblood-tinted elevation for lifted dossier cards */
+@utility shadow-dossier {
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--rust) 10%, transparent),
+    0 12px 34px -16px color-mix(in oklab, var(--rust) 30%, transparent),
+    0 3px 10px -6px color-mix(in oklab, var(--forest) 18%, transparent);
+}
+
+/* CRT scanline sweep — overlay on suspect portraits */
+@keyframes crt-scan {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 0.7; }
+  90%  { opacity: 0.7; }
+  100% { transform: translateY(1100%); opacity: 0; }
+}
+@utility crt-scanline {
+  position: relative;
+  overflow: hidden;
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 14%;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in oklab, var(--ember) 45%, transparent),
+      transparent
+    );
+    mix-blend-mode: screen;
+    animation: crt-scan 3.4s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--forest) 8%, transparent) 0 1px,
+      transparent 1px 3px
+    );
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 2;
+  }
+}
+
+/* Tilt-3D perspective — dossier card leans toward cursor plane on hover */
+@utility tilt-3d {
+  transform-style: preserve-3d;
+  transition: transform 400ms cubic-bezier(.2,.7,.2,1), box-shadow 400ms ease;
+  will-change: transform;
+  &:hover {
+    transform: perspective(1100px) rotateX(3deg) rotateY(-4deg) translateZ(14px);
+    box-shadow:
+      0 22px 48px -20px color-mix(in oklab, var(--rust) 32%, transparent),
+      0 6px 16px -8px color-mix(in oklab, var(--forest) 22%, transparent);
+  }
+}
+
+/* Risk-bar fill easing on load — set --risk (0-100) inline */
+@keyframes risk-fill {
+  from { width: 0%; }
+  to   { width: var(--risk, 0%); }
+}
+.risk-bar-fill {
+  animation: risk-fill 1100ms cubic-bezier(.2,.8,.2,1) both;
+  width: var(--risk, 0%);
+}
+
+/* Continuous marquee — intel ticker */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee 28s linear infinite;
+}
+.marquee-track:hover { animation-play-state: paused; }
+
+/* Typewriter reveal — Oracle chat log */
+@keyframes typewriter {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+@keyframes caret-blink {
+  50% { border-color: transparent; }
+}
+.typewriter {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid var(--ember);
+  animation: typewriter 1.6s steps(40, end) both, caret-blink 800ms step-end infinite;
+}
+
+/* Ember focus ring helper for inputs on cream */
+@utility ring-ember {
+  &:focus-visible {
+    outline: none;
+    border-color: color-mix(in oklab, var(--terracotta) 60%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--terracotta) 18%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-scanline::before, .marquee-track, .typewriter { animation: none; }
+  .tilt-3d:hover { transform: none; }
+  .risk-bar-fill { animation: none; }
+}
+
+
+/* ============================================================
+ * STRICT 7-COLOR PALETTE LOCK
+ * Remaps the ENTIRE Tailwind color system onto the Warm Terracotta palette:
+ *   forest #1f1e1c · forest-2 #2d2a26 · rust #a94a26 · terracotta #c15f3c
+ *   ember #d97757 · paper #f0ede4 · ivory #faf9f5
+ * Any hardcoded class (bg-blue-600, text-slate-500, emerald-400, rose-…) now
+ * resolves to one of these seven colors — no other color can render.
+ *
+ * NOTE: declared as a plain (unlayered) :root block — NOT @theme — so it wins
+ * the cascade over Tailwind's own `@layer theme` default palette. The utilities
+ * still reference var(--color-*), so overriding the variables recolors them all.
+ * ============================================================ */
+:root {
+  --color-white: #faf9f5;
+  --color-black: #1f1e1c;
+
+  /* ── Neutrals: slate / gray / zinc / neutral / stone ── */
+  --color-slate-50: #faf9f5;  --color-slate-100: #faf9f5; --color-slate-200: #f0ede4; --color-slate-300: #f0ede4; --color-slate-400: #2d2a26; --color-slate-500: #2d2a26; --color-slate-600: #1f1e1c; --color-slate-700: #1f1e1c; --color-slate-800: #1f1e1c; --color-slate-900: #1f1e1c; --color-slate-950: #1f1e1c;
+  --color-gray-50: #faf9f5;   --color-gray-100: #faf9f5;  --color-gray-200: #f0ede4;  --color-gray-300: #f0ede4;  --color-gray-400: #2d2a26;  --color-gray-500: #2d2a26;  --color-gray-600: #1f1e1c;  --color-gray-700: #1f1e1c;  --color-gray-800: #1f1e1c;  --color-gray-900: #1f1e1c;  --color-gray-950: #1f1e1c;
+  --color-zinc-50: #faf9f5;   --color-zinc-100: #faf9f5;  --color-zinc-200: #f0ede4;  --color-zinc-300: #f0ede4;  --color-zinc-400: #2d2a26;  --color-zinc-500: #2d2a26;  --color-zinc-600: #1f1e1c;  --color-zinc-700: #1f1e1c;  --color-zinc-800: #1f1e1c;  --color-zinc-900: #1f1e1c;  --color-zinc-950: #1f1e1c;
+  --color-neutral-50: #faf9f5; --color-neutral-100: #faf9f5; --color-neutral-200: #f0ede4; --color-neutral-300: #f0ede4; --color-neutral-400: #2d2a26; --color-neutral-500: #2d2a26; --color-neutral-600: #1f1e1c; --color-neutral-700: #1f1e1c; --color-neutral-800: #1f1e1c; --color-neutral-900: #1f1e1c; --color-neutral-950: #1f1e1c;
+  --color-stone-50: #faf9f5;  --color-stone-100: #faf9f5; --color-stone-200: #f0ede4; --color-stone-300: #f0ede4; --color-stone-400: #2d2a26; --color-stone-500: #2d2a26; --color-stone-600: #1f1e1c; --color-stone-700: #1f1e1c; --color-stone-800: #1f1e1c; --color-stone-900: #1f1e1c; --color-stone-950: #1f1e1c;
+
+  /* ── Warm / danger: red / rose ── */
+  --color-red-50: #f0ede4;  --color-red-100: #f0ede4; --color-red-200: #d97757; --color-red-300: #d97757; --color-red-400: #c15f3c; --color-red-500: #c15f3c; --color-red-600: #c15f3c; --color-red-700: #a94a26; --color-red-800: #a94a26; --color-red-900: #a94a26; --color-red-950: #1f1e1c;
+  --color-rose-50: #f0ede4; --color-rose-100: #f0ede4; --color-rose-200: #d97757; --color-rose-300: #d97757; --color-rose-400: #c15f3c; --color-rose-500: #c15f3c; --color-rose-600: #c15f3c; --color-rose-700: #a94a26; --color-rose-800: #a94a26; --color-rose-900: #a94a26; --color-rose-950: #1f1e1c;
+
+  /* ── Warm accents: orange / amber / yellow ── */
+  --color-orange-50: #f0ede4; --color-orange-100: #f0ede4; --color-orange-200: #d97757; --color-orange-300: #d97757; --color-orange-400: #d97757; --color-orange-500: #c15f3c; --color-orange-600: #c15f3c; --color-orange-700: #a94a26; --color-orange-800: #a94a26; --color-orange-900: #a94a26; --color-orange-950: #1f1e1c;
+  --color-amber-50: #f0ede4;  --color-amber-100: #f0ede4;  --color-amber-200: #d97757;  --color-amber-300: #d97757;  --color-amber-400: #d97757;  --color-amber-500: #c15f3c;  --color-amber-600: #c15f3c;  --color-amber-700: #a94a26;  --color-amber-800: #a94a26;  --color-amber-900: #a94a26;  --color-amber-950: #1f1e1c;
+  --color-yellow-50: #f0ede4; --color-yellow-100: #f0ede4; --color-yellow-200: #d97757; --color-yellow-300: #d97757; --color-yellow-400: #d97757; --color-yellow-500: #c15f3c; --color-yellow-600: #c15f3c; --color-yellow-700: #a94a26; --color-yellow-800: #a94a26; --color-yellow-900: #a94a26; --color-yellow-950: #1f1e1c;
+
+  /* ── Cool / green / purple / pink → folded into warm palette ── */
+  --color-lime-50: #f0ede4; --color-lime-100: #f0ede4; --color-lime-200: #d97757; --color-lime-300: #d97757; --color-lime-400: #c15f3c; --color-lime-500: #c15f3c; --color-lime-600: #c15f3c; --color-lime-700: #2d2a26; --color-lime-800: #1f1e1c; --color-lime-900: #1f1e1c; --color-lime-950: #1f1e1c;
+  --color-green-50: #f0ede4; --color-green-100: #f0ede4; --color-green-200: #d97757; --color-green-300: #d97757; --color-green-400: #c15f3c; --color-green-500: #c15f3c; --color-green-600: #c15f3c; --color-green-700: #2d2a26; --color-green-800: #1f1e1c; --color-green-900: #1f1e1c; --color-green-950: #1f1e1c;
+  --color-emerald-50: #f0ede4; --color-emerald-100: #f0ede4; --color-emerald-200: #d97757; --color-emerald-300: #d97757; --color-emerald-400: #c15f3c; --color-emerald-500: #c15f3c; --color-emerald-600: #c15f3c; --color-emerald-700: #2d2a26; --color-emerald-800: #1f1e1c; --color-emerald-900: #1f1e1c; --color-emerald-950: #1f1e1c;
+  --color-teal-50: #f0ede4; --color-teal-100: #f0ede4; --color-teal-200: #d97757; --color-teal-300: #d97757; --color-teal-400: #c15f3c; --color-teal-500: #c15f3c; --color-teal-600: #c15f3c; --color-teal-700: #2d2a26; --color-teal-800: #1f1e1c; --color-teal-900: #1f1e1c; --color-teal-950: #1f1e1c;
+  --color-cyan-50: #f0ede4; --color-cyan-100: #f0ede4; --color-cyan-200: #d97757; --color-cyan-300: #d97757; --color-cyan-400: #c15f3c; --color-cyan-500: #c15f3c; --color-cyan-600: #c15f3c; --color-cyan-700: #2d2a26; --color-cyan-800: #1f1e1c; --color-cyan-900: #1f1e1c; --color-cyan-950: #1f1e1c;
+  --color-sky-50: #f0ede4; --color-sky-100: #f0ede4; --color-sky-200: #d97757; --color-sky-300: #d97757; --color-sky-400: #c15f3c; --color-sky-500: #c15f3c; --color-sky-600: #c15f3c; --color-sky-700: #2d2a26; --color-sky-800: #1f1e1c; --color-sky-900: #1f1e1c; --color-sky-950: #1f1e1c;
+  --color-blue-50: #f0ede4; --color-blue-100: #f0ede4; --color-blue-200: #d97757; --color-blue-300: #d97757; --color-blue-400: #c15f3c; --color-blue-500: #c15f3c; --color-blue-600: #c15f3c; --color-blue-700: #2d2a26; --color-blue-800: #1f1e1c; --color-blue-900: #1f1e1c; --color-blue-950: #1f1e1c;
+  --color-indigo-50: #f0ede4; --color-indigo-100: #f0ede4; --color-indigo-200: #d97757; --color-indigo-300: #d97757; --color-indigo-400: #c15f3c; --color-indigo-500: #c15f3c; --color-indigo-600: #c15f3c; --color-indigo-700: #2d2a26; --color-indigo-800: #1f1e1c; --color-indigo-900: #1f1e1c; --color-indigo-950: #1f1e1c;
+  --color-violet-50: #f0ede4; --color-violet-100: #f0ede4; --color-violet-200: #d97757; --color-violet-300: #d97757; --color-violet-400: #c15f3c; --color-violet-500: #c15f3c; --color-violet-600: #c15f3c; --color-violet-700: #2d2a26; --color-violet-800: #1f1e1c; --color-violet-900: #1f1e1c; --color-violet-950: #1f1e1c;
+  --color-purple-50: #f0ede4; --color-purple-100: #f0ede4; --color-purple-200: #d97757; --color-purple-300: #d97757; --color-purple-400: #c15f3c; --color-purple-500: #c15f3c; --color-purple-600: #c15f3c; --color-purple-700: #2d2a26; --color-purple-800: #1f1e1c; --color-purple-900: #1f1e1c; --color-purple-950: #1f1e1c;
+  --color-fuchsia-50: #f0ede4; --color-fuchsia-100: #f0ede4; --color-fuchsia-200: #d97757; --color-fuchsia-300: #d97757; --color-fuchsia-400: #c15f3c; --color-fuchsia-500: #c15f3c; --color-fuchsia-600: #c15f3c; --color-fuchsia-700: #2d2a26; --color-fuchsia-800: #1f1e1c; --color-fuchsia-900: #1f1e1c; --color-fuchsia-950: #1f1e1c;
+  --color-pink-50: #f0ede4; --color-pink-100: #f0ede4; --color-pink-200: #d97757; --color-pink-300: #d97757; --color-pink-400: #c15f3c; --color-pink-500: #c15f3c; --color-pink-600: #c15f3c; --color-pink-700: #2d2a26; --color-pink-800: #1f1e1c; --color-pink-900: #1f1e1c; --color-pink-950: #1f1e1c;
 }

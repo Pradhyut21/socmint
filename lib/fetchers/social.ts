@@ -1,8 +1,5 @@
 import { PlatformAccount, Post, SuspectProfile } from "../types";
 import { getDemoProbeResult, getDemoGithubData } from "../mock/demoData";
-import { UNRELIABLE_PLATFORMS } from "../unreliablePlatforms";
-
-import { getPostFlagDetails } from "../risk/contentRiskClassifier";
 
 export type ProbeResult = {
   ok: boolean;
@@ -11,10 +8,6 @@ export type ProbeResult = {
   description?: string;
   verifiedUsername?: string;
   verifiedUrl?: string;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-  followers?: number;
 };
 
 export type PlatformProbe = {
@@ -23,45 +16,48 @@ export type PlatformProbe = {
   url: (username: string) => string;
   normalize?: (username: string) => string;
   tier: 1 | 2;
+  priority?: 1 | 2 | 3;
 };
 
 export const PLATFORM_PROBES: PlatformProbe[] = [
-  // Tier 1 — Official APIs
-  { tier: 1, platform: "github",    label: "GitHub",     url: (u) => `https://github.com/${u}` },
-  { tier: 1, platform: "reddit",    label: "Reddit",     url: (u) => `https://www.reddit.com/user/${u}` },
-  { tier: 1, platform: "hackernews",label: "HackerNews", url: (u) => `https://news.ycombinator.com/user?id=${u}` },
-  { tier: 1, platform: "devto",     label: "Dev.to",     url: (u) => `https://dev.to/${u}` },
-  { tier: 1, platform: "gitlab",    label: "GitLab",     url: (u) => `https://gitlab.com/${u}` },
-  { tier: 1, platform: "tumblr",    label: "Tumblr",     url: (u) => `https://${u}.tumblr.com` },
-  // Tier 2 — HTTP existence probes
-  { tier: 2, platform: "twitter",   label: "X / Twitter",url: (u) => `https://x.com/${u}` },
-  { tier: 2, platform: "instagram", label: "Instagram",  url: (u) => `https://www.instagram.com/${u}` },
-  { tier: 2, platform: "facebook",  label: "Facebook",   url: (u) => `https://www.facebook.com/${u}` },
-  { tier: 2, platform: "telegram",  label: "Telegram",   url: (u) => `https://t.me/${u}` },
-  { tier: 2, platform: "linkedin",  label: "LinkedIn",   normalize: (u) => u.replace(/^in\//, "").replace(/[\s_.]+/g, "-").toLowerCase(), url: (u) => `https://www.linkedin.com/in/${u}` },
-  { tier: 2, platform: "tiktok",    label: "TikTok",     url: (u) => `https://www.tiktok.com/@${u}` },
-  { tier: 2, platform: "snapchat",  label: "Snapchat",   url: (u) => `https://www.snapchat.com/add/${u}` },
-  { tier: 2, platform: "pinterest", label: "Pinterest",  url: (u) => `https://www.pinterest.com/${u}` },
-  { tier: 2, platform: "soundcloud",label: "SoundCloud", url: (u) => `https://soundcloud.com/${u}` },
-  { tier: 2, platform: "medium",    label: "Medium",     url: (u) => `https://medium.com/@${u}` },
-  { tier: 2, platform: "quora",     label: "Quora",      url: (u) => `https://www.quora.com/profile/${u}` },
-  { tier: 2, platform: "steam",     label: "Steam",      url: (u) => `https://steamcommunity.com/id/${u}` },
-  { tier: 2, platform: "pastebin",  label: "Pastebin",   url: (u) => `https://pastebin.com/u/${u}` },
-  { tier: 2, platform: "youtube",   label: "YouTube",    url: (u) => `https://www.youtube.com/@${u}` },
-  // Additional platforms from feature branch
-  { tier: 2, platform: "twitch",    label: "Twitch",     url: (u) => `https://www.twitch.tv/${u}` },
-  { tier: 2, platform: "duolingo",  label: "Duolingo",   url: (u) => `https://www.duolingo.com/profile/${u}` },
-  { tier: 2, platform: "freelancer",label: "Freelancer.com", url: (u) => `https://www.freelancer.com/u/${u}` },
-  { tier: 2, platform: "leetcode",  label: "LeetCode",   url: (u) => `https://leetcode.com/u/${u}` },
-  { tier: 2, platform: "threads",   label: "Threads",    url: (u) => `https://www.threads.net/@${u}` },
-  { tier: 2, platform: "chess",     label: "Chess",      url: (u) => `https://www.chess.com/member/${u}` },
-  { tier: 2, platform: "picsart",   label: "Picsart",    url: (u) => `https://picsart.com/u/${u}` },
-  { tier: 2, platform: "kaggle",    label: "Kaggle",     url: (u) => `https://www.kaggle.com/${u}` },
-  { tier: 2, platform: "academia",  label: "Academia",   url: (u) => `https://independent.academia.edu/${u}` },
-  { tier: 2, platform: "appledevelopers", label: "AppleDevelopers", url: (u) => `https://developer.apple.com/forums/profile/${u}` },
-  { tier: 2, platform: "smule",     label: "Smule",      url: (u) => `https://www.smule.com/${u}` },
-  { tier: 2, platform: "quizlet",   label: "Quizlet",    url: (u) => `https://quizlet.com/user/${u}` },
+  // Tier 1 — Official APIs (PRIORITY - Fast & Reliable)
+  { tier: 1, platform: "github",    label: "GitHub",     url: (u) => `https://github.com/${u}`, priority: 1 },
+  { tier: 1, platform: "reddit",    label: "Reddit",     url: (u) => `https://www.reddit.com/user/${u}`, priority: 1 },
+  { tier: 1, platform: "hackernews",label: "HackerNews", url: (u) => `https://news.ycombinator.com/user?id=${u}`, priority: 2 },
+  { tier: 1, platform: "devto",     label: "Dev.to",     url: (u) => `https://dev.to/${u}`, priority: 2 },
+  { tier: 1, platform: "gitlab",    label: "GitLab",     url: (u) => `https://gitlab.com/${u}`, priority: 2 },
+  { tier: 1, platform: "tumblr",    label: "Tumblr",     url: (u) => `https://${u}.tumblr.com`, priority: 3 },
+  { tier: 1, platform: "chess",     label: "Chess.com",  url: (u) => `https://www.chess.com/member/${u}`, priority: 1 },
+  { tier: 1, platform: "leetcode",  label: "LeetCode",   url: (u) => `https://leetcode.com/u/${u}`, priority: 1 },
+  { tier: 1, platform: "stackoverflow", label: "Stack Overflow", url: (u) => `https://stackoverflow.com/users/${u}`, priority: 1 },
+  { tier: 1, platform: "freelancer",label: "Freelancer", url: (u) => `https://www.freelancer.com/u/${u}`, priority: 3 },
+  { tier: 1, platform: "duolingo",  label: "Duolingo",   url: (u) => `https://www.duolingo.com/profile/${u}`, priority: 3 },
+  { tier: 1, platform: "keybase",   label: "Keybase",    url: (u) => `https://keybase.io/${u}`, priority: 2 },
+  // Tier 2 — HTTP existence probes (Common platforms prioritized)
+  { tier: 2, platform: "twitter",   label: "X / Twitter",url: (u) => `https://x.com/${u}`, priority: 1 },
+  { tier: 2, platform: "instagram", label: "Instagram",  url: (u) => `https://www.instagram.com/${u}`, priority: 1 },
+  { tier: 2, platform: "facebook",  label: "Facebook",   url: (u) => `https://www.facebook.com/${u}`, priority: 1 },
+  { tier: 2, platform: "telegram",  label: "Telegram",   url: (u) => `https://t.me/${u}`, priority: 2 },
+  { tier: 2, platform: "linkedin",  label: "LinkedIn",   normalize: (u) => u.replace(/^in\//, "").replace(/[\s_.]+/g, "-").toLowerCase(), url: (u) => `https://www.linkedin.com/in/${u}`, priority: 1 },
+  { tier: 2, platform: "tiktok",    label: "TikTok",     url: (u) => `https://www.tiktok.com/@${u}`, priority: 1 },
+  { tier: 2, platform: "snapchat",  label: "Snapchat",   url: (u) => `https://www.snapchat.com/add/${u}`, priority: 2 },
+  { tier: 2, platform: "pinterest", label: "Pinterest",  url: (u) => `https://www.pinterest.com/${u}`, priority: 2 },
+  { tier: 2, platform: "soundcloud",label: "SoundCloud", url: (u) => `https://soundcloud.com/${u}`, priority: 3 },
+  { tier: 2, platform: "medium",    label: "Medium",     url: (u) => `https://medium.com/@${u}`, priority: 1 },
+  { tier: 2, platform: "quora",     label: "Quora",      url: (u) => `https://www.quora.com/profile/${u}`, priority: 3 },
+  { tier: 2, platform: "steam",     label: "Steam",      url: (u) => `https://steamcommunity.com/id/${u}`, priority: 3 },
+  { tier: 2, platform: "pastebin",  label: "Pastebin",   url: (u) => `https://pastebin.com/u/${u}`, priority: 3 },
+  { tier: 2, platform: "youtube",   label: "YouTube",    url: (u) => `https://www.youtube.com/@${u}`, priority: 1 },
+  { tier: 2, platform: "threads",   label: "Threads",    url: (u) => `https://www.threads.net/@${u}`, priority: 2 },
+  { tier: 2, platform: "dribbble",  label: "Dribbble",   url: (u) => `https://dribbble.com/${u}`, priority: 3 },
+  { tier: 2, platform: "codepen",   label: "CodePen",    url: (u) => `https://codepen.io/${u}`, priority: 3 },
+  { tier: 2, platform: "behance",   label: "Behance",    url: (u) => `https://www.behance.net/${u}`, priority: 3 },
+  { tier: 2, platform: "twitch",    label: "Twitch",     url: (u) => `https://www.twitch.tv/${u}`, priority: 2 },
+  { tier: 2, platform: "kaggle",    label: "Kaggle",     url: (u) => `https://www.kaggle.com/${u}`, priority: 2 },
 ];
+
+// Quick scan platforms (priority 1 only - most common)
+export const QUICK_SCAN_PLATFORMS = PLATFORM_PROBES.filter(p => p.priority === 1);
 
 export const RISK_TERMS = [
   "fraud", "scam", "hawala", "mule", "otp", "carding", "crypto",
@@ -98,9 +94,12 @@ export function displayNameFromQuery(query: string) {
     .join(" ");
 }
 
-export async function fetchWithTimeout(url: string, timeoutMs = 3000, options: RequestInit = {}): Promise<Response> {
+export async function fetchWithTimeout(url: string, timeoutMs = 10000, options: RequestInit = {}, quickScan = false): Promise<Response> {
+  // In quick scan mode, use 8 second timeout, otherwise use 10 seconds (or provided timeout)
+  const actualTimeout = quickScan ? 8000 : timeoutMs;
+  
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), actualTimeout);
 
   const defaultHeaders = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -120,7 +119,7 @@ export async function fetchWithTimeout(url: string, timeoutMs = 3000, options: R
   };
 
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -128,8 +127,29 @@ export async function fetchWithTimeout(url: string, timeoutMs = 3000, options: R
         ...(options.headers || {}),
       },
     });
-  } finally {
+
+    const originalText = response.text.bind(response);
+    response.text = async () => {
+      try {
+        return await originalText();
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    const originalJson = response.json.bind(response);
+    response.json = async () => {
+      try {
+        return await originalJson();
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    return response;
+  } catch (err) {
     clearTimeout(timeout);
+    throw err;
   }
 }
 
@@ -154,17 +174,15 @@ export function parseHandlesFromBio(bio: string): { platform: string; username: 
         const match = after.match(/(?:[:\s\-@=]+)((?:[a-zA-Z0-9_\-\s]+|[.,](?!\s|$))+)/);
         if (match && match[1]) {
           let resolved = match[1].trim();
-          
-          // Split by whitespace to extract only the first word (the handle)
-          resolved = resolved.split(/\s+/)[0];
-
-          // Strip any leading @ if still present
-          resolved = resolved.replace(/^@/, "");
-
+          const stopWords = [" and ", " at ", " in ", " for ", " on ", " - ", " | "];
+          for (const stop of stopWords) {
+            const stopIdx = resolved.toLowerCase().indexOf(stop);
+            if (stopIdx !== -1) {
+              resolved = resolved.slice(0, stopIdx).trim();
+            }
+          }
           resolved = resolved.replace(/[.,|()]+$/, "").trim();
-          
-          // Validate using standard username characters (letters, numbers, underscores, dots, hyphens)
-          if (resolved && resolved.length > 2 && !["com", "http", "https"].includes(resolved.toLowerCase()) && /^[a-zA-Z0-9_.-]+$/.test(resolved)) {
+          if (resolved && resolved.length > 2 && !["com", "http", "https"].includes(resolved.toLowerCase())) {
             found.push({ platform: plat.name, username: resolved });
           }
         }
@@ -182,7 +200,7 @@ export function buildExpandedSearchQuery(query: string): string {
     return cleaned;
   }
 
-  const parts = cleaned.split(/[._\-\s]+/);
+  const parts = cleaned.split(/[_\-\s]+/);
   if (parts.length > 1) {
     const spaceVariant = parts.join(" ");
     const hyphenVariant = parts.join("-");
@@ -209,37 +227,21 @@ export function levenshteinDistance(a: string, b: string): number {
   return dp[la][lb];
 }
 
-export function isSimilarUsername(u1: string, u2: string): boolean {
-  const clean1 = u1.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const clean2 = u2.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!clean1 || !clean2) return false;
-
-  // If very short, they must match exactly at the beginning
-  if (clean1.length < 4 || clean2.length < 4) {
-    return clean1.slice(0, 3) === clean2.slice(0, 3);
-  }
-
-  // "starting from 4 letter matching" — must share the first 4 letters as prefix (or Levenshtein diff of at most 1 character)
-  const prefix1 = clean1.slice(0, 4);
-  const prefix2 = clean2.slice(0, 4);
-
-  const prefixDist = levenshteinDistance(prefix1, prefix2);
-  if (prefixDist <= 1) {
-    // Additionally, verify overall similarity is high
-    const maxLen = Math.max(clean1.length, clean2.length);
-    const dist = levenshteinDistance(clean1, clean2);
-    const similarity = 1 - dist / maxLen;
-    // Lower threshold of 0.48 since they already share the prefix!
-    return similarity >= 0.48;
-  }
-
-  return false;
+/** Decode the small set of HTML entities that appear in meta tag attributes
+ *  (og:image URLs in particular use `&amp;` for `&`, which corrupts the
+ *  signed CDN query-string params like `_nc_oc=`/`oh=`/`oe=` if left encoded). */
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
-
 
 export function extractMeta(html: string, pattern: RegExp): string {
   const match = html.match(pattern);
-  return match && match[1] ? match[1].trim() : "";
+  return match && match[1] ? decodeHtmlEntities(match[1].trim()) : "";
 }
 
 export async function fetchProfileViaSearchEngineAndWayback(
@@ -259,26 +261,26 @@ export async function fetchProfileViaSearchEngineAndWayback(
   try {
     console.log(`[OSINT-SEARCH] Querying Yahoo for site:${lowerPlatform}.com/${username}...`);
     const yahooUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(`site:${lowerPlatform}.com/${username}`)}`;
-    const resp = await fetchWithTimeout(yahooUrl, 4500);
+    const resp = await fetchWithTimeout(yahooUrl, 2000);
     if (resp.ok) {
       html = await resp.text();
       searchEngine = "yahoo";
     }
-  } catch (e: any) {
-    console.warn(`[OSINT-SEARCH] Yahoo search query offline for ${platform}:${username}: ${e.message || e}`);
+  } catch (e) {
+    console.error(`[OSINT-SEARCH] Yahoo search failed for ${platform}:${username}`, e);
   }
   
   if (!html) {
     try {
       console.log(`[OSINT-SEARCH] Querying Bing for site:${lowerPlatform}.com/${username}...`);
       const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(`site:${lowerPlatform}.com/${username}`)}`;
-      const resp = await fetchWithTimeout(bingUrl, 4500, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
+      const resp = await fetchWithTimeout(bingUrl, 2000, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
       if (resp.ok) {
         html = await resp.text();
         searchEngine = "bing";
       }
-    } catch (e: any) {
-      console.warn(`[OSINT-SEARCH] Bing search query offline for ${platform}:${username}: ${e.message || e}`);
+    } catch (e) {
+      console.error(`[OSINT-SEARCH] Bing search failed for ${platform}:${username}`, e);
     }
   }
   
@@ -316,9 +318,11 @@ export async function fetchProfileViaSearchEngineAndWayback(
   }
 
   let waybackHtml = "";
+  // Skip Wayback Machine for speed - only search engines provide fast enough data
+  /* Disabled for performance
   try {
     const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=${lowerPlatform}.com/${username}&output=json&limit=3`;
-    const cdxResp = await fetchWithTimeout(cdxUrl, 4000);
+    const cdxResp = await fetchWithTimeout(cdxUrl, 3000);
     if (cdxResp.ok) {
       const snapshots = await cdxResp.json();
       if (Array.isArray(snapshots) && snapshots.length > 1) {
@@ -333,16 +337,17 @@ export async function fetchProfileViaSearchEngineAndWayback(
           const timestamp = latestRow[1];
           const original = latestRow[2];
           const rawUrl = `https://web.archive.org/web/${timestamp}id_/${original}`;
-          const rawResp = await fetchWithTimeout(rawUrl, 5000);
+          const rawResp = await fetchWithTimeout(rawUrl, 3000);
           if (rawResp.ok) {
             waybackHtml = await rawResp.text();
           }
         }
       }
     }
-  } catch (e: any) {
-    console.warn(`[OSINT-SEARCH] Wayback CDX offline for ${platform}:${username}: ${e.message || e}`);
+  } catch (e) {
+    console.error(`[OSINT-SEARCH] Wayback CDX failed for ${platform}:${username}`, e);
   }
+  */
 
   if (waybackHtml) {
     const ogTitle = extractMeta(waybackHtml, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
@@ -424,7 +429,7 @@ export async function fetchProfileViaSearchEngineAndWayback(
         displayName: title ? title.split(/\s*(?:\(|@)/)[0]?.trim() || title : title,
         bio: description,
         followers: followers || "Not publicly available",
-        avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(username)}`,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&size=256&background=0D8ABC&color=fff&bold=true`,
         profileUrl,
       };
     } else if (lowerPlatform === "youtube") {
@@ -433,7 +438,7 @@ export async function fetchProfileViaSearchEngineAndWayback(
         description,
         subscribers: followers || "Not publicly available",
         videoCount: "Not publicly available",
-        avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(username)}`,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&size=256&background=0D8ABC&color=fff&bold=true`,
         profileUrl,
       };
     } else if (lowerPlatform === "pinterest") {
@@ -441,7 +446,7 @@ export async function fetchProfileViaSearchEngineAndWayback(
         displayName: title,
         bio: description,
         followers: followers || "Not publicly available",
-        avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(username)}`,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&size=256&background=0D8ABC&color=fff&bold=true`,
         profileUrl,
       };
     } else if (lowerPlatform === "linkedin") {
@@ -451,7 +456,7 @@ export async function fetchProfileViaSearchEngineAndWayback(
         company: null,
         education: null,
         headline: title,
-        avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(username)}`,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&size=256&background=0D8ABC&color=fff&bold=true`,
         profileUrl,
         summary: description,
       };
@@ -502,7 +507,7 @@ export async function verifyProfileExistsViaSearch(platform: string, username: s
     } else if (lowerPlatform === "pinterest") {
       searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(`site:pinterest.com/${username}`)}`;
     }
-    const resp = await fetchWithTimeout(searchUrl, 4500, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
+    const resp = await fetchWithTimeout(searchUrl, 2000, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
     if (resp.ok) {
       const html = await resp.text();
       const blocks = html.split(/<li[^>]*class="[^"]*b_algo[^"]*"/gi);
@@ -698,339 +703,19 @@ export interface InstagramMeta {
   profileUrl: string;
 }
 
-export async function fetchLeetCodeDetails(username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-  ranking?: number | null;
-}> {
-  let profileData: any = null;
-  let statsRes: any = null;
-  try {
-    const gql = await fetchWithTimeout("https://leetcode.com/graphql", 3500, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Referer": "https://leetcode.com" },
-      body: JSON.stringify({
-        query: `query getUserProfile($username: String!) {
-          matchedUser(username: $username) {
-            username
-            profile {
-              realName
-              userAvatar
-              ranking
-              aboutMe
-            }
-          }
-        }`,
-        variables: { username },
-      }),
-    }).then(r => r.json().catch(() => null));
-    profileData = gql?.data?.matchedUser;
-  } catch {}
+// SECURITY: never hardcode session tokens in source. These are read from env
+// (INSTAGRAM_SESSION_ID / X_AUTH_TOKEN) and default to empty (feature disabled).
+// Using personal session cookies for scraping violates platform ToS and risks
+// account bans — leave unset in production.
+let _igSessionId = process.env.INSTAGRAM_SESSION_ID || "";
+let _xAuthToken = process.env.X_AUTH_TOKEN || "";
 
-  try {
-    statsRes = await fetchWithTimeout(`https://leetcode-stats-api.herokuapp.com/${username}`, 4000)
-      .then(r => r.json().catch(() => null));
-  } catch {}
-
-  if (!profileData && !(statsRes && statsRes.status === "success")) {
-    return { ok: false };
-  }
-
-  const profile = profileData?.profile;
-  return {
-    ok: true,
-    displayName: profile?.realName || username,
-    bio: profile?.aboutMe || undefined,
-    profilePicUrl: profile?.userAvatar || `https://assets.leetcode.com/users/${username}/avatar_1780136023.png`,
-    ranking: profile?.ranking || statsRes?.ranking || null,
-  };
+export function setIgSessionId(id: string) {
+  _igSessionId = id;
 }
 
-export async function fetchDuolingoDetails(username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-}> {
-  try {
-    const apiRes = await fetchWithTimeout(`https://www.duolingo.com/2017-06-30/users?username=${username}`).then(r => r.json().catch(() => null));
-    const user = apiRes?.users?.[0];
-    if (user) {
-      return {
-        ok: true,
-        displayName: user.name || username,
-        bio: `Duolingo profile. Learning language: ${user.learningLanguage || "unknown"}.`,
-        profilePicUrl: user.picture ? `https:${user.picture}` : undefined,
-      };
-    }
-    return { ok: false };
-  } catch {
-    return { ok: false };
-  }
-}
-
-export async function fetchTwitchDetails(username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-}> {
-  try {
-    const response = await fetchWithTimeout(`https://www.twitch.tv/${username}`, 3000);
-    if (!response.ok) return { ok: false };
-    const html = await response.text();
-    const ogTitle = extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-    const ogDesc = extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-
-    const titleLower = ogTitle?.toLowerCase() || "";
-    const userExists = titleLower.includes(username.toLowerCase()) && titleLower !== "twitch";
-
-    if (!userExists) return { ok: false };
-
-    return {
-      ok: true,
-      displayName: ogTitle?.replace(/ - Twitch.*$/i, "").trim(),
-      bio: ogDesc || undefined,
-      profilePicUrl: ogImage || undefined,
-    };
-  } catch {
-    return { ok: false };
-  }
-}
-
-export async function fetchChessDetails(username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-}> {
-  try {
-    const profileRes = await fetchWithTimeout(`https://api.chess.com/pub/player/${username}`, 3000).then(r => r.ok ? r.json() : null).catch(() => null);
-    if (profileRes && profileRes.code === undefined && !profileRes.error) {
-      return {
-        ok: true,
-        displayName: profileRes.title || profileRes.name || username,
-        bio: profileRes.status || "Chess.com player",
-        profilePicUrl: profileRes.avatar || "https://www.chess.com/bundles/web/images/noavatar_l.84a92436.gif",
-      };
-    }
-    return { ok: false };
-  } catch {
-    return { ok: false };
-  }
-}
-
-export async function fetchScrapedDetails(url: string, platformLabel: string, username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-}> {
-  try {
-    const response = await fetchWithTimeout(url, 3000);
-    if (!response.ok) return { ok: false };
-    const html = await response.text();
-    
-    const title = extractMeta(html, /<title[^>]*>([^<]+)<\/title>/i);
-    const description =
-      extractMeta(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
-      extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
-    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-
-    let exists = true;
-    const lowerHtml = html.toLowerCase();
-    const lowerTitle = title?.toLowerCase() || "";
-
-    if (platformLabel.toLowerCase() === "dribbble") {
-      if (lowerHtml.includes("whoops, that page is gone") || response.status === 404) exists = false;
-    } else if (platformLabel.toLowerCase() === "soundcloud") {
-      if (lowerHtml.includes("we can't find that") || lowerHtml.includes("soundcloud is not available") || response.status === 404) exists = false;
-    } else if (platformLabel.toLowerCase() === "pastebin") {
-      if (lowerHtml.includes("page_removed") || lowerTitle.includes("not found") || response.status === 404) exists = false;
-    } else if (platformLabel.toLowerCase() === "twitter" || platformLabel.toLowerCase() === "x") {
-      if (lowerTitle.includes("login") || lowerTitle.includes("sign in") || lowerTitle.includes("log in") || response.status === 404) exists = false;
-    }
-
-    if (!exists) return { ok: false };
-
-    let cleanName = title || username;
-    if (platformLabel.toLowerCase() === "dribbble") {
-      cleanName = title.replace(/\s*\|\s*Dribbble/i, "").trim();
-    } else if (platformLabel.toLowerCase() === "soundcloud") {
-      cleanName = title.replace(/\s*\|\s*Free Listening on SoundCloud/i, "").trim();
-    } else if (platformLabel.toLowerCase() === "pastebin") {
-      cleanName = title.replace(/\s*-\s*Pastebin\.com/i, "").trim();
-    }
-
-    return {
-      ok: true,
-      displayName: cleanName,
-      bio: description || undefined,
-      profilePicUrl: ogImage || undefined,
-    };
-  } catch {
-    return { ok: false };
-  }
-}
-
-export async function fetchDribbbleDetails(username: string) {
-  return fetchScrapedDetails(`https://dribbble.com/${username}`, "Dribbble", username);
-}
-
-export async function fetchSoundCloudDetails(username: string) {
-  return fetchScrapedDetails(`https://soundcloud.com/${username}`, "SoundCloud", username);
-}
-
-export async function fetchPastebinDetails(username: string) {
-  return fetchScrapedDetails(`https://pastebin.com/u/${username}`, "Pastebin", username);
-}
-
-export async function fetchTwitterDetails(username: string) {
-  return fetchScrapedDetails(`https://x.com/${username}`, "Twitter", username);
-}
-
-export async function fetchGithubDetails(username: string): Promise<{
-  ok: boolean;
-  status?: number;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-  followers?: number;
-  creationDate?: string;
-}> {
-  try {
-    const token = process.env.GITHUB_TOKEN;
-    const headers: HeadersInit = {
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "Antigravity-IDE-OSINT"
-    };
-    if (token && token !== "ghp_PlaceholderTokenHere") {
-      headers["Authorization"] = `token ${token}`;
-    }
-    const res = await fetchWithTimeout(`https://api.github.com/users/${username}`, 4500, { headers });
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (data) {
-        return {
-          ok: true,
-          status: 200,
-          displayName: data.name || data.login,
-          bio: data.bio || undefined,
-          profilePicUrl: data.avatar_url || undefined,
-          followers: data.followers || 0,
-          creationDate: data.created_at || undefined
-        };
-      }
-    }
-    return { ok: false, status: res.status };
-  } catch {
-    return { ok: false, status: 500 };
-  }
-}
-
-export async function fetchYoutubeDetails(username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-}> {
-  try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/@${username}&format=json`;
-    const res = await fetchWithTimeout(oembedUrl, 4000);
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (data) {
-        return {
-          ok: true,
-          displayName: data.title || data.author_name || username,
-          profilePicUrl: data.thumbnail_url || undefined,
-          bio: `YouTube channel for @${username}.`
-        };
-      }
-    }
-  } catch {}
-
-  return fetchScrapedDetails(`https://www.youtube.com/@${username}`, "YouTube", username);
-}
-
-export async function fetchThreadsDetails(username: string): Promise<{
-  ok: boolean;
-  displayName?: string;
-  bio?: string;
-  profilePicUrl?: string;
-  followers?: number;
-}> {
-  // Threads requires a browser User-Agent — fetchWithTimeout already sends one.
-  // Real profiles return og:title like "SAI KISHAN A (@kishansaaai)".
-  // Non-existent handles redirect to the login page: title = "Threads • Log in".
-  try {
-    const res = await fetchWithTimeout(
-      `https://www.threads.net/@${username}`,
-      5000
-    );
-    if (!res.ok && res.status !== 200) return { ok: false };
-    const html = await res.text();
-
-    const ogTitle =
-      extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
-      extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i) ||
-      extractMeta(html, /<title[^>]*>([^<]+)<\/title>/i);
-
-    const ogDesc =
-      extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
-      extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-
-    const ogImage =
-      extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
-      extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-
-    if (!ogTitle) return { ok: false };
-
-    const lowerTitle = ogTitle.toLowerCase();
-    // Threads login-redirect fingerprint — same title for all unauthenticated
-    // requests to non-existent handles, confirmed by real-vs-fake control-test.
-    if (
-      lowerTitle.includes("log in") ||
-      lowerTitle.includes("sign in") ||
-      lowerTitle === "threads" ||
-      lowerTitle === "threads • log in" ||
-      lowerTitle === "threads | log in"
-    ) {
-      return { ok: false };
-    }
-
-    // Parse follower count from og:description, e.g. "7 Followers · ..."
-    let followers = 0;
-    if (ogDesc) {
-      const followerMatch = ogDesc.match(/(\d[\d,]*)\s+Follower/i);
-      if (followerMatch) {
-        followers = parseInt(followerMatch[1].replace(/,/g, ""), 10);
-      }
-    }
-
-    // Strip trailing platform suffix from display name, e.g. " (@handle) • Threads"
-    const cleanName = ogTitle
-      .replace(/\s*•\s*Threads\s*$/i, "")
-      .replace(/\s*\(@[^)]+\)\s*$/, "")
-      .trim() || username;
-
-    return {
-      ok: true,
-      displayName: cleanName,
-      bio: ogDesc || undefined,
-      profilePicUrl: ogImage || undefined,
-      followers,
-    };
-  } catch {
-    return { ok: false };
-  }
+export function setXAuthToken(token: string) {
+  _xAuthToken = token;
 }
 
 export async function probePublicProfile(url: string): Promise<ProbeResult & {
@@ -1046,237 +731,139 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
 
   if (demoResult) return demoResult;
 
-  // ── Intercept Unreliable Platforms ──────────────────────────────────
-  const platformName = lowercaseUrl.includes("instagram.com") ? "instagram"
-    : lowercaseUrl.includes("twitter.com") || lowercaseUrl.includes("x.com") ? "twitter"
-    : lowercaseUrl.includes("linkedin.com") ? "linkedin"
-    : lowercaseUrl.includes("t.me") ? "telegram"
-    : lowercaseUrl.includes("facebook.com") ? "facebook"
-    : lowercaseUrl.includes("youtube.com") ? "youtube"
-    : lowercaseUrl.includes("pinterest.com") ? "pinterest"
-    : lowercaseUrl.includes("steamcommunity.com") ? "steam"
-    : lowercaseUrl.includes("tiktok.com") ? "tiktok"
-    : lowercaseUrl.includes("twitch.tv") ? "twitch"
-    : lowercaseUrl.includes("threads.net") ? "threads"
-    : lowercaseUrl.includes("duolingo.com") ? "duolingo"
-    : lowercaseUrl.includes("picsart.com") ? "picsart"
-    : lowercaseUrl.includes("developer.apple.com") ? "appledevelopers"
-    : lowercaseUrl.includes("stackoverflow.com") ? "stackoverflow"
-    : "";
+  // Custom check for Instagram
+  if (lowercaseUrl.includes("instagram.com")) {
+    let igUsername = lowercaseUrl.split("instagram.com/")[1]?.split("/")[0]?.split("?")[0];
+    if (!igUsername) return { ok: false, status: 404 };
+    igUsername = igUsername.replace(/^@/, "");
 
-  const unreliable = UNRELIABLE_PLATFORMS.find(p => p.id === platformName);
-  if (unreliable) {
-    return { ok: false, status: 500, reason: unreliable.reason } as any;
-  }
-
-  // ── LeetCode Upgraded Detail-Fetch Check ────────────────────────────
-  if (lowercaseUrl.includes("leetcode.com/u/") || lowercaseUrl.includes("leetcode.com/")) {
-    const parts = lowercaseUrl.split("/");
-    const username = parts[parts.indexOf("leetcode.com") + 1] === "u"
-      ? parts[parts.indexOf("leetcode.com") + 2]
-      : parts[parts.indexOf("leetcode.com") + 1];
-    if (username) {
-      const details = await fetchLeetCodeDetails(username);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName,
-          description: details.bio || "Active LeetCode profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
+    if (_igSessionId) {
+      try {
+        const igApiRes = await fetchWithTimeout(
+          `https://i.instagram.com/api/v1/users/web_profile_info/?username=${igUsername}`,
+          8000,
+          {
+            headers: {
+              "User-Agent": "Instagram 219.0.0.12.117 Android (28/9; 411dpi; 1080x2241; Xiaomi; Mi A2; jasmine_sprout; qcom; en_US; 302733750)",
+              Accept: "application/json",
+              "X-IG-App-ID": "936619743392459",
+              "X-ASBD-ID": "129477",
+              "X-IG-WWW-Claim": "0",
+              "X-Requested-With": "XMLHttpRequest",
+              Referer: `https://www.instagram.com/${igUsername}/`,
+              Cookie: `sessionid=${_igSessionId}`,
+            },
+          }
+        );
+        if (igApiRes.ok) {
+          const igData = await igApiRes.json().catch(() => null);
+          const user = igData?.data?.user;
+          if (user) {
+            return {
+              ok: true,
+              status: 200,
+              title: user.full_name || user.username || igUsername,
+              description: user.biography || `Instagram profile for @${igUsername}.`,
+              instagramMeta: {
+                username: user.username || igUsername,
+                displayName: user.full_name || null,
+                bio: user.biography || null,
+                website: user.external_url || null,
+                followers: String(user.edge_followed_by?.count ?? user.follower_count ?? 0),
+                avatar: user.profile_pic_url_hd || user.profile_pic_url || null,
+                profileUrl: url,
+              }
+            };
+          }
+        }
+        if (igApiRes.status === 404) return { ok: false, status: 404 };
+      } catch { /* fall through */ }
     }
   }
 
-  // ── Duolingo Upgraded Detail-Fetch Check ────────────────────────────
-  if (lowercaseUrl.includes("duolingo.com/profile/")) {
-    const username = lowercaseUrl.split("profile/")[1]?.split("/")[0]?.split("?")[0];
-    if (username) {
-      const details = await fetchDuolingoDetails(username);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName,
-          description: details.bio || "Active Duolingo profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
+  // Custom check for Threads
+  // Threads is a JS-only shell with no og:image. Since Threads and Instagram share
+  // the same handle namespace, we look up the profile pic via Instagram's API.
+  if (lowercaseUrl.includes("threads.net")) {
+    const threadsUser = lowercaseUrl.split("threads.net/@")[1]?.split("/")[0]?.split("?")[0]?.replace(/^@/, "");
+    if (threadsUser) {
+      try {
+        const igApiRes = await fetchWithTimeout(
+          `https://www.instagram.com/api/v1/users/web_profile_info/?username=${threadsUser}`,
+          6000,
+          {
+            headers: {
+              "User-Agent": "Instagram 219.0.0.12.117 Android (28/9; 411dpi; 1080x2241; Xiaomi; Mi A2; jasmine_sprout; qcom; en_US; 302733750)",
+              Accept: "application/json",
+              "X-IG-App-ID": "936619743392459",
+              "X-ASBD-ID": "129477",
+              "X-IG-WWW-Claim": "0",
+              "X-Requested-With": "XMLHttpRequest",
+              Referer: "https://www.instagram.com/",
+            },
+          }
+        );
+        if (igApiRes.ok) {
+          const igData = await igApiRes.json().catch(() => null);
+          const user = igData?.data?.user;
+          if (user) {
+            return {
+              ok: true,
+              status: 200,
+              title: user.full_name || user.username || threadsUser,
+              description: user.biography || `Threads profile for @${threadsUser}.`,
+              instagramMeta: {
+                username: user.username || threadsUser,
+                displayName: user.full_name || null,
+                bio: user.biography || null,
+                website: user.external_url || null,
+                followers: String(user.edge_followed_by?.count ?? 0),
+                avatar: user.profile_pic_url_hd || user.profile_pic_url || null,
+                profileUrl: url,
+              }
+            };
+          }
+        }
+        if (igApiRes.status === 404) return { ok: false, status: 404 };
+      } catch { /* fall through */ }
     }
+    return { ok: false, status: 404 };
   }
 
-  // ── Twitch Upgraded Detail-Fetch Check ──────────────────────────────
-  if (lowercaseUrl.includes("twitch.tv/")) {
-    const twitchUser = lowercaseUrl.split("twitch.tv/")[1]?.split("/")[0]?.split("?")[0];
-    if (twitchUser) {
-      const details = await fetchTwitchDetails(twitchUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || twitchUser,
-          description: details.bio || "Active Twitch profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
-    }
-  }
+  // Custom check for X/Twitter
+  if (lowercaseUrl.includes("x.com") || lowercaseUrl.includes("twitter.com")) {
+    let xUsername = lowercaseUrl.split(/(?:x\.com|twitter\.com)\//)[1]?.split("/")[0]?.split("?")[0];
+    if (!xUsername) return { ok: false, status: 404 };
+    xUsername = xUsername.replace(/^@/, "");
 
-  // ── Chess.com Upgraded Detail-Fetch Check ───────────────────────────
-  if (lowercaseUrl.includes("chess.com/member/")) {
-    const chessUser = lowercaseUrl.split("member/")[1]?.split("/")[0]?.split("?")[0];
-    if (chessUser) {
-      const details = await fetchChessDetails(chessUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || chessUser,
-          description: details.bio || "Active Chess.com profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
-    }
-  }
-
-  // ── GitHub Upgraded Detail-Fetch Check ──────────────────────────────
-  if (lowercaseUrl.includes("github.com/")) {
-    const gitUser = lowercaseUrl.split("github.com/")[1]?.split("/")[0]?.split("?")[0];
-    if (gitUser && !["features", "pulls", "issues", "marketplace", "explore", "trending", "pricing"].includes(gitUser)) {
-      const details = await fetchGithubDetails(gitUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || gitUser,
-          description: details.bio || "Active GitHub profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined,
-          followers: details.followers
-        };
-      }
-      // Distinguish rate limit/unauthorized from doesn't exist
-      const failStatus = details.status || 404;
-      return { ok: false, status: failStatus };
-    }
-  }
-
-  // ── YouTube Upgraded Detail-Fetch Check ─────────────────────────────
-  if (lowercaseUrl.includes("youtube.com/")) {
-    const splitAt = lowercaseUrl.includes("youtube.com/@") ? "youtube.com/@" : "youtube.com/";
-    let ytUser = lowercaseUrl.split(splitAt)[1]?.split("/")[0]?.split("?")[0];
-    if (ytUser === "user" || ytUser === "c" || ytUser === "channel") {
-      ytUser = lowercaseUrl.split("youtube.com/")[1]?.split("/")[1]?.split("?")[0] || "";
-    }
-    if (ytUser) {
-      const details = await fetchYoutubeDetails(ytUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || ytUser,
-          description: details.bio || "Active YouTube profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
-    }
-  }
-
-  // ── X / Twitter Upgraded Detail-Fetch Check ─────────────────────────
-  if (lowercaseUrl.includes("twitter.com/") || lowercaseUrl.includes("x.com/")) {
-    const splitAt = lowercaseUrl.includes("twitter.com/") ? "twitter.com/" : "x.com/";
-    const twUser = lowercaseUrl.split(splitAt)[1]?.split("/")[0]?.split("?")[0];
-    if (twUser && !["home", "explore", "notifications", "messages", "i"].includes(twUser)) {
-      const details = await fetchTwitterDetails(twUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || twUser,
-          description: details.bio || "Active X / Twitter profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
-    }
-  }
-
-  // ── SoundCloud Upgraded Detail-Fetch Check ──────────────────────────
-  if (lowercaseUrl.includes("soundcloud.com/")) {
-    const scUser = lowercaseUrl.split("soundcloud.com/")[1]?.split("/")[0]?.split("?")[0];
-    if (scUser && !["discover", "stream", "upload", "you"].includes(scUser)) {
-      const details = await fetchSoundCloudDetails(scUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || scUser,
-          description: details.bio || "Active SoundCloud profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
-    }
-  }
-
-  // ── Pastebin Upgraded Detail-Fetch Check ────────────────────────────
-  if (lowercaseUrl.includes("pastebin.com/u/")) {
-    const pbUser = lowercaseUrl.split("pastebin.com/u/")[1]?.split("/")[0]?.split("?")[0];
-    if (pbUser) {
-      const details = await fetchPastebinDetails(pbUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || pbUser,
-          description: details.bio || "Active Pastebin profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
-    }
-  }
-
-  // ── Dribbble Upgraded Detail-Fetch Check ────────────────────────────
-  if (lowercaseUrl.includes("dribbble.com/")) {
-    const drUser = lowercaseUrl.split("dribbble.com/")[1]?.split("/")[0]?.split("?")[0];
-    if (drUser && !["shots", "designers", "jobs", "stories"].includes(drUser)) {
-      const details = await fetchDribbbleDetails(drUser);
-      if (details.ok) {
-        return {
-          ok: true,
-          status: 200,
-          title: details.displayName || drUser,
-          description: details.bio || "Active Dribbble profile confirmed.",
-          displayName: details.displayName,
-          bio: details.bio,
-          profilePicUrl: details.profilePicUrl || undefined
-        };
-      }
-      return { ok: false, status: 404 };
+    if (_xAuthToken) {
+      try {
+        const xRes = await fetchWithTimeout(
+          `https://x.com/${xUsername}`,
+          8000,
+          {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              Cookie: `auth_token=${_xAuthToken}`,
+            },
+            redirect: "manual"
+          }
+        );
+        if (xRes.status === 302 || xRes.status === 301 || xRes.status === 307) {
+          const loc = xRes.headers.get("location") || "";
+          if (loc.includes("login") || loc.includes("i/flow/signup")) {
+            return { ok: false, status: 401 };
+          }
+        }
+        if (xRes.ok) {
+          return {
+            ok: true,
+            status: 200,
+            title: xUsername,
+            description: `X (Twitter) profile confirmed via authenticated API probe.`,
+          };
+        }
+      } catch { /* fall through */ }
     }
   }
 
@@ -1285,7 +872,7 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
     const redditUser = lowercaseUrl.split("reddit.com/user/")[1]?.split("/")[0]?.split("?")[0] || "";
     if (redditUser) {
       try {
-        const jsonResp = await fetchWithTimeout(`https://www.reddit.com/user/${redditUser}/about.json`, 5000);
+        const jsonResp = await fetchWithTimeout(`https://www.reddit.com/user/${redditUser}/about.json`, 2000);
         if (jsonResp.ok) {
           const data = await jsonResp.json();
           if (data?.data?.name) {
@@ -1299,49 +886,203 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
     }
   }
 
-  // ── Telegram: fetch public preview page and parse name/bio ──────────────────
-  if (lowercaseUrl.includes("t.me/")) {
-    const tgUser = lowercaseUrl.split("t.me/")[1]?.split("/")[0]?.split("?")[0] || "";
-    if (tgUser && !["share", "addstickers", "setlanguage", "contact", "s"].includes(tgUser)) {
+  // ── Chess.com: use public API ──────────────────────────────────────────────
+  if (lowercaseUrl.includes("chess.com/member/")) {
+    const username = lowercaseUrl.split("member/")[1]?.split("/")[0]?.split("?")[0];
+    if (username) {
       try {
-        console.log(`[TELEGRAM] Querying public profile for "${tgUser}"...`);
-        const resp = await fetchWithTimeout(`https://t.me/${tgUser}`, 5000);
-        if (resp.ok) {
-          const html = await resp.text();
-          
-          const ogTitle = extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-            || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-          
-          const ogDesc = extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-            || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+        const [profileRes, statsRes] = await Promise.all([
+          fetchWithTimeout(`https://api.chess.com/pub/player/${username}`).then(r => r.json().catch(() => null)),
+          fetchWithTimeout(`https://api.chess.com/pub/player/${username}/stats`).then(r => r.json().catch(() => null))
+        ]);
+        if (profileRes && profileRes.code === undefined && !profileRes.error) {
+          const ratings = {
+            bullet: statsRes?.chess_bullet?.last?.rating || null,
+            blitz: statsRes?.chess_blitz?.last?.rating || null,
+            rapid: statsRes?.chess_rapid?.last?.rating || null,
+            daily: statsRes?.chess_daily?.last?.rating || null,
+            puzzle: statsRes?.tactics?.highest?.rating || null
+          };
+          return {
+            ok: true,
+            status: 200,
+            title: profileRes.name || profileRes.username || username,
+            description: `Chess.com player. ${profileRes.title || ''} Rapid: ${ratings.rapid || 'N/A'}. ${profileRes.followers || 0} followers.`
+          };
+        }
+      } catch {}
+      return { ok: false, status: 404 };
+    }
+  }
 
-          const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+  // ── LeetCode: use GraphQL API ──────────────────────────────────────────────
+  if (lowercaseUrl.includes("leetcode.com")) {
+    const parts = lowercaseUrl.split("?")[0].split("/");
+    const username = parts[parts.indexOf("leetcode.com") + 1] === "u"
+      ? parts[parts.indexOf("leetcode.com") + 2]
+      : parts[parts.indexOf("leetcode.com") + 1];
+    if (username) {
+      try {
+        const gql = await fetchWithTimeout("https://leetcode.com/graphql", 3000, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Referer": "https://leetcode.com" },
+          body: JSON.stringify({
+            query: `query getUserProfile($username: String!) {
+              matchedUser(username: $username) {
+                username
+                profile {
+                  realName
+                  ranking
+                  reputation
+                }
+                submitStats {
+                  acSubmissionNum { difficulty count }
+                }
+              }
+            }`,
+            variables: { username },
+          }),
+        }).then(r => r.json().catch(() => null));
+        
+        const user = gql?.data?.matchedUser;
+        if (user) {
+          const submitAc = user.submitStats?.acSubmissionNum || [];
+          const allAc = submitAc.find((s: any) => s.difficulty === "All");
+          return {
+            ok: true,
+            status: 200,
+            title: user.profile?.realName || username,
+            description: `LeetCode user. Solved ${allAc?.count || 0} problems. Ranking: ${user.profile?.ranking || 'N/A'}.`
+          };
+        }
+      } catch {}
+      return { ok: false, status: 404 };
+    }
+  }
 
-          const exists = ogTitle && !ogTitle.includes("Telegram: Contact") && !html.includes("If you have Telegram, you can contact");
-          const hasBio = ogDesc && !ogDesc.includes("Telegram is a cloud-based") && !ogDesc.includes("You can contact");
-          const hasTitle = ogTitle && ogTitle.trim() && ogTitle !== `Contact @${tgUser}`;
-
-          if (exists || hasBio || hasTitle) {
-            console.log(`[TELEGRAM] ✓ Found active Telegram profile: "${ogTitle || tgUser}"`);
-            const telegramMeta = {
-              username: tgUser,
-              displayName: ogTitle || tgUser,
-              bio: ogDesc || null,
-              avatar: ogImage || null,
-              profileUrl: url,
-            };
+  // ── Stack Overflow: use Stack Exchange API ────────────────────────────────
+  if (lowercaseUrl.includes("stackoverflow.com/users")) {
+    const userId = lowercaseUrl.match(/\/users\/(\d+)/)?.[1];
+    if (userId) {
+      try {
+        const apiUrl = `https://api.stackexchange.com/2.3/users/${userId}?site=stackoverflow`;
+        const apiResp = await fetchWithTimeout(apiUrl, 2500);
+        if (apiResp.ok) {
+          const data = await apiResp.json();
+          const user = data?.items?.[0];
+          if (user) {
+            const badges = user.badge_counts || {};
             return {
               ok: true,
               status: 200,
-              title: ogTitle || tgUser,
-              description: ogDesc || `Telegram profile for @${tgUser}`,
-              telegramMeta,
-            } as any;
+              title: user.display_name || `User ${userId}`,
+              description: `Stack Overflow user. ${user.reputation || 0} reputation. Gold: ${badges.gold || 0}, Silver: ${badges.silver || 0}, Bronze: ${badges.bronze || 0}.`
+            };
           }
         }
-        return { ok: false, status: 404 };
-      } catch (e: any) {
-        console.warn(`[TELEGRAM] Error probing: ${e.message || e}`);
+      } catch {}
+    }
+  }
+
+  // ── Freelancer.com: use public API ─────────────────────────────────────────
+  if (lowercaseUrl.includes("freelancer.com/u/")) {
+    const username = lowercaseUrl.split("/u/")[1]?.split("/")[0]?.split("?")[0];
+    if (username) {
+      try {
+        const apiRes = await fetchWithTimeout(
+          `https://www.freelancer.com/api/users/0.1/users?usernames%5B%5D=${encodeURIComponent(username)}&compact=true`,
+          7000
+        ).then(r => r.json().catch(() => null));
+        const usersObj = apiRes?.result?.users;
+        const user = usersObj ? Object.values(usersObj)[0] as any : null;
+        if (user && user.username) {
+          return {
+            ok: true,
+            status: 200,
+            title: user.display_name || user.username,
+            description: `Freelancer.com profile. ${user.tagline || ''} ${user.reviews_count || 0} reviews.`
+          };
+        }
+      } catch {}
+    }
+  }
+
+  // ── Duolingo: use public API ───────────────────────────────────────────────
+  if (lowercaseUrl.includes("duolingo.com/profile/")) {
+    const username = lowercaseUrl.split("profile/")[1]?.split("/")[0]?.split("?")[0];
+    if (username) {
+      try {
+        const apiRes = await fetchWithTimeout(`https://www.duolingo.com/2017-06-30/users?username=${username}`)
+          .then(r => r.json().catch(() => null));
+        const user = apiRes?.users?.[0];
+        if (user) {
+          return {
+            ok: true,
+            status: 200,
+            title: user.name || username,
+            description: `Duolingo user. ${user.totalXp || 0} XP. ${user.streak || 0} day streak. Learning ${user.learningLanguage || 'languages'}.`
+          };
+        }
+      } catch {}
+      return { ok: false, status: 404 };
+    }
+  }
+
+  // ── Keybase: use public API ────────────────────────────────────────────────
+  if (lowercaseUrl.includes("keybase.io/")) {
+    const username = lowercaseUrl.split("keybase.io/")[1]?.split("/")[0]?.split("?")[0];
+    if (username) {
+      try {
+        const apiResp = await fetchWithTimeout(
+          `https://keybase.io/_/api/1.0/user/lookup.json?username=${username}`,
+          6000
+        );
+        if (apiResp.ok) {
+          const data = await apiResp.json();
+          const user = data?.them;
+          if (user && user.basics) {
+            const proofs = user.proofs_summary?.all || [];
+            return {
+              ok: true,
+              status: 200,
+              title: user.profile?.full_name || user.basics.username,
+              description: `Keybase user. ${proofs.length} verified proofs. ${user.profile?.bio || 'Identity verification platform.'}`
+            };
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // ── Threads: HTML probe ────────────────────────────────────────────────────
+  if (lowercaseUrl.includes("threads.net")) {
+    let threadsUsername = lowercaseUrl.split("threads.net/")[1]?.split("/")[0]?.split("?")[0];
+    if (threadsUsername) {
+      threadsUsername = threadsUsername.replace(/^@/, "");
+      try {
+        const response = await fetchWithTimeout(`https://www.threads.net/@${threadsUsername}`);
+        if (!response.ok) return { ok: false, status: response.status };
+        
+        const html = await response.text();
+        const isProfilePage = html.includes(`"username":"${threadsUsername}"`) || 
+                            html.includes(`threads.net/@${threadsUsername}`) ||
+                            html.includes('property="og:title"');
+        
+        if (!isProfilePage || html.includes("Sorry, this page isn't available")) {
+          return { ok: false, status: 404 };
+        }
+
+        const ogTitle = extractMeta(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
+        const ogDesc = extractMeta(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+        
+        return {
+          ok: true,
+          status: 200,
+          title: ogTitle?.replace(/\(@.*?\)/, "").trim() || threadsUsername,
+          description: ogDesc || `Threads profile found.`
+        };
+      } catch {
+        return { ok: false, status: 0 };
       }
     }
   }
@@ -1357,7 +1098,11 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
           5500,
           {
             headers: {
+              // Mobile app UA bypasses the login-wall checkpoint that blocks desktop UAs
+              "User-Agent": "Instagram 219.0.0.12.117 Android (28/9; 411dpi; 1080x2241; Xiaomi; Mi A2; jasmine_sprout; qcom; en_US; 302733750)",
               "x-ig-app-id": "936619743392459",
+              "X-ASBD-ID": "129477",
+              "X-IG-WWW-Claim": "0",
               "x-requested-with": "XMLHttpRequest",
               Referer: "https://www.instagram.com/",
               Accept: "application/json",
@@ -1367,6 +1112,15 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
         if (igApiResp.ok) {
           const igData = await igApiResp.json();
           const igProfile = igData?.data?.user;
+          console.log(`[INSTAGRAM-API] Response for ${igUser}:`, {
+            hasData: !!igData,
+            hasUser: !!igProfile,
+            username: igProfile?.username,
+            fullName: igProfile?.full_name,
+            isPrivate: igProfile?.is_private,
+            profilePicHD: igProfile?.profile_pic_url_hd,
+            profilePic: igProfile?.profile_pic_url
+          });
           if (igProfile) {
             const isPrivate: boolean = igProfile.is_private ?? false;
             const followerCount: number = igProfile.edge_followed_by?.count ?? 0;
@@ -1379,6 +1133,7 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
               avatar:      igProfile.profile_pic_url_hd || igProfile.profile_pic_url || null,
               profileUrl:  url,
             };
+            console.log(`[INSTAGRAM-API] Final avatar URL:`, instagramMeta.avatar);
             return {
               ok: !isPrivate,
               status: isPrivate ? 401 : 200,
@@ -1637,7 +1392,10 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
       let website = "Not publicly available";
       const webMatch = html.match(/"external_url":\s*"([^"]+)"/);
       if (webMatch) website = webMatch[1];
-      const avatar = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) || null;
+      // og:image may be absent on a login wall — also try inline JSON profile_pic fields
+      const avatar = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+                     (html.match(/"profile_pic_url_hd":"(https:[^"]+)"/) || html.match(/"profile_pic_url":"(https:[^"]+)"/))?.[1]?.replace(/\\u0026/g, '&') ||
+                     null;
 
       const instagramMeta: InstagramMeta = {
         username,
@@ -1707,15 +1465,11 @@ export async function probePublicProfile(url: string): Promise<ProbeResult & {
       };
     }
 
-    const ogImage = extractMeta(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || extractMeta(html, /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-
     return {
       ok: !/not found|page doesn't exist|this account doesn't exist|404|no such user/i.test(`${title} ${description}`),
       status: response.status,
       title,
       description,
-      profilePicUrl: ogImage || undefined,
     };
   } catch {
     return { ok: false };
@@ -1743,15 +1497,12 @@ export function formatGithubEvent(event: any): Post {
     content = `${event.payload?.action || "Opened"} issue #${event.payload?.issue?.number || ""} in ${event.repo?.name || "repository"}`;
   }
   
-  const flagInfo = getPostFlagDetails(content);
-  
   return {
     id: `github-${event.id}`,
     platform: "github",
     content,
     postedAt: event.created_at,
-    flagLevel: flagInfo.flagLevel,
-    flagReason: flagInfo.flagReason,
+    flagLevel: "NORMAL",
     capturedAt: new Date().toISOString(),
   };
 }
@@ -1795,8 +1546,8 @@ export async function fuzzyGithubSearch(username: string, githubTokenOverride?: 
     console.log(`[SOCMINT] Fuzzy match: "${username}" → "${resolvedUsername}" (edit distance: ${bestMatch.distance})`);
 
     const [userResp, eventsResp] = await Promise.all([
-      fetchWithTimeout(`https://api.github.com/users/${resolvedUsername}`, 3500, requestOptions),
-      fetchWithTimeout(`https://api.github.com/users/${resolvedUsername}/events/public?per_page=5`, 3500, requestOptions),
+      fetchWithTimeout(`https://api.github.com/users/${resolvedUsername}`, 12000, requestOptions),
+      fetchWithTimeout(`https://api.github.com/users/${resolvedUsername}/events/public?per_page=5`, 12000, requestOptions),
     ]);
 
     if (!userResp.ok) return { posts: [] };
@@ -1838,10 +1589,10 @@ export async function fetchGithubActivity(username: string, isNameQuery = false,
     }
 
     const [userResponse, eventsResponse, reposResponse, orgsResponse] = await Promise.all([
-      fetchWithTimeout(`https://api.github.com/users/${username}`, 3500, requestOptions),
-      fetchWithTimeout(`https://api.github.com/users/${username}/events/public?per_page=5`, 3500, requestOptions),
-      fetchWithTimeout(`https://api.github.com/users/${username}/repos?sort=stars&per_page=10`, 3500, requestOptions),
-      fetchWithTimeout(`https://api.github.com/users/${username}/orgs`, 3500, requestOptions),
+      fetchWithTimeout(`https://api.github.com/users/${username}`, 12000, requestOptions),
+      fetchWithTimeout(`https://api.github.com/users/${username}/events/public?per_page=5`, 12000, requestOptions),
+      fetchWithTimeout(`https://api.github.com/users/${username}/repos?sort=stars&per_page=10`, 12000, requestOptions),
+      fetchWithTimeout(`https://api.github.com/users/${username}/orgs`, 12000, requestOptions),
     ]);
 
 
@@ -1982,8 +1733,8 @@ export async function fetchGithubActivity(username: string, isNameQuery = false,
     // Last resort: fuzzy username search
     return await fuzzyGithubSearch(username);
 
-  } catch (err: any) {
-    console.warn(`[GITHUB] Network error for "${username}": ${err.message || err}`);
+  } catch (err) {
+    console.error(`[GITHUB] Network error for "${username}":`, err);
     // On network failure, try demo data
     const demoData = getDemoGithubData(username);
     if (demoData) return demoData;
@@ -2103,11 +1854,10 @@ export async function fetchRedditActivity(username: string): Promise<Post[]> {
         platform:  "reddit",
         content:   [child.data.title, child.data.selftext].filter(Boolean).join(" - ").slice(0, 420),
         postedAt:  new Date(child.data.created_utc * 1000).toISOString(),
-        ...(() => {
-          const contentText = [child.data.title, child.data.selftext].filter(Boolean).join(" - ").slice(0, 420);
-          const flagInfo = getPostFlagDetails(contentText);
-          return { flagLevel: flagInfo.flagLevel, flagReason: flagInfo.flagReason || "Keyword match in public Reddit submission." };
-        })(),
+        flagLevel: scoreText(child.data.title + " " + (child.data.selftext || "")) > 0
+          ? "SUSPICIOUS"
+          : "NORMAL",
+        flagReason:  "Keyword match in public Reddit submission.",
         capturedAt:  new Date().toISOString(),
         // Attach intel to the first post so liveSocmint can pick it up
         ...(child === children[0] && redditIntel ? { _redditIntel: redditIntel } : {}),
@@ -2147,10 +1897,8 @@ export async function fetchHackerNewsActivity(username: string): Promise<{ accou
           platform: "hackernews",
           content,
           postedAt: new Date((item.time || 0) * 1000).toISOString(),
-          ...(() => {
-            const flagInfo = getPostFlagDetails(content);
-            return { flagLevel: flagInfo.flagLevel, flagReason: flagInfo.flagReason || (flagInfo.flagLevel !== "NORMAL" ? "Risk keyword match in HackerNews submission." : undefined) };
-          })(),
+          flagLevel: scoreText(content) > 0 ? "SUSPICIOUS" : "NORMAL",
+          flagReason: scoreText(content) > 0 ? "Risk keyword match in HackerNews submission." : undefined,
           capturedAt: new Date().toISOString(),
         };
       });
@@ -2185,11 +1933,8 @@ export async function fetchDevToActivity(username: string): Promise<{ account?: 
           platform: "devto",
           content: `${a.title}${a.description ? ` — ${a.description}` : ""}`,
           postedAt: a.published_at || new Date().toISOString(),
-          ...(() => {
-            const contentText = `${a.title}${a.description ? ` — ${a.description}` : ""}`;
-            const flagInfo = getPostFlagDetails(contentText);
-            return { flagLevel: flagInfo.flagLevel, flagReason: flagInfo.flagReason || (flagInfo.flagLevel !== "NORMAL" ? "Risk keyword in Dev.to article." : undefined) };
-          })(),
+          flagLevel: scoreText(a.title + " " + (a.description || "")) > 0 ? "SUSPICIOUS" : "NORMAL",
+          flagReason: "Risk keyword in Dev.to article.",
           capturedAt: new Date().toISOString(),
         }))
       : [];
@@ -2276,8 +2021,8 @@ export async function searchWebForSocialProfiles(query: string, capturedAt: stri
       if (resp.ok) {
         html = await resp.text();
       }
-    } catch (e: any) {
-      console.warn(`[OSINT-SEARCH] Yahoo search query offline: ${e.message || e}`);
+    } catch (e) {
+      console.error(`[OSINT-SEARCH] Yahoo search query failed:`, e);
     }
     
     let blocks = html ? html.split(/<div[^>]*class="[^"]*algo[^"]*"/gi) : [];
@@ -2293,8 +2038,8 @@ export async function searchWebForSocialProfiles(query: string, capturedAt: stri
           html = await resp.text();
           blocks = html.split(/<li[^>]*class="[^"]*b_algo[^"]*"/gi);
         }
-      } catch (e: any) {
-        console.warn(`[OSINT-SEARCH] Fallback Bing search query offline: ${e.message || e}`);
+      } catch (e) {
+        console.error(`[OSINT-SEARCH] Fallback Bing search query failed:`, e);
       }
     }
 
@@ -2507,13 +2252,6 @@ export async function searchWebForSocialProfiles(query: string, capturedAt: stri
       
       const existsIdx = discoveredAccounts.findIndex(a => a.platform === platform && a.username.toLowerCase() === handle.toLowerCase());
       if (existsIdx === -1) {
-        // Prevent adding completely different accounts discovered via search engines
-        const isSimilar = isSimilarUsername(handle, query);
-        if (!isSimilar) {
-          console.log(`[OSINT-SEARCH] Skipping crawled handle "${handle}" because it does not match query "${query}"`);
-          continue;
-        }
-
         discoveredAccounts.push({
           id: `${platform}-${handle}-${Date.now()}`,
           platform,

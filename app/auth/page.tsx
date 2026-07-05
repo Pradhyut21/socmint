@@ -57,12 +57,21 @@ export default function AuthPage() {
     setIsoNow(new Date().toISOString());
   }, []);
 
-  // If already authenticated, bounce to /
+  // If already authenticated or dev mode, bounce to /
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+    // Check for dev mode
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const isDevMode = process.env.NODE_ENV === "development" && 
+      (!supabaseUrl || supabaseUrl.includes("your-project") || 
+       !supabaseAnonKey || supabaseAnonKey.includes("your-anon-key"));
+    
+    if (isDevMode) {
+      console.log("🚀 Dev mode detected on auth page, redirecting to home...");
       router.push("/");
       return;
     }
+    
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (active && data.session) router.push("/");

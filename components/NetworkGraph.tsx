@@ -1,336 +1,226 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useMemo, useState } from "react";
 import { SuspectProfile, NetworkNode, NetworkLink } from "../lib/types";
-import { Info, ZoomIn, ZoomOut, RotateCcw, Share2 } from "lucide-react";
+import { Info, RotateCcw, Share2 } from "lucide-react";
 
 interface NetworkGraphProps {
   suspect: SuspectProfile;
 }
 
+// ─── Layout constants (SVG viewBox coordinate space) ────────────────────────
+const VB_WIDTH = 780;
+const LEFT_PAD = 168;   // room for the root label on the far left
+const RIGHT_PAD = 32;
+const ROW_HEIGHT = 30;  // vertical spacing between leaves
+const TOP_PAD = 28;
+const BOTTOM_PAD = 28;
+
+type PositionedNode = NetworkNode & {
+  x: number;
+  y: number;
+  depth: number;
+  parent?: string;
+  isLeaf: boolean;
+};
+
+// ─── Node visual theme by group ─────────────────────────────────────────────
+function nodeStyle(node: NetworkNode) {
+  const isBridge = node.label?.includes("Bridge") || node.id === "sol_dev_99";
+  switch (node.group) {
+    case "suspect":
+      return { fill: "#ef4444", stroke: "#b91c1c", r: 8, halo: "rgba(239,68,68,0.18)" };
+    case "mule":
+      return { fill: "#f59e0b", stroke: "#b45309", r: 6, halo: "rgba(245,158,11,0.16)" };
+    case "group":
+      return { fill: "#10b981", stroke: "#047857", r: 6, halo: "rgba(16,185,129,0.16)" };
+    default:
+      return isBridge
+        ? { fill: "#06b6d4", stroke: "#0e7490", r: 7, halo: "rgba(6,182,212,0.18)" }
+        : { fill: "#3b82f6", stroke: "#1d4ed8", r: 6, halo: "rgba(59,130,246,0.16)" };
+  }
+}
+
 export default function NetworkGraph({ suspect }: NetworkGraphProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  const [nodes, setNodes] = useState<(NetworkNode & { x: number; y: number; vx: number; vy: number; fx?: number; fy?: number })[]>([]);
-  const [links, setLinks] = useState<NetworkLink[]>([]);
   const [selectedNode, setSelectedNode] = useState<NetworkNode | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<NetworkNode | null>(null);
-  const [draggedNode, setDraggedNode] = useState<any>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const svgWrapRef = useRef<HTMLDivElement>(null);
 
-  const hasNetworkData = suspect.network && suspect.network.nodes && suspect.network.nodes.length > 0;
+  // Build a network from suspect.network if present; otherwise derive one from
+  // the discovered accounts / locations so the graph always renders when we have data.
+  const derivedNetwork = useMemo(() => {
+    if (suspect.network && suspect.network.nodes && suspect.network.nodes.length > 0) {
+      return suspect.network;
+    }
 
-  // Initialize network nodes and layout coordinates
-  useEffect(() => {
-    if (!hasNetworkData) return;
-    const width = containerRef.current?.clientWidth || 600;
-    const height = 450;
-    
-    // Position suspect at center, distribute other nodes in a circle initially
-    const suspectNode = suspect.network.nodes.find(n => n.group === 'suspect');
-    
-    const initializedNodes = suspect.network.nodes.map((node, index) => {
-      const isSuspect = node.group === 'suspect';
-      let x = width / 2;
-      let y = height / 2;
-      
-      if (!isSuspect) {
-        const angle = (index / (suspect.network.nodes.length - 1)) * 2 * Math.PI;
-        const radius = 120 + Math.random() * 30;
-        x += Math.cos(angle) * radius;
-        y += Math.sin(angle) * radius;
-      }
-      
-      return {
-        ...node,
-        x,
-        y,
-        vx: 0,
-        vy: 0
-      };
+    const accounts = suspect.accounts || [];
+    if (accounts.length === 0) return null;
+
+    const rootName = suspect.realName && !suspect.realName.startsWith("@")
+      ? suspect.realName
+      : (suspect.username || "Subject").replace(/^@/, "");
+
+    const nodes: NetworkNode[] = [
+      { id: rootName, label: `${rootName}\n(Query Subject)`, group: "suspect", val: 30 },
+    ];
+    const links: NetworkLink[] = [];
+    const seen = new Set<string>([rootName]);
+
+    accounts.forEach((acc) => {
+      const id = `${acc.platform}:${acc.username}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      nodes.push({
+        id,
+        label: `${acc.platform.toUpperCase()}\n@${acc.username}`,
+        group: "account",
+        val: acc.confidence === "CONFIRMED" ? 20 : acc.tier === 1 ? 18 : 14,
+      });
+      links.push({
+        source: rootName,
+        target: id,
+        type: "OWNS",
+        weight: acc.confidence === "CONFIRMED" ? 5 : 2,
+      });
     });
 
-    setNodes(initializedNodes);
-    setLinks(suspect.network.links);
-    setSelectedNode(null);
+    (suspect.locations || []).forEach((loc: any) => {
+      const id = `location:${loc.locationName}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      nodes.push({ id, label: `LOCATION\n${loc.locationName}`, group: "group", val: 12 });
+      links.push({ source: rootName, target: id, type: "INTERACTS_WITH", weight: 2 });
+    });
+
+    return { nodes, links };
   }, [suspect]);
 
-  // Main Canvas Rendering & Physics loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  const hasNetworkData = !!(derivedNetwork && derivedNetwork.nodes.length > 0);
 
-    let animationId: number;
-    const width = canvas.width;
-    const height = canvas.height;
+  // ─── Compute tidy horizontal tree layout ──────────────────────────────────
+  const { positioned, linkPaths, vbHeight } = useMemo(() => {
+    if (!derivedNetwork || derivedNetwork.nodes.length === 0) return { positioned: [] as PositionedNode[], linkPaths: [] as { d: string; source: string; target: string; type?: string }[], vbHeight: 300 };
 
-    const runPhysicsAndDraw = () => {
-      // --- Simple Force-Directed Layout Physics Engine ---
-      const repelForce = 350;
-      const linkForce = 0.05;
-      const centerForce = 0.015;
-      const friction = 0.85;
+    const rawNodes = derivedNetwork.nodes;
+    const rawLinks = derivedNetwork.links;
 
-      // 1. Node Repulsion (nodes push each other away)
-      for (let i = 0; i < nodes.length; i++) {
-        const n1 = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-          const n2 = nodes[j];
-          const dx = n2.x - n1.x;
-          const dy = n2.y - n1.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          
-          if (dist < 220) {
-            const force = (repelForce) / (dist * dist);
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            
-            if (!n1.fx) { n1.vx -= fx; n1.vy -= fy; }
-            if (!n2.fx) { n2.vx += fx; n2.vy += fy; }
-          }
-        }
+    // Build undirected adjacency
+    const adj = new Map<string, string[]>();
+    rawNodes.forEach(n => adj.set(n.id, []));
+    rawLinks.forEach(l => {
+      if (adj.has(l.source) && adj.has(l.target)) {
+        adj.get(l.source)!.push(l.target);
+        adj.get(l.target)!.push(l.source);
       }
-
-      // 2. Link Attraction (connected nodes pull each other close)
-      links.forEach((link) => {
-        const n1 = nodes.find(n => n.id === link.source);
-        const n2 = nodes.find(n => n.id === link.target);
-        if (n1 && n2) {
-          const dx = n2.x - n1.x;
-          const dy = n2.y - n1.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          
-          // Target length for links is 110px
-          const desiredDist = 110;
-          const diff = dist - desiredDist;
-          const force = diff * linkForce;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-
-          if (!n1.fx) { n1.vx += fx; n1.vy += fy; }
-          if (!n2.fx) { n2.vx -= fx; n2.vy -= fy; }
-        }
-      });
-
-      // 3. Center Gravity & Update positions
-      nodes.forEach((node) => {
-        if (node.fx !== undefined && node.fy !== undefined) {
-          node.x = node.fx;
-          node.y = node.fy;
-          node.vx = 0;
-          node.vy = 0;
-          return;
-        }
-
-        // Pull to center
-        const dx = width / 2 - node.x;
-        const dy = height / 2 - node.y;
-        node.vx += dx * centerForce;
-        node.vy += dy * centerForce;
-
-        // Apply velocities with friction damping
-        node.vx *= friction;
-        node.vy *= friction;
-        node.x += node.vx;
-        node.y += node.vy;
-
-        // Bound check to keep inside canvas
-        node.x = Math.max(20, Math.min(width - 20, node.x));
-        node.y = Math.max(20, Math.min(height - 20, node.y));
-      });
-
-      // --- Draw Canvas Elements ---
-      ctx.clearRect(0, 0, width, height);
-
-      // Draw connections
-      links.forEach((link) => {
-        const n1 = nodes.find(n => n.id === link.source);
-        const n2 = nodes.find(n => n.id === link.target);
-        if (n1 && n2) {
-          // Highlight connection if hovered
-          const isRelatedToHover = hoveredNode && (n1.id === hoveredNode.id || n2.id === hoveredNode.id);
-          const hasHoverActive = hoveredNode !== null;
-
-          ctx.beginPath();
-          ctx.moveTo(n1.x, n1.y);
-          ctx.lineTo(n2.x, n2.y);
-          
-          if (hasHoverActive) {
-            ctx.strokeStyle = isRelatedToHover ? "rgba(59, 130, 246, 0.7)" : "rgba(30, 41, 59, 0.15)";
-            ctx.lineWidth = isRelatedToHover ? 2.5 : 1.0;
-          } else {
-            ctx.strokeStyle = link.type === "CO_ACCUSED" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.25)";
-            const weight = link.weight || (link.strength ? link.strength * 5 : 1);
-            ctx.lineWidth = Math.min(4, weight * 1.2);
-          }
-          ctx.stroke();
-        }
-      });
-
-      // Draw nodes
-      nodes.forEach((node) => {
-        const isHovered = hoveredNode && node.id === hoveredNode.id;
-        const isSelected = selectedNode && node.id === selectedNode.id;
-        const hasHoverActive = hoveredNode !== null;
-        
-        // Dim unselected nodes on hover
-        const isDimmed = hasHoverActive && !isHovered && !links.some(l => 
-          (l.source === node.id && l.target === hoveredNode.id) ||
-          (l.target === node.id && l.source === hoveredNode.id)
-        );
-
-        ctx.save();
-        ctx.globalAlpha = isDimmed ? 0.25 : 1.0;
-
-        // Visual properties based on node types
-        let size = (node.val || node.size || 16) * 0.75;
-        let color = "#3b82f6"; // default blue
-        let ringColor = "rgba(59, 130, 246, 0.2)";
-        let isBridgeNode = node.label.includes("Bridge");
-
-        if (node.group === "suspect") {
-          size = 22;
-          color = "#ef4444"; // red suspect
-          ringColor = "rgba(239, 68, 68, 0.25)";
-          
-          // Draw pulsing outer circle for suspect
-          const pulse = 1 + Math.sin(Date.now() / 200) * 0.08;
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, size * pulse * 1.5, 0, 2 * Math.PI);
-          ctx.fillStyle = ringColor;
-          ctx.fill();
-        } else if (node.group === "mule") {
-          color = "#f59e0b"; // yellow mule
-          ringColor = "rgba(245, 158, 11, 0.2)";
-        } else if (node.group === "group") {
-          color = "#10b981"; // green group
-          ringColor = "rgba(16, 185, 129, 0.2)";
-        }
-
-        // Draw shadow glow for active selection
-        if (isHovered || isSelected) {
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = color;
-        }
-
-        // Draw node body
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        // Node border
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
-        ctx.strokeStyle = isBridgeNode ? "#06b6d4" : "#0f172a";
-        ctx.lineWidth = isBridgeNode ? 3 : 2;
-        ctx.stroke();
-
-        // Label details text
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = isHovered || isSelected ? "#0f172a" : "#334155";
-        ctx.font = isHovered || isSelected ? "bold 10px 'JetBrains Mono', monospace" : "9px 'JetBrains Mono', monospace";
-        ctx.textAlign = "center";
-        
-        // Split multi-line labels
-        const lines = node.label.split("\n");
-        lines.forEach((line, idx) => {
-          ctx.fillText(line, node.x, node.y + size + 12 + (idx * 10));
-        });
-
-        ctx.restore();
-      });
-
-      animationId = requestAnimationFrame(runPhysicsAndDraw);
-    };
-
-    runPhysicsAndDraw();
-
-    return () => cancelAnimationFrame(animationId);
-  }, [nodes, links, hoveredNode, selectedNode]);
-
-  // Handle Canvas Interaction: Mouse down / start drag
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Detect if clicking on a node
-    const clicked = nodes.find((node) => {
-      const dist = Math.sqrt((node.x - x) ** 2 + (node.y - y) ** 2);
-      const size = (node.val || node.size || 16) * 0.75;
-      return dist <= size + 10;
     });
 
-    if (clicked) {
-      setDraggedNode(clicked);
-      setSelectedNode(clicked);
-      clicked.fx = x;
-      clicked.fy = y;
-    }
-  };
+    // Root = suspect node, or the most-connected node, or first node
+    const root =
+      rawNodes.find(n => n.group === "suspect") ||
+      [...rawNodes].sort((a, b) => (adj.get(b.id)?.length || 0) - (adj.get(a.id)?.length || 0))[0] ||
+      rawNodes[0];
 
-  // Mouse Move: update drag location
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // BFS to assign parent + depth (spanning tree)
+    const depth = new Map<string, number>();
+    const parent = new Map<string, string | undefined>();
+    const children = new Map<string, string[]>();
+    rawNodes.forEach(n => children.set(n.id, []));
 
-    if (draggedNode) {
-      draggedNode.fx = x;
-      draggedNode.fy = y;
-    } else {
-      // Hover detection
-      const hovered = nodes.find((node) => {
-        const dist = Math.sqrt((node.x - x) ** 2 + (node.y - y) ** 2);
-        const size = (node.val || node.size || 16) * 0.75;
-        return dist <= size + 10;
-      });
-      setHoveredNode(hovered || null);
-    }
-  };
-
-  // Mouse Up: release drag lock
-  const handleMouseUp = () => {
-    if (draggedNode) {
-      draggedNode.fx = undefined;
-      draggedNode.fy = undefined;
-      setDraggedNode(null);
-    }
-  };
-
-  // Reset coordinates layout
-  const handleReset = () => {
-    const width = containerRef.current?.clientWidth || 600;
-    const height = 450;
-    const initializedNodes = nodes.map((node, index) => {
-      const isSuspect = node.group === 'suspect';
-      let x = width / 2;
-      let y = height / 2;
-      
-      if (!isSuspect) {
-        const angle = (index / (nodes.length - 1)) * 2 * Math.PI;
-        x += Math.cos(angle) * (110 + Math.random() * 20);
-        y += Math.sin(angle) * (110 + Math.random() * 20);
+    const visited = new Set<string>([root.id]);
+    depth.set(root.id, 0);
+    parent.set(root.id, undefined);
+    const queue: string[] = [root.id];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      const neighbors = (adj.get(cur) || []).sort();
+      for (const nb of neighbors) {
+        if (!visited.has(nb)) {
+          visited.add(nb);
+          depth.set(nb, (depth.get(cur) || 0) + 1);
+          parent.set(nb, cur);
+          children.get(cur)!.push(nb);
+          queue.push(nb);
+        }
       }
+    }
+
+    // Any disconnected nodes → attach directly under root
+    rawNodes.forEach(n => {
+      if (!visited.has(n.id)) {
+        visited.add(n.id);
+        depth.set(n.id, 1);
+        parent.set(n.id, root.id);
+        children.get(root.id)!.push(n.id);
+      }
+    });
+
+    const maxDepth = Math.max(1, ...Array.from(depth.values()));
+
+    // Assign a y-slot to each leaf via DFS ordering; internal nodes = avg(children)
+    const yMap = new Map<string, number>();
+    let leafCursor = 0;
+    const assignY = (id: string): number => {
+      const kids = children.get(id) || [];
+      if (kids.length === 0) {
+        const y = leafCursor;
+        leafCursor += 1;
+        yMap.set(id, y);
+        return y;
+      }
+      const childYs = kids.map(assignY);
+      const y = (Math.min(...childYs) + Math.max(...childYs)) / 2;
+      yMap.set(id, y);
+      return y;
+    };
+    assignY(root.id);
+
+    const leafCount = Math.max(1, leafCursor);
+    const height = TOP_PAD + BOTTOM_PAD + Math.max(1, leafCount - 1) * ROW_HEIGHT;
+    const colW = maxDepth > 0 ? (VB_WIDTH - LEFT_PAD - RIGHT_PAD) / maxDepth : 0;
+
+    const positioned: PositionedNode[] = rawNodes.map(n => {
+      const d = depth.get(n.id) || 0;
+      const yslot = yMap.get(n.id) || 0;
       return {
-        ...node,
-        x,
-        y,
-        vx: 0,
-        vy: 0,
-        fx: undefined,
-        fy: undefined
+        ...n,
+        depth: d,
+        parent: parent.get(n.id),
+        isLeaf: (children.get(n.id) || []).length === 0,
+        x: LEFT_PAD + d * colW,
+        y: TOP_PAD + yslot * ROW_HEIGHT,
       };
     });
-    setNodes(initializedNodes);
-  };
+
+    const posById = new Map(positioned.map(p => [p.id, p]));
+
+    // Build smooth cubic-bezier link paths (parent → child)
+    const linkPaths = positioned
+      .filter(n => n.parent)
+      .map(n => {
+        const pnode = posById.get(n.parent!)!;
+        const x1 = pnode.x, y1 = pnode.y, x2 = n.x, y2 = n.y;
+        const mx = (x1 + x2) / 2;
+        const d = `M ${x1},${y1} C ${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+        // Find original link for type/weight
+        const orig = rawLinks.find(
+          l => (l.source === n.parent && l.target === n.id) || (l.target === n.parent && l.source === n.id)
+        );
+        return { d, source: n.parent!, target: n.id, type: orig?.type };
+      });
+
+    return { positioned, linkPaths, vbHeight: Math.max(300, height) };
+  }, [derivedNetwork]);
+
+  // Neighbor lookup for hover highlighting
+  const neighborsOf = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    positioned.forEach(n => map.set(n.id, new Set()));
+    linkPaths.forEach(l => {
+      map.get(l.source)?.add(l.target);
+      map.get(l.target)?.add(l.source);
+    });
+    return map;
+  }, [positioned, linkPaths]);
 
   if (!hasNetworkData) {
     return (
@@ -341,75 +231,138 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
     );
   }
 
+  const isEdgeActive = (l: { source: string; target: string }) =>
+    hoveredId != null && (l.source === hoveredId || l.target === hoveredId);
+  const isNodeActive = (id: string) =>
+    hoveredId == null || id === hoveredId || neighborsOf.get(hoveredId)?.has(id);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      
-      {/* Interactive Visual Graph Canvas */}
+      {/* Visual Graph */}
       <div className="lg:col-span-3 flex flex-col gap-4">
-        
         {/* Controls header */}
         <div className="glass-panel p-4 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Share2 className="w-5 h-5 text-blue-650" />
             <h4 className="text-sm font-semibold text-ink font-mono tracking-wider uppercase">
-              Suspect Network Graph Mapping
+              Suspect Relationship Tree
             </h4>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={handleReset}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700 hover:text-ink hover:border-slate-350 shadow-sm transition-all"
+          {selectedNode && (
+            <button
+              onClick={() => setSelectedNode(null)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700 hover:text-ink hover:border-slate-350 shadow-sm transition-all"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Reset Layout
+              <RotateCcw className="w-3.5 h-3.5" /> Clear Selection
             </button>
-          </div>
+          )}
         </div>
 
-        {/* Canvas Render Container */}
-        <div 
-          ref={containerRef}
-          className="relative w-full rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden h-[450px] cursor-grab active:cursor-grabbing shadow-inner"
+        {/* SVG Tree Container */}
+        <div
+          ref={svgWrapRef}
+          className="relative w-full rounded-2xl bg-white border border-slate-200 overflow-auto shadow-inner"
+          style={{ maxHeight: 560 }}
         >
-          <canvas
-            ref={canvasRef}
-            width={750}
-            height={450}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            className="w-full h-full block"
-          />
+          <svg
+            viewBox={`0 0 ${VB_WIDTH} ${vbHeight}`}
+            width="100%"
+            style={{ display: "block", minHeight: 340 }}
+            preserveAspectRatio="xMidYMin meet"
+          >
+            {/* Subtle dot grid background */}
+            <defs>
+              <pattern id="ng-dots" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
+              </pattern>
+            </defs>
+            <rect x="0" y="0" width={VB_WIDTH} height={vbHeight} fill="url(#ng-dots)" opacity="0.5" />
 
-          {/* Map legend bottom left */}
-          <div className="absolute bottom-4 left-4 p-3 bg-white/95 border border-slate-200 rounded-xl flex flex-col gap-2 font-mono text-[9px] shadow-md pointer-events-none">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-              <span className="text-slate-750 font-semibold">Suspect Target</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              <span className="text-slate-750 font-semibold">Owned Platform Profile</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              <span className="text-slate-750 font-semibold">Mule Account Holder</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span className="text-slate-750 font-semibold">Moderated Chat Group</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 border border-slate-205"></span>
-              <span className="text-slate-750 font-semibold">Bridge Associate (Central Node)</span>
-            </div>
+            {/* Links */}
+            <g fill="none">
+              {linkPaths.map((l, i) => {
+                const active = isEdgeActive(l);
+                const dimmed = hoveredId != null && !active;
+                const isCoAccused = l.type === "CO_ACCUSED";
+                return (
+                  <path
+                    key={i}
+                    d={l.d}
+                    stroke={active ? "#2563eb" : isCoAccused ? "rgba(239,68,68,0.45)" : "rgba(100,116,139,0.35)"}
+                    strokeWidth={active ? 2.2 : 1.3}
+                    opacity={dimmed ? 0.15 : 1}
+                    style={{ transition: "opacity 150ms, stroke 150ms" }}
+                  />
+                );
+              })}
+            </g>
+
+            {/* Nodes + labels */}
+            <g>
+              {positioned.map((n) => {
+                const style = nodeStyle(n);
+                const active = isNodeActive(n.id);
+                const isSel = selectedNode?.id === n.id;
+                const isHov = hoveredId === n.id;
+                const labelText = n.label.split("\n")[0];
+
+                // Label placement: root & leaves → left of circle; internal middle nodes → above
+                const isRoot = n.depth === 0;
+                const labelLeft = isRoot || n.isLeaf;
+                const labelX = labelLeft ? n.x - style.r - 8 : n.x;
+                const labelY = labelLeft ? n.y + 3.5 : n.y - style.r - 6;
+                const anchor: "start" | "middle" | "end" = labelLeft ? "end" : "middle";
+
+                return (
+                  <g
+                    key={n.id}
+                    style={{ cursor: "pointer", transition: "opacity 150ms" }}
+                    opacity={active ? 1 : 0.28}
+                    onMouseEnter={() => setHoveredId(n.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    onClick={() => setSelectedNode(n)}
+                  >
+                    {/* halo for suspect / selected / hovered */}
+                    {(n.group === "suspect" || isSel || isHov) && (
+                      <circle cx={n.x} cy={n.y} r={style.r + 6} fill={style.halo} />
+                    )}
+                    <circle
+                      cx={n.x}
+                      cy={n.y}
+                      r={isSel || isHov ? style.r + 1.5 : style.r}
+                      fill={style.fill}
+                      stroke={isSel ? "#0f172a" : style.stroke}
+                      strokeWidth={isSel ? 2.5 : 1.5}
+                    />
+                    <text
+                      x={labelX}
+                      y={labelY}
+                      textAnchor={anchor}
+                      fontFamily="'JetBrains Mono', monospace"
+                      fontSize={isRoot ? 12 : 10.5}
+                      fontWeight={isRoot || isSel || isHov ? 700 : 500}
+                      fill={isSel || isHov ? "#0f172a" : "#475569"}
+                    >
+                      {labelText}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+
+          {/* Legend */}
+          <div className="absolute bottom-3 left-3 p-2.5 bg-white/95 border border-slate-200 rounded-xl flex flex-wrap gap-x-3 gap-y-1.5 font-mono text-[9px] shadow-md pointer-events-none max-w-[92%]">
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /><span className="text-slate-700 font-semibold">Suspect</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-slate-700 font-semibold">Owned Profile</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /><span className="text-slate-700 font-semibold">Mule Account</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-slate-700 font-semibold">Chat Group</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400 border border-slate-300" /><span className="text-slate-700 font-semibold">Bridge Node</span></div>
           </div>
         </div>
-
       </div>
 
-      {/* Network analysis detail sidebar */}
+      {/* Sidebar */}
       <div className="lg:col-span-1">
         <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white shadow-sm h-full flex flex-col min-h-[300px]">
           <div className="flex items-center gap-2 mb-4">
@@ -452,14 +405,12 @@ export default function NetworkGraph({ suspect }: NetworkGraphProps) {
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 font-mono text-xs">
               <Share2 className="w-8 h-8 text-slate-500 mb-3 animate-pulse" />
               <p className="text-slate-650 font-medium leading-relaxed">
-                Click any coordinate node in the map graph to inspect relational intelligence details and centrality calculations.
+                Click any node in the relationship tree to inspect relational intelligence details and centrality calculations.
               </p>
             </div>
           )}
-
         </div>
       </div>
-
     </div>
   );
 }

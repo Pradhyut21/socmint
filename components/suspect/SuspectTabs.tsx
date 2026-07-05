@@ -1,6 +1,6 @@
 "use client";
-// Force Next.js compilation reload
-import React, { useRef, useState, type ReactNode } from "react";
+
+import React, { useRef, useState, useEffect, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,7 +13,11 @@ import {
   Users, MessageSquare, Globe, FileText, ScanFace, EyeOff, Bitcoin,
   AlertTriangle, Gavel, Share2, MapPin, GitBranch, Bot, FileCheck, Brain,
   AlertCircle, Clock, Send, IndianRupee, PhoneCall, ShieldX, FilePlus, ExternalLink,
-  Briefcase, Building2, GraduationCap, GitCommit, Info, Archive, Mail, Network,
+  Briefcase, Building2, GraduationCap, GitCommit, Info,
+  Github, Linkedin, Instagram, Youtube, Facebook, Twitter, Twitch, Gitlab,
+  MessageCircle, Music2, Camera, Rss, HelpCircle, Cloud, Ghost, Radio,
+  Swords, Puzzle, AtSign, ImageIcon, Trophy, Sparkles, ShieldCheck, TrendingUp,
+  Copy, Check, ChevronDown, Terminal, Code2, Gamepad2, PenTool,
 } from "lucide-react";
 
 
@@ -27,10 +31,14 @@ import WikidataCard from "@/components/WikidataCard";
 import NLPAnalyzer from "@/components/NLPAnalyzer";
 import FaceScanCard from "@/components/FaceScanCard";
 import ShadowAccounts from "@/components/ShadowAccounts";
+import CryptoTraceCard from "@/components/CryptoTraceCard";
+import DarkWebMonitor from "@/components/DarkWebMonitor";
 import LegalRecords from "@/components/LegalRecords";
+import NetworkGraph from "@/components/NetworkGraph";
 import EvidenceGraph from "@/components/EvidenceGraph";
 
 import LocationMap from "@/components/LocationMap";
+import EvasionTimeline from "@/components/EvasionTimeline";
 import AiChat from "@/components/AiChat";
 import SearchEngineEvidencePanel from "@/components/SearchEngineEvidencePanel";
 import EvidencePackage from "@/components/EvidencePackage";
@@ -39,14 +47,8 @@ import StylometryPanel from "@/components/StylometryPanel";
 import ManualIngestPanel from "@/components/ManualIngestPanel";
 import SearchIntelPanel from "@/components/SearchIntelPanel";
 import IntelCorrelationTab from "@/components/suspect/IntelCorrelationTab";
-import LinkedAccountsStreamTab from "@/components/suspect/LinkedAccountsStreamTab";
-import WaybackArchiveTab from "@/components/WaybackArchiveTab";
-import ContactDiscoveryTab from "@/components/ContactDiscoveryTab";
-import OSINTFrameworkGraph from "@/components/OSINTFrameworkGraph";
-import CryptoTraceCard from "@/components/CryptoTraceCard";
 import { ConfidenceTrend } from "@/components/ConfidenceTrend";
 import { KeywordTagCloud } from "@/components/KeywordTagCloud";
-import { Wifi } from "lucide-react";
 
 interface TabDef {
   id: string;
@@ -69,31 +71,17 @@ export function SuspectTabs({
     { id: "overview", label: "Overview", icon: Users, render: (p) => <OverviewTab p={p} onTabChange={onTabChange} onTriggerSearch={onTriggerSearch} /> },
     { id: "correlation-shield", label: "Intelligence Correlation", icon: Brain, badge: profile.investigationQuality ? { tone: "evidence" as const, text: `${profile.investigationQuality.score}%` } : undefined, render: (p) => <IntelCorrelationTab p={p} /> },
     { id: "accounts", label: "Linked Accounts", icon: Share2, render: (p) => <AccountsTab p={p} /> },
-    { id: "live-account-scan", label: "Live Account Scan", icon: Wifi, render: (p) => <LinkedAccountsStreamTab username={p.username.replace(/^@/, "")} /> },
-
-    { id: "timeline", label: "Post Timeline", icon: MessageSquare, render: (p) => <TimelineView suspect={p} /> },
     { id: "face", label: "Face Scan", icon: ScanFace, render: (p) => <FaceScanCard suspect={p} /> },
-    { id: "crypto", label: "Crypto Trace", icon: Bitcoin,
-      badge: profile.cryptoTrace ? { tone: "warn", text: String(profile.cryptoTrace.transactions?.length || 0) } : undefined,
-      render: (p) => <CryptoTraceCard suspect={p} /> },
-    { id: "legal", label: "Legal & Public Records", icon: Gavel, render: (p) => <LegalRecords suspect={p} /> },
+    { id: "stylometry", label: "Stylometry", icon: PenTool, render: (p) => <StylometryPanel suspect={p} /> },
+    { id: "network", label: "Network Graph", icon: GitBranch, render: (p) => <NetworkGraph suspect={p} /> },
     { id: "evidence-graph", label: "Evidence Graph", icon: GitCommit, render: (p) => <EvidenceGraph suspect={p} /> },
-    { id: "reasoning-log", label: "Reasoning Log", icon: Clock, render: (p) => <ReasoningLogView p={p} /> },
-    { id: "geo", label: "Geotag Trail", icon: MapPin, render: (p) => <LocationMap suspect={p} /> },
-    {
-      id: "content-risk",
-      label: "Content Risk",
-      icon: AlertTriangle,
-      badge: (() => {
-        const highRiskPosts = profile.posts.filter(post => post.flagLevel === "HIGH_RISK" || post.flagLevel === "SUSPICIOUS");
-        return highRiskPosts.length > 0 ? { tone: "stamp" as const, text: String(highRiskPosts.length) } : undefined;
-      })(),
-      render: (p) => <ContentRiskPanel suspect={p} />,
-    },
-
-    { id: "stylometry", label: "Language Analysis", icon: Brain, render: (p) => <StylometryPanel suspect={p} /> },
-    { id: "search-intel", label: "Search Intel", icon: Globe, render: (p) => <SearchIntelPanel suspect={p} key={p.caseReference} /> },
-    { id: "osint-graph", label: "OSINT Graph", icon: Network, render: (p) => <OSINTFrameworkGraph suspect={p} /> },
+    { id: "reasoning-log", label: "Reasoning Log", icon: Terminal, render: (p) => <ReasoningLogView p={p} /> },
+    { id: "geo-trail", label: "Geotagged Trail", icon: MapPin, render: (p) => <LocationMap suspect={p} /> },
+    { id: "evasion", label: "Evasion Timeline", icon: AlertTriangle, render: (p) => <EvasionTimeline suspect={p} /> },
+    { id: "content-risk", label: "Content Risk", icon: ShieldX, render: (p) => <ContentRiskPanel suspect={p} /> },
+    { id: "search-intel", label: "Search Intel", icon: Globe, render: (p) => <SearchIntelPanel suspect={p} /> },
+    { id: "ingest", label: "Evidence Ingest", icon: FilePlus, render: (p) => <ManualIngestPanel suspect={p} /> },
+    { id: "chat", label: "AI Chat", icon: Bot, render: (p) => <AiChat suspect={p} /> },
     { id: "evidence", label: "Court Certificate", icon: FileCheck, render: (p) => <EvidencePackage suspect={p} /> },
   ];
 
@@ -101,12 +89,22 @@ export function SuspectTabs({
   const scrollRef = useRef<HTMLDivElement>(null);
   const scroll = (dir: -1 | 1) => scrollRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
 
+  // Listen for sidebar AI Chat button → switch to chat tab
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail as string;
+      if (TABS.some(t => t.id === tab)) setActive(tab);
+    };
+    window.addEventListener("switch-tab", handler);
+    return () => window.removeEventListener("switch-tab", handler);
+  }, []);
+
   const current = TABS.find((t) => t.id === active)!;
 
   return (
     <div className="space-y-4">
       {/* Scrollable Tabs navigation header */}
-      <div className="sticky top-14 z-20 -mx-4 border-b border-border bg-background/95 px-4 backdrop-blur md:-mx-8 md:px-8 no-print">
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border bg-background/95 px-4 backdrop-blur md:-mx-8 md:px-8 no-print">
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => scroll(-1)}>
             <ChevronLeft className="h-4 w-4" />
@@ -235,10 +233,7 @@ function OverviewTab({
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <div className="lg:col-span-3">
-        <AiChat suspect={p} />
-      </div>
-
+      {/* Risk Assessment - TOP PRIORITY */}
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center justify-between font-display">
@@ -330,16 +325,22 @@ function OverviewTab({
         </CardContent>
       </Card>
 
+      {/* Identity Card - TOP PRIORITY */}
       <Card>
         <CardHeader><CardTitle className="font-display">Identity</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="overflow-hidden rounded-md border border-border">
-            <img
-              src={p.photoUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.realName || "Suspect")}`}
-              alt={p.realName}
+            <img 
+              src={p.photoUrl?.replace(/&amp;/g, '&')} 
+              alt={p.realName} 
               className="aspect-square w-full bg-muted object-cover"
               onError={(e) => {
-                e.currentTarget.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.realName || "Suspect")}`;
+                console.log('[OVERVIEW] Profile photo failed to load:', p.photoUrl);
+                // Fallback to UI Avatars if image fails
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.realName)}&size=512&background=0D8ABC&color=fff&bold=true`;
+              }}
+              onLoad={() => {
+                console.log('[OVERVIEW] Profile photo loaded successfully:', p.photoUrl);
               }}
             />
           </div>
@@ -352,60 +353,6 @@ function OverviewTab({
         </CardContent>
       </Card>
 
-
-
-
-
-      {p.searchIntel?.results && p.searchIntel.results.length > 0 && (
-        <Card className="lg:col-span-3 border-l-4 border-l-purple-600 bg-purple-50/10 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
-              <Globe className="w-5 h-5 text-purple-605" /> Search Intelligence Discovery Summary
-            </CardTitle>
-            <CardDescription className="text-slate-600 font-mono text-[10px]">
-              Top public web discoveries and dork hits matching suspect profile vectors.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="font-mono text-xs pb-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              {p.searchIntel.results.slice(0, 4).map((f) => (
-                <div key={f.id} className="p-2.5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between gap-1">
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge className="bg-ink text-paper text-[8px] uppercase tracking-wide px-1.5 py-0.5 rounded">
-                        {f.source}
-                      </Badge>
-                      {f.riskTags.slice(0, 2).map(tag => (
-                        <Badge key={tag} className="bg-red-500/10 text-red-500 border border-red-500/25 text-[8px] font-bold">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="font-bold text-[11px] text-ink mt-1 hover:underline truncate">
-                      {f.url ? (
-                        <a href={f.url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5">
-                          {f.title} <ExternalLink className="w-2.5 h-2.5 text-muted-foreground" />
-                        </a>
-                      ) : (
-                        f.title
-                      )}
-                    </div>
-                    <p className="text-[10px] text-slate-700 font-medium leading-relaxed line-clamp-2 mt-0.5 font-sans">
-                      {f.snippet}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {p.searchIntel.results.length > 4 && (
-              <div className="text-right text-[10px] text-muted-foreground mt-2">
-                And {p.searchIntel.results.length - 4} more findings. View the "Search Intel" tab for the full list.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-      
       {p.education && p.education.length > 0 && (
         <Card className="lg:col-span-3 border-l-4 border-l-cyan-600 bg-slate-50/10 shadow-sm">
           <CardHeader>
@@ -501,6 +448,46 @@ function Field({
 }
 
 
+// ─── Platform Visual Metadata (icon + brand gradient) ───────────────────────
+const PLATFORM_META: Record<string, { icon: typeof Github; gradient: string; solid: string; label: string }> = {
+  github:     { icon: Github,     gradient: "from-slate-700 to-slate-900",   solid: "#1f2937", label: "GitHub" },
+  gitlab:     { icon: Gitlab,     gradient: "from-orange-500 to-orange-700", solid: "#e2580c", label: "GitLab" },
+  linkedin:   { icon: Linkedin,   gradient: "from-blue-500 to-blue-700",     solid: "#0a66c2", label: "LinkedIn" },
+  instagram:  { icon: Instagram,  gradient: "from-pink-500 via-rose-500 to-amber-500", solid: "#d6249f", label: "Instagram" },
+  twitter:    { icon: Twitter,    gradient: "from-sky-400 to-sky-600",       solid: "#1d9bf0", label: "X / Twitter" },
+  facebook:   { icon: Facebook,   gradient: "from-blue-600 to-blue-800",     solid: "#1877f2", label: "Facebook" },
+  youtube:    { icon: Youtube,    gradient: "from-red-500 to-red-700",       solid: "#ff0000", label: "YouTube" },
+  reddit:     { icon: MessageCircle, gradient: "from-orange-500 to-red-600", solid: "#ff4500", label: "Reddit" },
+  twitch:     { icon: Twitch,     gradient: "from-purple-500 to-purple-700", solid: "#9146ff", label: "Twitch" },
+  soundcloud: { icon: Music2,     gradient: "from-orange-400 to-orange-600", solid: "#ff5500", label: "SoundCloud" },
+  medium:     { icon: Rss,        gradient: "from-slate-700 to-slate-900",   solid: "#000000", label: "Medium" },
+  quora:      { icon: HelpCircle, gradient: "from-red-600 to-red-800",       solid: "#b92b27", label: "Quora" },
+  tumblr:     { icon: Cloud,      gradient: "from-indigo-600 to-indigo-800", solid: "#36465d", label: "Tumblr" },
+  pinterest:  { icon: Camera,     gradient: "from-red-500 to-rose-700",      solid: "#e60023", label: "Pinterest" },
+  telegram:   { icon: Send,       gradient: "from-sky-400 to-sky-600",       solid: "#26a5e4", label: "Telegram" },
+  snapchat:   { icon: Ghost,      gradient: "from-yellow-400 to-yellow-500", solid: "#fffc00", label: "Snapchat" },
+  threads:    { icon: AtSign,     gradient: "from-slate-700 to-slate-900",   solid: "#000000", label: "Threads" },
+  hackernews: { icon: Terminal,   gradient: "from-orange-500 to-orange-700", solid: "#ff6600", label: "Hacker News" },
+  devto:      { icon: Code2,      gradient: "from-slate-800 to-black",       solid: "#0a0a0a", label: "Dev.to" },
+  steam:      { icon: Gamepad2,   gradient: "from-slate-700 to-slate-900",   solid: "#1b2838", label: "Steam" },
+  chess:      { icon: Swords,     gradient: "from-emerald-600 to-emerald-800", solid: "#7fa650", label: "Chess.com" },
+  whatsapp:   { icon: MessageCircle, gradient: "from-green-500 to-green-700", solid: "#25d366", label: "WhatsApp" },
+};
+
+function getPlatformMeta(platform: string) {
+  return PLATFORM_META[platform.toLowerCase()] || {
+    icon: Globe, gradient: "from-slate-500 to-slate-700", solid: "#64748b", label: platform,
+  };
+}
+
+// ─── Confidence tier visual config ──────────────────────────────────────────
+function confidenceTier(score: number) {
+  if (score >= 85) return { name: "Confirmed", ring: "ring-emerald-200", text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", bar: "bg-emerald-500", dot: "bg-emerald-500" };
+  if (score >= 70) return { name: "Probable", ring: "ring-indigo-200", text: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200", bar: "bg-indigo-500", dot: "bg-indigo-500" };
+  if (score >= 50) return { name: "Possible", ring: "ring-amber-200", text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", bar: "bg-amber-500", dot: "bg-amber-500" };
+  return { name: "Weak", ring: "ring-rose-200", text: "text-rose-700", bg: "bg-rose-50", border: "border-rose-200", bar: "bg-rose-500", dot: "bg-rose-500" };
+}
+
 function AccountsTab({ p }: { p: SuspectProfile }) {
   const [showWeak, setShowWeak] = useState(false);
 
@@ -508,20 +495,40 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
     return <Placeholder text="No linked public platform accounts confirmed for this subject." />;
   }
 
-  const getConfidenceScore = (confidence?: string): number => {
-    if (confidence === "CONFIRMED") return 95;
-    if (confidence === "PROBABLE") return 78;
-    if (confidence === "POSSIBLE") return 55;
+  // Use real calculated confidenceScore (0-100) when available, fall back to categorical mapping
+  const getConfidenceScore = (a: { confidence?: string; confidenceScore?: number }): number => {
+    if (typeof a.confidenceScore === "number") return a.confidenceScore;
+    if (a.confidence === "CONFIRMED") return 95;
+    if (a.confidence === "PROBABLE") return 78;
+    if (a.confidence === "POSSIBLE") return 55;
     return 35; // Weak
   };
 
-  const sortedAccounts = [...p.accounts].sort((a, b) => getConfidenceScore(b.confidence) - getConfidenceScore(a.confidence));
-  const displayedAccounts = sortedAccounts.filter(a => {
-    const score = getConfidenceScore(a.confidence);
+  // Detect accounts discovered via a username variation (e.g. "saikishan1", "sai_kishan")
+  // rather than the exact searched handle. fastOSINT tags these in confidenceReasoning.
+  const searchedHandle = (p.username || "").replace(/^@/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const isVariationAccount = (a: PlatformAccount): boolean => {
+    const reasoning = (a as any).confidenceReasoning as string[] | undefined;
+    if (reasoning?.some(r => r.toLowerCase().includes("found via variation"))) return true;
+    // Fallback: normalized username differs from the searched handle
+    const acctHandle = (a.username || "").replace(/^@/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!searchedHandle || !acctHandle) return false;
+    return acctHandle !== searchedHandle;
+  };
+
+  const sortedAccounts = [...p.accounts].sort((a, b) => getConfidenceScore(b) - getConfidenceScore(a));
+
+  // Split into primary (exact handle) and variation (similar usernames)
+  const primaryAccounts = sortedAccounts.filter(a => !isVariationAccount(a));
+  const variationAccounts = sortedAccounts.filter(a => isVariationAccount(a));
+
+  const displayedPrimary = primaryAccounts.filter(a => {
+    const score = getConfidenceScore(a);
     if (score < 50) return showWeak;
     return true;
   });
-  const hasWeakAccounts = sortedAccounts.some(a => getConfidenceScore(a.confidence) < 50);
+  const hasWeakAccounts = primaryAccounts.some(a => getConfidenceScore(a) < 50);
+  const weakCount = primaryAccounts.filter(a => getConfidenceScore(a) < 50).length;
 
   const platformColor: Record<string, string> = {
     linkedin: "text-blue-700 bg-blue-50 border-blue-200",
@@ -532,150 +539,279 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
 
   return (
     <div className="space-y-6">
-      <div className="mb-2">
-        <h4 className="text-xs font-semibold text-slate-650 uppercase tracking-wider mb-2 font-mono">
-          🔍 Profile Keyword & Subject Fingerprint
-        </h4>
-        <KeywordTagCloud accounts={p.accounts} realName={p.realName} />
-      </div>
-      {hasWeakAccounts && (
-        <div className="flex justify-end mb-4">
-          <Button 
-            variant="outline" 
-            size="sm" 
+
+      {/* Summary strip */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-slate-600">
+          <Badge variant="outline" className="bg-white border-slate-200 font-bold text-slate-700 gap-1.5">
+            <Users className="w-3 h-3" /> {sortedAccounts.length} account{sortedAccounts.length !== 1 ? "s" : ""}
+          </Badge>
+          <Badge variant="outline" className="bg-emerald-50 border-emerald-200 font-bold text-emerald-700 gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {sortedAccounts.filter(a => getConfidenceScore(a) >= 70).length} high-confidence
+          </Badge>
+          {variationAccounts.length > 0 && (
+            <Badge variant="outline" className="bg-violet-50 border-violet-200 font-bold text-violet-700 gap-1.5">
+              <Users className="w-3 h-3" /> {variationAccounts.length} similar handle{variationAccounts.length !== 1 ? "s" : ""}
+            </Badge>
+          )}
+        </div>
+        {hasWeakAccounts && (
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setShowWeak(!showWeak)}
             className="font-mono text-xs font-bold text-slate-700 border-slate-250 bg-white shadow-sm transition-all"
           >
-            {showWeak ? "🙈 Hide Low Confidence Results" : "👁️ Show Low Confidence Results"}
+            {showWeak ? `🙈 Hide ${weakCount} Low Confidence` : `👁️ Show ${weakCount} Low Confidence`}
           </Button>
-        </div>
-      )}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {displayedAccounts.map((a, idx) => {
-          const score = getConfidenceScore(a.confidence);
-          const tierName = score >= 85 ? "Confirmed" : score >= 70 ? "Probable" : score >= 50 ? "Possible" : "Weak";
-          const tierRange = score >= 85 ? "85–100" : score >= 70 ? "70–84" : score >= 50 ? "50–69" : "<50";
-          const badgeClass = score >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-            : score >= 70 ? "bg-indigo-50 text-indigo-750 border-indigo-200"
-            : score >= 50 ? "bg-amber-50 text-amber-700 border-amber-200"
-            : "bg-rose-50 text-rose-700 border-rose-200";
-
-          return (
-            <Card key={idx} className="card-3d bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardContent className="space-y-2 p-4">
-                <div className="flex items-start justify-between gap-1 flex-wrap border-b border-slate-100 pb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-indigo-900 font-bold">{a.platform}</span>
-                    <Badge variant="outline" className={`font-mono text-[8px] uppercase font-extrabold px-1.5 py-0 border ${badgeClass}`}>
-                      {tierName}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {(a.confidence === "CONFIRMED" || (a as any).verified) && <Badge variant="outline" className="text-[10px] border-slate-300 font-semibold text-slate-700">verified</Badge>}
-                    {a.profilePicUrl && (
-                      <ReverseImageDropdown imageUrl={a.profilePicUrl} />
-                    )}
-                  </div>
-                </div>
-
-                {/* Avatar + Info side-by-side */}
-                <div className="flex items-start gap-3 pt-1">
-                  {a.profilePicUrl && (
-                    <img
-                      src={a.profilePicUrl}
-                      alt={`${a.username}'s avatar`}
-                      className="w-12 h-12 rounded-xl object-cover border border-slate-200 bg-slate-50 shrink-0"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null;
-                        target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(a.username)}`;
-                      }}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono text-sm font-semibold text-ink truncate">
-                      {a.username ? (a.username.startsWith("@") ? a.username : "@" + a.username) : "—"}
-                    </div>
-                    {a.displayName && a.displayName !== a.username && (
-                      <div className="text-[11px] text-slate-600 font-semibold truncate">
-                        {a.displayName}
-                      </div>
-                    )}
-                    {a.bio && <p className="text-xs text-slate-750 font-medium line-clamp-2 mt-1 leading-relaxed">{a.bio}</p>}
-                  </div>
-                </div>
-
-                <div className="flex justify-between border-t border-slate-200 pt-2 font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
-                  <span>{a.followers?.toLocaleString() ?? "—"} followers</span>
-                  <span>Last: {a.creationDate || (a as any).lastActive || "—"}</span>
-                </div>
-                <div className="pt-2 text-right">
-                  <a href={a.profileUrl} target="_blank" rel="noreferrer" className="text-xs text-cyan-800 font-bold hover:underline inline-flex items-center gap-1">
-                    Inspect Source <ChevronRight className="w-3 h-3" />
-                  </a>
-                </div>
-
-
-                {/* Confidence Explanation Breakdown */}
-                {(() => {
-                  const { pct, matched, notMatched } = explainConfidence(a, p);
-                  return (
-                    <div className="mt-3 pt-2.5 border-t border-slate-200 font-mono text-[9px] text-ink">
-                      <div className="flex justify-between font-bold text-slate-650">
-                        <span>Attribution Confidence</span>
-                        <span className="font-bold text-ink">{tierName} ({tierRange})</span>
-                      </div>
-                      <div className="mt-1 flex flex-col gap-0.5">
-                        {matched.length > 0 && (
-                          <div className="text-emerald-650 font-semibold truncate" title={matched.join(", ")}>
-                            ✓ Matched: {matched.join(", ")}
-                          </div>
-                        )}
-                        {notMatched.length > 0 && (
-                          <div className="text-slate-400 font-medium truncate" title={notMatched.join(", ")}>
-                            ✗ Not Matched: {notMatched.join(", ")}
-                          </div>
-                        )}
-                        {a.mergeJustification && (
-                          <div className="mt-3 pt-2.5 border-t border-dashed border-indigo-200 text-indigo-950 bg-indigo-50/30 p-2.5 rounded-xl text-[9px] font-mono leading-relaxed">
-                            <div className="font-bold text-indigo-850 mb-1">🔗 Merged because:</div>
-                            <div className="flex flex-col gap-0.5 mb-1.5">
-                              {matched.map((m, idx) => (
-                                <div key={idx} className="text-emerald-700 font-semibold">✓ {m}</div>
-                              ))}
-                              {notMatched.map((nm, idx) => (
-                                <div key={idx} className="text-slate-400 font-medium">✗ {nm}</div>
-                              ))}
-                            </div>
-                            <div className="flex justify-between font-bold text-indigo-900 mt-1 border-t border-indigo-100 pt-1.5">
-                              <span>Overall Merge Confidence:</span>
-                              <span>{pct}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* GitHub Intelligence Panel */}
-                {a.platform === "github" && (a as any).githubIntel && (
-                  <GithubIntelPanel intel={(a as any).githubIntel} username={a.username} />
-                )}
-                {/* Reddit Intelligence Panel */}
-                {a.platform === "reddit" && (a as any).redditIntel && (
-                  <RedditIntelPanel intel={(a as any).redditIntel} />
-                )}
-                {/* LinkedIn Intelligence Panel */}
-                {a.platform === "linkedin" && ((a as any).headline || (a as any).jobTitle || (a as any).company || (a as any).education) && (
-                  <LinkedinIntelPanel account={a as any} />
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+        )}
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {displayedPrimary.map((a, idx) => (
+          <AccountCard key={idx} account={a} profile={p} getConfidenceScore={getConfidenceScore} />
+        ))}
+      </div>
+
+      {/* Related / Similar Username Accounts */}
+      {variationAccounts.length > 0 && (
+        <div className="space-y-3 rounded-2xl border border-violet-200 bg-violet-50/30 p-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-violet-600" />
+            <h4 className="font-display text-sm font-bold text-ink">Related Accounts — Similar Usernames</h4>
+            <Badge className="bg-violet-100 text-violet-800 border-violet-200 font-mono text-[10px]">
+              {variationAccounts.length}
+            </Badge>
+          </div>
+          <p className="font-mono text-[10px] text-slate-500 -mt-1">
+            Discovered by searching handle variations of <span className="font-bold text-violet-700">@{p.username.replace(/^@/, "")}</span> (with numbers, dashes, underscores, etc.). May belong to the subject or to namesakes — verify manually.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {variationAccounts.map((a, idx) => (
+              <AccountCard key={`var-${idx}`} account={a} profile={p} getConfidenceScore={getConfidenceScore} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <SimilarProfilesAndSweep p={p} platformColor={platformColor} />
+    </div>
+  );
+}
+
+// ─── Individual Account Card ─────────────────────────────────────────────────
+function AccountCard({
+  account: a,
+  profile: p,
+  getConfidenceScore,
+}: {
+  account: PlatformAccount;
+  profile: SuspectProfile;
+  getConfidenceScore: (a: { confidence?: string; confidenceScore?: number }) => number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const score = getConfidenceScore(a);
+  const tier = confidenceTier(score);
+  const meta = getPlatformMeta(a.platform);
+  const PlatformIcon = meta.icon;
+  const hasIntelPanel =
+    (a.platform === "github" && !!(a as any).githubIntel) ||
+    (a.platform === "reddit" && !!(a as any).redditIntel) ||
+    (a.platform === "linkedin" && ((a as any).headline || (a as any).jobTitle || (a as any).company || (a as any).education));
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (a.profileUrl) {
+      navigator.clipboard?.writeText(a.profileUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
+
+  return (
+    <div className="group relative rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden flex flex-col">
+      <div className="p-4 pb-3 flex-1 flex flex-col gap-3">
+        {/* Header row: avatar + platform + confidence ring */}
+        <div className="flex items-start gap-3">
+          <div className="relative shrink-0">
+            {a.profilePicUrl ? (
+              <img
+                src={a.profilePicUrl.replace(/&amp;/g, "&")}
+                alt={a.username}
+                className={`w-14 h-14 rounded-full object-cover ring-2 ${tier.ring} ring-offset-2 ring-offset-white`}
+                onError={(e) => {
+                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(a.username || a.platform)}&size=96&background=random`;
+                }}
+              />
+            ) : (
+              <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${meta.gradient} flex items-center justify-center ring-2 ${tier.ring} ring-offset-2 ring-offset-white`}>
+                <span className="text-white font-bold text-lg">
+                  {(a.username || a.platform).charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            {/* Platform badge overlapping avatar corner */}
+            <div
+              className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm"
+              style={{ backgroundColor: meta.solid }}
+              title={meta.label}
+            >
+              <PlatformIcon className="w-3.5 h-3.5 text-white" />
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0 pt-0.5">
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500 font-bold">{meta.label}</span>
+              {a.profilePicUrl && <ReverseImageDropdown imageUrl={a.profilePicUrl} />}
+            </div>
+            <div className="font-mono text-sm font-bold text-ink truncate mt-0.5">
+              {a.username ? (a.username.startsWith("@") ? a.username : "@" + a.username) : "—"}
+            </div>
+            {a.displayName && a.displayName !== a.username && (
+              <div className="text-[11px] text-slate-500 font-medium truncate">{a.displayName}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Bio */}
+        {a.bio && <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{a.bio}</p>}
+
+        {/* Confidence bar */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold">
+            <span className={`inline-flex items-center gap-1 ${tier.text}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${tier.dot}`} />
+              {tier.name}
+            </span>
+            <span className="text-slate-700">{score}%</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${tier.bar} transition-all duration-500`}
+              style={{ width: `${Math.min(100, score)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Meta row: followers / last seen */}
+        <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 border-t border-slate-100 pt-2">
+          <span className="inline-flex items-center gap-1 font-semibold">
+            <Users className="w-3 h-3" /> {a.followers?.toLocaleString() ?? "—"}
+          </span>
+          <span className="inline-flex items-center gap-1 font-semibold">
+            <Clock className="w-3 h-3" /> {a.creationDate || (a as any).lastActive || "—"}
+          </span>
+          {(a.confidence === "CONFIRMED" || (a as any).verified) && (
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+              <ShieldCheck className="w-3 h-3" /> verified
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Footer actions */}
+      <div className="flex items-center border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/60">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex-1 flex items-center justify-center gap-1 py-2 text-[11px] font-bold font-mono text-slate-600 hover:bg-slate-100 transition-colors"
+        >
+          <Info className="w-3.5 h-3.5" />
+          Details
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
+        <button
+          onClick={handleCopy}
+          className="flex items-center justify-center gap-1 px-3 py-2 text-[11px] font-bold font-mono text-slate-600 hover:bg-slate-100 transition-colors"
+          title="Copy profile URL"
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+        <a
+          href={a.profileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-1 px-3 py-2 text-[11px] font-bold font-mono text-cyan-700 hover:bg-cyan-50 transition-colors"
+        >
+          Open <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      </div>
+
+      {/* Expandable detail panel */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden border-t border-slate-100"
+          >
+            <div className="p-4 space-y-3 bg-slate-50/40">
+              {/* Confidence Explanation Breakdown */}
+              {(() => {
+                const { pct, matched, notMatched } = explainConfidence(a, p);
+                return (
+                  <div className="font-mono text-[10px] text-ink">
+                    <div className="flex justify-between font-bold text-slate-600 mb-1.5">
+                      <span>Attribution Confidence</span>
+                      <span className={tier.text}>{tier.name} ({score}%)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {matched.map((m, i) => (
+                        <span key={`m-${i}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-emerald-700 font-semibold text-[9px]">
+                          <Check className="w-2.5 h-2.5" /> {m}
+                        </span>
+                      ))}
+                      {notMatched.map((nm, i) => (
+                        <span key={`nm-${i}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-slate-400 font-medium text-[9px]">
+                          {nm}
+                        </span>
+                      ))}
+                    </div>
+                    {a.mergeJustification && (
+                      <div className="mt-3 pt-2.5 border-t border-dashed border-indigo-200 text-indigo-950 bg-indigo-50/40 p-2.5 rounded-xl text-[9px] leading-relaxed">
+                        <div className="font-bold text-indigo-850 mb-1">🔗 Merged because:</div>
+                        <div className="flex justify-between font-bold text-indigo-900 mt-1 border-t border-indigo-100 pt-1.5">
+                          <span>Overall Merge Confidence:</span>
+                          <span>{pct}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Platform-specific intel panels */}
+              {hasIntelPanel && (
+                <div className="pt-2 border-t border-slate-200">
+                  {a.platform === "github" && (a as any).githubIntel && (
+                    <GithubIntelPanel intel={(a as any).githubIntel} username={a.username} />
+                  )}
+                  {a.platform === "reddit" && (a as any).redditIntel && (
+                    <RedditIntelPanel intel={(a as any).redditIntel} />
+                  )}
+                  {a.platform === "linkedin" && ((a as any).headline || (a as any).jobTitle || (a as any).company || (a as any).education) && (
+                    <LinkedinIntelPanel account={a as any} />
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Similar Profiles + Platform Sweep Directory ─────────────────────────────
+function SimilarProfilesAndSweep({ p, platformColor }: { p: SuspectProfile; platformColor: Record<string, string> }) {
+  return (
+    <>
       {/* Similar Profiles Section */}
       {p.suggestedProfiles && p.suggestedProfiles.length > 0 && (
         <Card className="border-l-4 border-l-violet-500 bg-violet-50/30 shadow-sm">
@@ -788,11 +924,239 @@ function AccountsTab({ p }: { p: SuspectProfile }) {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }
 
+function FinancialTab({ p }: { p: SuspectProfile }) {
+  // Support both backend upiFootprint and mock financialFootprint formats
+  const u = p.upiFootprint;
+  const f = p.financialFootprint;
 
+  if (!u && !f) return <Placeholder text="No Indian financial footprint recorded for this subject." />;
+
+  const statusTone = (s: string) =>
+    s === "OPEN" || s === "FOUND_PUBLIC_MENTION" ? "bg-stamp text-primary-foreground font-bold" :
+    s === "UNDER_INVESTIGATION" ? "bg-warn text-ink font-bold" : "bg-slate-100 text-slate-700 font-bold";
+
+  // If we have real upiFootprint data from backend
+  if (u) {
+    const totalComplaints = u.ncrp.complaintCount || (u.ncrp.status === "FOUND_PUBLIC_MENTION" ? 1 : 0);
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+                <IndianRupee className="h-4 w-4 text-stamp" /> UPI handles
+              </CardTitle>
+              <CardDescription>Probable VPAs across Payment Service Providers</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {u.probableUpiIds.map((handle: any, i: number) => (
+                <div key={i} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-ink font-semibold">
+                  <span>{handle.id}</span>
+                  <Badge variant="outline" className="text-[10px] border-slate-350">{handle.source}</Badge>
+                </div>
+              ))}
+              {u.probableUpiIds.length === 0 && (
+                <p className="text-xs text-slate-600 font-mono font-medium">No inferred UPI handles identified.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+                <PhoneCall className="h-4 w-4 text-stamp" /> Truecaller
+              </CardTitle>
+              <CardDescription>Carrier intelligence and community signals</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-ink">
+              {u.truecaller.status === "PUBLIC_DATA_UNAVAILABLE" || !u.truecaller.name ? (
+                <p className="text-xs text-slate-655 font-mono font-medium">Truecaller public details unavailable.</p>
+              ) : (
+                <>
+                  <div>
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">Display name</div>
+                    <div className="font-bold text-sm text-ink">{u.truecaller.name}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Carrier</span>
+                      <div className="font-mono font-semibold text-slate-800">{u.truecaller.carrier || "Unknown"}</div>
+                    </div>
+                    <div>
+                      <span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Circle</span>
+                      <div className="font-mono font-semibold text-slate-800">{u.truecaller.telecomCircle || "Unknown"}</div>
+                    </div>
+                  </div>
+                  {u.truecaller.spamScore !== undefined && (
+                    <div>
+                      <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+                        <span>Spam score</span>
+                        <span className="font-bold text-rose-800">{u.truecaller.spamScore}/100</span>
+                      </div>
+                      <Progress value={u.truecaller.spamScore} className="mt-1 h-1.5" />
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+                <ShieldX className="h-4 w-4 text-stamp" /> NCRP summary
+              </CardTitle>
+              <CardDescription>National Cyber Crime Reporting Portal hits</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-ink">
+              <div className="flex justify-between">
+                <span className="text-slate-600 font-semibold">Status</span>
+                <Badge className={statusTone(u.ncrp.status) + " font-mono text-[10px]"}>{u.ncrp.status.replace(/_/g, " ")}</Badge>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600 font-semibold">Complaint Hits</span>
+                <span className="font-mono font-bold text-rose-800">{totalComplaints}</span>
+              </div>
+              <p className="text-[10px] text-slate-700 font-medium font-mono mt-2 leading-relaxed border-t border-slate-200 pt-2">{u.ncrp.note}</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback to friend's mock financialFootprint schema
+  if (f) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+                <IndianRupee className="h-4 w-4 text-stamp" /> UPI handles
+              </CardTitle>
+              <CardDescription>Probable VPAs across PSPs · last seen {f.upi.lastSeen}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {f.upi.handles.map((h) => (
+                <div key={h} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-ink font-semibold">
+                  <span>{h}</span>
+                  <Badge variant="outline" className="text-[10px] border-slate-350">{h.split("@")[1]}</Badge>
+                </div>
+              ))}
+              <div className="pt-1 font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+                Banks linked: {f.upi.banks.join(" · ")}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+                <PhoneCall className="h-4 w-4 text-stamp" /> Truecaller
+              </CardTitle>
+              <CardDescription>Carrier intelligence & community spam signals</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-ink">
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">Display name</div>
+                <div className="font-bold text-sm text-ink">{f.truecaller.name}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Carrier</span><div className="font-mono font-semibold text-slate-800">{f.truecaller.carrier}</div></div>
+                <div><span className="font-mono text-[10px] uppercase text-slate-600 font-bold">Circle</span><div className="font-mono font-semibold text-slate-800">{f.truecaller.circle}</div></div>
+              </div>
+              <div>
+                <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+                  <span>Spam score</span>
+                  <span className="font-bold text-rose-800">{f.truecaller.spamScore}/100 · {f.truecaller.spamReports} reports</span>
+                </div>
+                <Progress value={f.truecaller.spamScore} className="mt-1 h-1.5" />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {f.truecaller.tags.map((t) => (
+                  <Badge key={t} className="bg-stamp/10 text-stamp text-[10px] font-mono border-transparent">{t}</Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 font-display text-base text-ink">
+                <ShieldX className="h-4 w-4 text-stamp" /> NCRP summary
+              </CardTitle>
+              <CardDescription>National Cyber Crime Reporting Portal hits</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-ink">
+              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total complaints</span><span className="font-mono font-bold text-rose-800">{f.ncrp.length}</span></div>
+              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Open / Investigating</span><span className="font-mono font-bold text-stamp">{f.ncrp.filter(c => c.status !== "CLOSED").length}</span></div>
+              <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total amount alleged</span><span className="font-mono font-bold">₹ {f.ncrp.reduce((s,c) => s + (c.amountInr ?? 0), 0).toLocaleString("en-IN")}</span></div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="bg-white border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="font-display text-ink">NCRP complaint history</CardTitle>
+            <CardDescription>Live mirror from cybercrime.gov.in (mock)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left font-mono text-[10px] uppercase tracking-wider text-slate-700 font-bold">
+                    <th className="py-2 pr-3">Complaint ID</th>
+                    <th className="py-2 pr-3">Date</th>
+                    <th className="py-2 pr-3">Category</th>
+                    <th className="py-2 pr-3">Jurisdiction</th>
+                    <th className="py-2 pr-3 text-right">Amount (INR)</th>
+                    <th className="py-2 pr-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {f.ncrp.map((c) => (
+                    <tr key={c.id} className="border-b border-slate-150 last:border-0 text-slate-800 font-medium">
+                      <td className="py-2 pr-3 font-mono text-xs text-ink font-semibold">{c.id}</td>
+                      <td className="py-2 pr-3 font-mono text-xs">{c.date}</td>
+                      <td className="py-2 pr-3">{c.category}</td>
+                      <td className="py-2 pr-3 text-xs text-slate-600">{c.jurisdiction}</td>
+                      <td className="py-2 pr-3 text-right font-mono font-bold text-ink">{c.amountInr ? `₹ ${c.amountInr.toLocaleString("en-IN")}` : "—"}</td>
+                      <td className="py-2 pr-3"><Badge className={statusTone(c.status) + " font-mono text-[10px] border-transparent"}>{c.status.replace("_", " ")}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {f.bankAccounts && (
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader><CardTitle className="font-display text-ink">Linked bank accounts</CardTitle></CardHeader>
+            <CardContent className="grid gap-2 md:grid-cols-2">
+              {f.bankAccounts.map((b) => (
+                <div key={b.accountMasked} className="flex items-center justify-between rounded-md border border-slate-200 p-3 bg-slate-50 shadow-sm">
+                  <div>
+                    <div className="font-bold text-ink">{b.bank}</div>
+                    <div className="font-mono text-xs text-slate-600 font-semibold">{b.ifsc} · {b.accountMasked}</div>
+                  </div>
+                  {b.flagged && <Badge className="bg-stamp text-primary-foreground text-[10px] font-bold border-transparent">FLAGGED</Badge>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
 
 function Placeholder({ text }: { text: string }) {
   return <div className="rounded-md border border-dashed border-slate-250 p-6 text-center text-sm text-slate-650 font-bold bg-slate-50">{text}</div>;
@@ -1445,7 +1809,18 @@ const explainConfidence = (a: any, p: SuspectProfile) => {
     }
   }
 
-
+  // UPI Alias Match
+  if (p.upiFootprint && p.upiFootprint.upi && Array.isArray(p.upiFootprint.upi.handles)) {
+    const matchedUpi = p.upiFootprint.upi.handles.some((h: string) => {
+      const prefix = h.split("@")[0]?.toLowerCase();
+      return prefix && (cleanAUsername.includes(prefix) || prefix.includes(cleanAUsername));
+    });
+    if (matchedUpi) {
+      matched.push("UPI Alias Match");
+    } else {
+      notMatched.push("UPI Alias Match");
+    }
+  }
 
   const scoreMap = {
     CONFIRMED: "95%",
@@ -1453,7 +1828,10 @@ const explainConfidence = (a: any, p: SuspectProfile) => {
     POSSIBLE: "45%",
   };
 
-  const pct = scoreMap[a.confidence as "CONFIRMED" | "PROBABLE" | "POSSIBLE"] || "50%";
+  // Prefer the real calculated confidenceScore over the categorical fallback
+  const pct = typeof a.confidenceScore === "number"
+    ? `${a.confidenceScore}%`
+    : (scoreMap[a.confidence as "CONFIRMED" | "PROBABLE" | "POSSIBLE"] || "50%");
 
   return { pct, matched, notMatched };
 };

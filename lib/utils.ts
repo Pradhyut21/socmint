@@ -22,15 +22,38 @@ export async function fetchWithTimeout(
   options: RequestInit = {}
 ): Promise<Response> {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const id = setTimeout(() => {
+    try { controller.abort(); } catch {}
+  }, timeoutMs);
 
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       ...options,
       signal: controller.signal,
     });
-  } finally {
+
+    const originalText = response.text.bind(response);
+    response.text = async () => {
+      try {
+        return await originalText();
+      } finally {
+        clearTimeout(id);
+      }
+    };
+
+    const originalJson = response.json.bind(response);
+    response.json = async () => {
+      try {
+        return await originalJson();
+      } finally {
+        clearTimeout(id);
+      }
+    };
+
+    return response;
+  } catch (err) {
     clearTimeout(id);
+    throw err;
   }
 }
 

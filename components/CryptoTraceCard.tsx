@@ -5,13 +5,13 @@ import { SuspectProfile, CryptoTransaction } from "../lib/types";
 import { Coins, ShieldAlert, ArrowUpRight, ArrowDownLeft, Lock, RefreshCw, Landmark } from "lucide-react";
 
 interface CryptoTraceCardProps {
-  suspect?: SuspectProfile;
+  suspect: SuspectProfile;
 }
 
 export default function CryptoTraceCard({ suspect }: CryptoTraceCardProps) {
   const [addressInput, setAddressInput] = useState("");
   const [tracing, setTracing] = useState(false);
-  const [traceResult, setTraceResult] = useState<any>(suspect?.cryptoTrace || null);
+  const [traceResult, setTraceResult] = useState<any>(suspect.cryptoTrace || null);
 
   const getCoinColor = (coin: string) => {
     switch (coin) {

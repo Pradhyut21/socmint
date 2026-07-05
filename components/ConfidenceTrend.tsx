@@ -17,7 +17,7 @@ export function ConfidenceTrend({ steps, initialConfidence = 20 }: ConfidenceTre
     for (const step of steps) {
       running = Math.min(100, Math.max(0, running + (step.confidenceDelta || 0)));
       pts.push({
-        label: step.module.replace(/\(\)/g, "").replace("investigateSingleUsername", "Sweep").replace("fetchGravatarData", "Gravatar"),
+        label: step.module.replace(/\(\)/g, "").replace("investigateSingleUsername", "Sweep").replace("fetchUpiFootprint", "UPI").replace("fetchHibpBreaches", "HIBP").replace("fetchGravatarData", "Gravatar"),
         confidence: running,
       });
     }

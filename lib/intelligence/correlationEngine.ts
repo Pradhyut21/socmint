@@ -2,7 +2,6 @@ import { PlatformAccount, SuspectProfile, ReliableEvidenceItem, PlatformStatus }
 import { levenshtein, handleSimilarityScore, avatarHashScore } from "../analysis/shadowAccountProber";
 import { compareDeveloperProfiles } from "./developerFingerprint";
 import { compareBiosSemantically } from "./semanticSimilarity";
-import { parseHandlesFromBio } from "../fetchers/social";
 
 export interface CorrelationSignal {
   name: string;
@@ -89,11 +88,7 @@ export function correlateAccount(account: PlatformAccount, profile: SuspectProfi
   const n1 = profile.realName?.toLowerCase().trim();
   const n2 = account.displayName?.toLowerCase().trim();
   if (n1 && n2 && n1 !== "not provided" && n2 !== "not provided") {
-    const words1 = n1.split(/[^a-z0-9]+/);
-    const words2 = n2.split(/[^a-z0-9]+/);
-    const hasSharedWord = words1.some(w1 => w1.length >= 4 && words2.some(w2 => w2 === w1));
-
-    if (n1 === n2 || n1.includes(n2) || n2.includes(n1) || levenshtein(n1, n2) <= 2 || hasSharedWord) {
+    if (n1 === n2 || n1.includes(n2) || n2.includes(n1) || levenshtein(n1, n2) <= 2) {
       positiveSignals.push({
         name: "Display Name Match",
         weight: 20,
@@ -258,42 +253,6 @@ export function correlateAccount(account: PlatformAccount, profile: SuspectProfi
     }
   }
 
-  // 9.5 Bio Handle Cross-Link (+45)
-  if (account.bio && account.bio !== "Not provided") {
-    const candidateBioLower = account.bio.toLowerCase();
-    const targetHandleLower = profile.username.replace(/^@/, "").toLowerCase();
-    const targetRealNameLower = profile.realName?.toLowerCase().trim() || "";
-
-    const candidateDeclaredHandles = parseHandlesFromBio(account.bio);
-    const mentionsTargetPrimary = candidateDeclaredHandles.some(
-      h => h.username.toLowerCase() === targetHandleLower
-    ) || (targetHandleLower.length >= 4 && candidateBioLower.includes(`@${targetHandleLower}`)) || (targetRealNameLower.length >= 5 && candidateBioLower.includes(targetRealNameLower));
-
-    // Check confirmed bios
-    const confirmedBios = profile.accounts.filter(a => a.confidence === "CONFIRMED").map(a => a.bio || "");
-    const primaryBio = profile.photoUrl || ""; // also check bios of main profile
-    const allConfirmedBios = [primaryBio, ...confirmedBios].filter(Boolean);
-    
-    let targetDeclaresCandidate = false;
-    for (const bioText of allConfirmedBios) {
-      const declared = parseHandlesFromBio(bioText);
-      if (declared.some(h => h.username.toLowerCase() === u2 && h.platform === account.platform)) {
-        targetDeclaresCandidate = true;
-        break;
-      }
-    }
-
-    if (mentionsTargetPrimary || targetDeclaresCandidate) {
-      positiveSignals.push({
-        name: "Bio Handle Cross-Link",
-        weight: 45,
-        description: mentionsTargetPrimary 
-          ? `Direct linkage: candidate's bio explicitly references target identity or handle "@${profile.username}".`
-          : `Direct linkage: target's confirmed bio explicitly references candidate's handle "@${account.username}" on ${account.platform}.`
-      });
-    }
-  }
-
   // 10. Repository Similarity (+15) & 11. Developer Stack Similarity (+15)
   if (account.platform === "github" || account.platform === "gitlab") {
     const gitlabAcc = profile.accounts.find(a => a.platform === "gitlab");
@@ -316,21 +275,17 @@ export function correlateAccount(account: PlatformAccount, profile: SuspectProfi
     }
   }
 
-  // 12. Avatar Perceptual Hash (+40)
+  // 12. Avatar Perceptual Hash (+20)
   if (account.profilePicUrl) {
-    const otherAvatars = [
-      profile.photoUrl,
-      ...profile.accounts.filter(a => a.id !== account.id && a.profilePicUrl).map(a => a.profilePicUrl)
-    ].filter(Boolean) as string[];
-
+    const otherAvatars = profile.accounts.filter(a => a.id !== account.id && a.profilePicUrl).map(a => a.profilePicUrl);
     let avatarMatchFound = false;
     for (const otherAv of otherAvatars) {
       const hashResult = avatarHashScore(account.profilePicUrl, otherAv);
       if (hashResult.score >= 70) {
         positiveSignals.push({
           name: "Avatar Perceptual Hash",
-          weight: 40,
-          description: `Avatar match: perceptual hash confirms identical or near-identical profile picture (${hashResult.score}% similarity).`
+          weight: 20,
+          description: `Avatar match: profile picture matches other accounts (${hashResult.score}% similarity).`
         });
         avatarMatchFound = true;
         break;
@@ -466,6 +421,19 @@ export function generateEvidenceReliabilityList(profile: SuspectProfile): Reliab
     });
   });
 
+  // 3. Financial records
+  if (profile.upiFootprint?.probableUpiIds?.length > 0) {
+    items.push({
+      id: "ev-upi",
+      source: "UPI Payment Service Providers Audit",
+      evidenceType: "VPA Registry Footprint",
+      confidence: "High",
+      reliability: "High",
+      freshness: "1 day ago",
+      verificationStatus: "Yes",
+      details: `Discovered active Virtual Payment Addresses (VPAs): ${profile.upiFootprint.probableUpiIds.map((h: any) => h.id).join(", ")}.`
+    });
+  }
 
   return items;
 }
@@ -495,38 +463,23 @@ export function calculateInvestigationQuality(profile: SuspectProfile): {
   const correlatedAccounts = profile.accounts.map(acc => correlateAccount(acc, profile));
   const avgCorrelation = correlatedAccounts.length > 0
     ? Math.round(correlatedAccounts.reduce((sum, c) => sum + c.confidence, 0) / correlatedAccounts.length)
-    : 0;
+    : 50;
     
   const timelineCount = profile.posts.length;
   const hasAiNexus = profile.nexusAnalysis ? 95 : 40;
 
-  // Let's implement the new real-world data formula:
-  // 1. Identity Correlation: Math.round((avgCorrelation / 100) * 40)
-  const correlationPart = Math.round((avgCorrelation / 100) * 40);
+  // Weighted score calculation
+  const searchedScore = Math.min(20, (searched / 20) * 20);
+  const respondedScore = Math.min(20, (responded / searched) * 20);
+  const verificationScore = Math.min(20, evidenceCount > 0 ? (verifiedCount / evidenceCount) * 20 : 0);
+  const correlationScore = Math.min(20, (avgCorrelation / 100) * 20);
+  const timelineScore = Math.min(10, timelineCount > 5 ? 10 : (timelineCount / 5) * 10);
+  const aiScore = Math.min(10, (hasAiNexus / 100) * 10);
 
-  // 2. Account Verification Ratio:
-  const confirmedCount = profile.accounts.filter(a => a.confidence === "CONFIRMED").length;
-  const probableCount = profile.accounts.filter(a => a.confidence === "PROBABLE").length;
-  const totalAcc = profile.accounts.length;
-  const verificationRatio = totalAcc > 0
-    ? ((confirmedCount * 1.0 + probableCount * 0.5) / totalAcc)
-    : 0;
-  const verificationPart = Math.round(verificationRatio * 40);
+  const score = Math.round(searchedScore + respondedScore + verificationScore + correlationScore + timelineScore + aiScore);
+  const finalScore = Math.max(10, Math.min(99, score)); // Capped at 99%
 
-  // 3. Evidence Verification:
-  const evidencePart = Math.round((evidenceCount > 0 ? verifiedCount / evidenceCount : 0) * 10);
-
-  // 4. Timeline count:
-  const timelinePart = Math.min(10, Math.round((timelineCount / 5) * 10));
-
-  const score = correlationPart + verificationPart + evidencePart + timelinePart;
-  
-  // Dynamic capping: If there are NO accounts at all, keep it to 1%.
-  const finalScore = totalAcc === 0 ? 1 : Math.max(1, Math.min(100, score));
-
-  const reason = totalAcc === 0
-    ? `No active platform registrations discovered. Search complete.`
-    : `${confirmedCount} confirmed & ${probableCount} probable profiles discovered. ${verifiedCount}/${evidenceCount} evidence items verified. Average cross-correlation strength: ${avgCorrelation}%.`;
+  const reason = `${searched} platforms searched, ${responded} responded, ${verifiedCount} evidence sources verified, ${avgCorrelation}% average identity correlation strength.`;
 
   return {
     score: finalScore,

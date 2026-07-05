@@ -233,12 +233,7 @@ Return ONLY JSON:
     if (!resp.ok) return base;
 
     const data = await resp.json();
-    let content = data.choices?.[0]?.message?.content || "{}";
-    
-    // Strip markdown code block wrappers if the model includes them
-    content = content.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-    
-    const raw = JSON.parse(content);
+    const raw = JSON.parse(data.choices?.[0]?.message?.content || "{}");
 
     const nimScores = {
       violence: Number(raw.violence ?? base.scores.violence),
@@ -266,24 +261,4 @@ Return ONLY JSON:
   } catch {
     return base;
   }
-}
-
-export function getPostFlagDetails(content: string): { flagLevel: "NORMAL" | "SUSPICIOUS" | "HIGH_RISK"; flagReason?: string } {
-  if (!content || content.trim().length === 0) {
-    return { flagLevel: "NORMAL" };
-  }
-  const result = classifyContentRisk({ text: content });
-  if (result.riskLevel === "CRITICAL" || result.riskLevel === "HIGH") {
-    return {
-      flagLevel: "HIGH_RISK",
-      flagReason: `Flagged via safety analysis. Matches: ${result.triggeringPhrases.join(", ")}`,
-    };
-  }
-  if (result.riskLevel === "MEDIUM") {
-    return {
-      flagLevel: "SUSPICIOUS",
-      flagReason: `Potential risk signals detected. Matches: ${result.triggeringPhrases.join(", ")}`,
-    };
-  }
-  return { flagLevel: "NORMAL" };
 }

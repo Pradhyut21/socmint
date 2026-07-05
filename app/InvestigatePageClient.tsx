@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Search, Loader2, Printer, FilePlus, ShieldAlert, Sparkles,
   AtSign, Phone, Mail, ScanFace, IdCard, SlidersHorizontal, X, AlertTriangle,
-  ArrowLeft, Clock, CheckCircle2, Lock, Camera, Coins, Shield, Plus, Globe, Copy,
+  ArrowLeft, Clock, CheckCircle2, Lock, Camera, Coins, Shield, Plus, Globe, Copy, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -17,16 +17,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { storage } from "@/lib/storage";
 import { printDossier } from "@/lib/export/pdfExport";
 import { riskColor } from "@/lib/utils";
-import type { SuspectProfile, DossierInput, EvidenceArtifact, ContentRiskResult } from "@/lib/types";
+import type { SuspectProfile, DossierInput, EvidenceArtifact, ContentRiskResult, PlatformAccount } from "@/lib/types";
 import { SuspectTabs } from "@/components/suspect/SuspectTabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { getAllArtifacts, removeArtifact, pinEvidence } from "@/lib/evidence/evidenceCaptureService";
-import CryptoTraceCard from "@/components/CryptoTraceCard";
 
 // Dynamically import WebGL ShieldOrb to prevent server-side compile errors
 const ShieldOrb = dynamic(
@@ -38,11 +36,8 @@ const SEARCH_TYPES = [
   { value: "username", label: "Username", icon: AtSign, placeholder: "shadowtrader99" },
   { value: "name", label: "Real name", icon: IdCard, placeholder: "Vikram Rathore" },
   { value: "email", label: "Email", icon: Mail, placeholder: "name@protonmail.com" },
-  { value: "phone", label: "Phone", icon: Phone, placeholder: "+91 98765 43210" },
-  { value: "face", label: "Face scan", icon: ScanFace, placeholder: "upload photo or use camera" },
   { value: "crypto", label: "Crypto wallet", icon: Coins, placeholder: "BTC, ETH, or LTC address" },
-  { value: "domain", label: "Domain / IP", icon: Globe, placeholder: "scam-site.xyz or 103.28.92.1" },
-  { value: "manual_post", label: "Manual post", icon: FilePlus, placeholder: "Search manually ingested captions or authors..." },
+  { value: "face", label: "Face scan", icon: ScanFace, placeholder: "Upload or capture image" },
 ] as const;
 
 const SWEEP_STAGES = [
@@ -75,7 +70,11 @@ export default function InvestigatePage() {
   const [stage, setStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("overview");
+  // State for live updates
+  const [liveAccounts, setLiveAccounts] = useState<PlatformAccount[]>([]);
+  const [liveMessages, setLiveMessages] = useState<string[]>([]);
 
+  const [showApiSettings, setShowApiSettings] = useState(false);
   const [githubTokenInput, setGithubTokenInput] = useState("");
 
   useEffect(() => {
@@ -92,11 +91,16 @@ export default function InvestigatePage() {
 
   const [type, setType] = useState<(typeof SEARCH_TYPES)[number]["value"]>("username");
   const [query, setQuery] = useState("");
+  // Optional disambiguating hint for "Real name" searches (username/college/company)
+  const [nameContext, setNameContext] = useState("");
   const [dossierUsernames, setDossierUsernames] = useState<string[]>([""]);
   const [dossierRealName, setDossierRealName] = useState("");
   const [dossierEmail, setDossierEmail] = useState("");
   const [dossierPhone, setDossierPhone] = useState("");
   const [dossierFaceData, setDossierFaceData] = useState("");
+  
+  // Quick Scan / Deep Scan toggle
+  const [quickScan, setQuickScan] = useState(true); // Default to Quick Scan (fast mode)
   
   // Standalone/unassociated manual post states
   const [allManualPosts, setAllManualPosts] = useState<EvidenceArtifact[]>([]);
@@ -144,16 +148,6 @@ export default function InvestigatePage() {
       if (match) {
         setSuspect(match);
         setActiveTab("overview");
-
-        // Auto-scroll to the chat box if hash contains chat-box
-        if (typeof window !== "undefined" && window.location.hash.includes("chat-box")) {
-          setTimeout(() => {
-            const el = document.getElementById("chat-box");
-            if (el) {
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-          }, 400);
-        }
       }
     }
   }, [caseRef]);
@@ -240,10 +234,11 @@ export default function InvestigatePage() {
   };
 
   // Execute real API investigation
-  const runSweep = async (queryVal: string, typeVal: string, dossier?: DossierInput) => {
+  const runSweep = async (queryVal: string, typeVal: string, dossier?: DossierInput, nameContextVal?: string) => {
     setError(null);
     setLoading(true);
     setStage(0);
+    setSuspect(null); // Clear previous results
 
     const label = typeVal === "dossier" && dossier 
       ? [dossier.usernames[0], dossier.realName, dossier.email].filter(Boolean).join(", ")
@@ -300,94 +295,278 @@ export default function InvestigatePage() {
     }, 1200);
 
     try {
-      const requestBody: Record<string, any> = { query: queryVal, type: typeVal };
+      const requestBody: Record<string, any> = { query: queryVal, type: typeVal, quickScan };
       if (typeVal === "dossier" && dossier) {
         requestBody.dossier = dossier;
       }
+      if (nameContextVal) {
+        requestBody.nameContext = nameContextVal;
+      }
 
       const tokenOverride = typeof window !== "undefined" ? localStorage.getItem("github_token_override") : null;
+
+      // Use EventSource for Server-Sent Events
+      const params = new URLSearchParams();
+      Object.keys(requestBody).forEach(key => {
+        params.append(key, typeof requestBody[key] === 'object' ? JSON.stringify(requestBody[key]) : requestBody[key]);
+      });
+      if (tokenOverride) {
+        params.append('githubToken', tokenOverride);
+      }
+
+      // Make POST request to streaming endpoint
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (tokenOverride) {
         headers["x-github-token"] = tokenOverride;
       }
 
-      const response = await fetch("/api/investigate", {
+      console.log("[STREAMING] Calling /api/investigate-live with:", { query: queryVal, type: typeVal, quickScan });
+
+      const response = await fetch("/api/investigate-live", {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody),
       });
 
-
-      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Investigation sweep failed.");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Investigation failed");
       }
 
-      const profile = data.profile as SuspectProfile;
-      setSuspect(profile);
-
-      // ── Duplicate case detection ──────────────────────────────────────
-      const existingCases = storage.getRecent();
-      const duplicate = existingCases.find(c =>
-        c.caseReference !== profile.caseReference && (
-          (profile.username && c.username?.toLowerCase() === profile.username?.toLowerCase()) ||
-          (profile.emailAddress && profile.emailAddress !== "Not provided" && c.emailAddress === profile.emailAddress) ||
-          (profile.phoneNumber  && profile.phoneNumber  !== "Not provided" && c.phoneNumber  === profile.phoneNumber)
-        )
-      );
-      if (duplicate) {
-        toast.warning("Possible duplicate case detected", {
-          description: `This target matches an existing case: ${duplicate.caseReference} (${duplicate.realName}). Review before proceeding.`,
-          duration: 8000,
-        });
+      // Read the streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error("No response body");
       }
 
-      storage.pushRecent(profile);
+      setLiveAccounts([]);
+      setLiveMessages([]);
 
-      const durationMs = Date.now() - startTime;
-      const platformsQueried = profile.platformStatuses?.map(s => s.name) || [];
-      const evidenceCount = profile.evidenceReliability?.length || 0;
-      storage.pushExtendedAudit({
-        action: "INVESTIGATE",
-        caseId: profile.caseReference,
-        investigationTarget: label,
-        searchType: typeVal,
-        platformsQueried,
-        evidenceCount,
-        reportGenerated: false,
-        durationMs,
-        detail: `OSINT Sweep completed for target "${label}" in ${durationMs}ms.`
-      });
+      console.log("[STREAMING] Starting to read SSE stream...");
 
-      toast.success("OSINT Sweep complete", { 
-        description: `${profile.realName} · ${profile.riskLevel} · ${profile.caseReference}` 
-      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log("[STREAMING] ✅ Stream ended naturally");
+          break;
+        }
 
-      // Fire off background AI Nexus Analysis
-      fetch("/api/nexus", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile }),
-      })
-        .then((res) => res.json())
-        .then((nexusData) => {
-          if (nexusData && !nexusData.error) {
-            setSuspect((prev) => {
-              if (!prev || prev.caseReference !== profile.caseReference) return prev;
-              const updated = { ...prev, nexusAnalysis: nexusData };
-              // Update in recent investigations
-              const recents = storage.getRecent().map(r => r.caseReference === profile.caseReference ? updated : r);
-              localStorage.setItem("socmint_recent_investigations", JSON.stringify(recents));
-              return updated;
-            });
-            toast.info("AI NEXUS Analysis completed", {
-              description: "Cross-signal findings fused to suspect dossier."
-            });
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === "status") {
+                setLiveMessages(prev => [...prev, data.message]);
+                console.log("[STREAMING] Status:", data.message);
+              } else if (data.type === "account_found") {
+                console.log("[STREAMING] ✅ Account found event received:", data);
+                console.log("[STREAMING] Account profilePicUrl:", data.account?.profilePicUrl);
+                setLiveMessages(prev => [...prev, data.message]);
+                
+                if (data.account) {
+                  console.log("[STREAMING] Account data:", data.account);
+                  console.log("[STREAMING] Account has profilePicUrl?", !!data.account.profilePicUrl);
+                  console.log("[STREAMING] Full account object keys:", Object.keys(data.account));
+                  
+                  setLiveAccounts(prev => {
+                    const newAccounts = [...prev, data.account];
+                    console.log("[STREAMING] Total accounts now:", newAccounts.length);
+                    return newAccounts;
+                  });
+                  
+                  // Create or update partial profile immediately
+                  setSuspect(prev => {
+                    const newAccount = data.account;
+                    console.log("[STREAMING] Adding account to profile, profilePicUrl:", newAccount.profilePicUrl);
+                    const existingAccounts = prev ? prev.accounts || [] : [];
+                    
+                    // Check if account already exists
+                    const accountExists = existingAccounts.some(acc => 
+                      acc.platform === newAccount.platform && acc.username === newAccount.username
+                    );
+                    
+                    if (accountExists) {
+                      console.log("[STREAMING] Account already in profile, skipping");
+                      return prev;
+                    }
+                    
+                    const updatedAccounts = [...existingAccounts, newAccount];
+                    
+                    // Helper function: Select best profile picture with priority: Instagram → GitHub → YouTube → others
+                    const selectBestProfilePic = (accounts: any[], fallbackName: string) => {
+                      const instagram = accounts.find(a => a.platform === "instagram" && a.profilePicUrl)?.profilePicUrl;
+                      const github = accounts.find(a => a.platform === "github" && a.profilePicUrl)?.profilePicUrl;
+                      const youtube = accounts.find(a => a.platform === "youtube" && a.profilePicUrl)?.profilePicUrl;
+                      const anyOther = accounts.find(a => a.profilePicUrl)?.profilePicUrl;
+                      return instagram || github || youtube || anyOther || 
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&size=256&background=0D8ABC&color=fff&bold=true`;
+                    };
+                    
+                    if (!prev) {
+                      // First account - create new profile
+                      console.log("[STREAMING] 🚀 Creating initial profile with first account");
+                      const partialProfile: SuspectProfile = {
+                        username: queryVal,
+                        realName: queryVal,
+                        phoneNumber: "Not provided",
+                        emailAddress: "Not provided",
+                        photoUrl: selectBestProfilePic(updatedAccounts, queryVal),
+                        riskScore: 0,
+                        riskLevel: "LOW",
+                        riskSubscores: { language: 0, behavioral: 0, network: 0, legal: 0 },
+                        riskSignals: [],
+                        accounts: updatedAccounts,
+                        posts: [],
+                        legalRecords: [],
+                        aliasResults: [],
+                        network: { nodes: [], links: [] },
+                        locations: [],
+                        caseReference: `TEMP-${Date.now()}`,
+                        capturedAt: new Date().toISOString(),
+                      };
+                      
+                      // Stop showing loading skeleton, switch to accounts tab
+                      setLoading(false);
+                      setActiveTab("accounts");
+                      console.log("[STREAMING] ✅ Profile created, UI should show results now");
+                      
+                      return partialProfile;
+                    } else {
+                      // Update existing profile with new account and refresh photoUrl with priority
+                      console.log("[STREAMING] Adding account to existing profile");
+                      return {
+                        ...prev,
+                        accounts: updatedAccounts,
+                        photoUrl: selectBestProfilePic(updatedAccounts, prev.realName || prev.username)
+                      };
+                    }
+                  });
+                } else {
+                  console.log("[STREAMING] ⚠️ No account data in event");
+                }
+              } else if (data.type === "complete") {
+                // Final profile ready
+                console.log("[STREAMING] 🎉 Complete event received, setting final profile");
+                clearInterval(stageTimer);
+                
+                const finalProfile = data.profile as SuspectProfile;
+                
+                // CRITICAL FIX: Merge liveAccounts that were reported during streaming
+                // The final profile should already include these, but we ensure no accounts are lost
+                setSuspect((prev) => {
+                  if (!prev) {
+                    // No partial profile was built, use final as-is
+                    console.log("[STREAMING] No partial profile, using final profile");
+                    return finalProfile;
+                  }
+                  
+                  // Merge accounts from partial profile (built during streaming) into final profile
+                  const finalAccountKeys = new Set(
+                    finalProfile.accounts.map(acc => `${acc.platform}::${acc.username.toLowerCase()}`)
+                  );
+                  
+                  const missingAccounts = prev.accounts.filter(acc => {
+                    const key = `${acc.platform}::${acc.username.toLowerCase()}`;
+                    return !finalAccountKeys.has(key);
+                  });
+                  
+                  if (missingAccounts.length > 0) {
+                    console.log(`[STREAMING] ⚠️ Found ${missingAccounts.length} accounts in partial profile missing from final, merging...`);
+                    return {
+                      ...finalProfile,
+                      accounts: [...finalProfile.accounts, ...missingAccounts]
+                    };
+                  }
+                  
+                  console.log("[STREAMING] All accounts present in final profile");
+                  return finalProfile;
+                });
+                
+                setLoading(false);
+                setActiveTab("accounts"); // Always switch to accounts when complete
+                
+                const profile = finalProfile;
+                
+                // Handle duplicate detection and storage
+                const existingCases = storage.getRecent();
+                const duplicate = existingCases.find(c =>
+                  c.caseReference !== profile.caseReference && (
+                    (profile.username && c.username?.toLowerCase() === profile.username?.toLowerCase()) ||
+                    (profile.emailAddress && profile.emailAddress !== "Not provided" && c.emailAddress === profile.emailAddress) ||
+                    (profile.phoneNumber  && profile.phoneNumber  !== "Not provided" && c.phoneNumber  === profile.phoneNumber)
+                  )
+                );
+                if (duplicate) {
+                  toast.warning("Possible duplicate case detected", {
+                    description: `This target matches an existing case: ${duplicate.caseReference} (${duplicate.realName}). Review before proceeding.`,
+                    duration: 8000,
+                  });
+                }
+
+                storage.pushRecent(profile);
+
+                const durationMs = Date.now() - startTime;
+                const platformsQueried = profile.platformStatuses?.map(s => s.name) || [];
+                const evidenceCount = profile.evidenceReliability?.length || 0;
+                storage.pushExtendedAudit({
+                  action: "INVESTIGATE",
+                  caseId: profile.caseReference,
+                  investigationTarget: label,
+                  searchType: typeVal,
+                  platformsQueried,
+                  evidenceCount,
+                  reportGenerated: false,
+                  durationMs,
+                  detail: `OSINT Sweep completed for target "${label}" in ${durationMs}ms.`
+                });
+
+                toast.success("OSINT Sweep complete", { 
+                  description: `${profile.realName} · ${profile.riskLevel} · ${profile.caseReference}` 
+                });
+
+                // Background AI Nexus Analysis
+                fetch("/api/nexus", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ profile }),
+                })
+                  .then((res) => res.json())
+                  .then((nexusData) => {
+                    if (nexusData && !nexusData.error) {
+                      setSuspect((prev) => {
+                        if (!prev || prev.caseReference !== profile.caseReference) return prev;
+                        const updated = { ...prev, nexusAnalysis: nexusData };
+                        const recents = storage.getRecent().map(r => r.caseReference === profile.caseReference ? updated : r);
+                        localStorage.setItem("socmint_recent_investigations", JSON.stringify(recents));
+                        return updated;
+                      });
+                      toast.info("AI NEXUS Analysis completed", {
+                        description: "Cross-signal findings fused to suspect dossier."
+                      });
+                    }
+                  })
+                  .catch(() => {});
+                
+                return;
+              } else if (data.type === "error") {
+                throw new Error(data.error);
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks or heartbeat messages
+              if (!line.startsWith(':')) {
+                console.log("[STREAMING] Failed to parse SSE line:", line);
+              }
+            }
           }
-        })
-        .catch(() => {});
+        }
+      }
 
-      setTimeout(() => headerRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown sweep error";
       setError(msg);
@@ -399,14 +578,29 @@ export default function InvestigatePage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10">
+    <div className="mx-auto max-w-7xl px-4 py-4 md:px-8 md:py-6">
+      {/* Show loading banner at top if still loading but have partial results */}
+      {loading && suspect && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }} 
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-center gap-3"
+        >
+          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-900">Search in progress...</p>
+            <p className="text-xs text-blue-700">{SWEEP_STAGES[stage]}</p>
+          </div>
+        </motion.div>
+      )}
+      
       <AnimatePresence mode="wait">
-        {loading ? (
+        {loading && !suspect ? (
           <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
             <SweepSkeleton stageText={SWEEP_STAGES[stage]} />
           </motion.div>
         ) : !suspect ? (
-          <motion.div key="hero" className="space-y-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
+          <motion.div key="hero" className="flex h-[calc(100vh-9rem)] items-center overflow-hidden [&>*]:w-full" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: "easeOut" }}>
             {hasRunManualSearch ? (
               <Card className="border-border">
                 <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -441,7 +635,6 @@ export default function InvestigatePage() {
               </Card>
             ) : (
               <div className="space-y-6">
-                <div className="space-y-6">
                   <SearchForm 
                     onSearch={runSweep} 
                     error={error} 
@@ -450,117 +643,124 @@ export default function InvestigatePage() {
                     setAdvanced={setAdvanced}
                     type={type}
                     setType={setType}
+                    showApiSettings={showApiSettings}
+                    setShowApiSettings={setShowApiSettings}
                     githubTokenInput={githubTokenInput}
                     setGithubTokenInput={setGithubTokenInput}
                     query={query}
-                    setQuery={setQuery}
-                    dossierUsernames={dossierUsernames}
-                    setDossierUsernames={setDossierUsernames}
-                    dossierRealName={dossierRealName}
-                    setDossierRealName={setDossierRealName}
-                    dossierEmail={dossierEmail}
-                    setDossierEmail={setDossierEmail}
-                    dossierPhone={dossierPhone}
-                    setDossierPhone={setDossierPhone}
-                    dossierFaceData={dossierFaceData}
-                    setDossierFaceData={setDossierFaceData}
-                    bulkMode={bulkMode}
-                    setBulkMode={setBulkMode}
-                    bulkInput={bulkInput}
-                    setBulkInput={setBulkInput}
-                    runBulkSweep={runBulkSweep}
-                    handleCsvUpload={handleCsvUpload}
-                  />
 
-                  {bulkResults && (
-                    <Card className="border-border shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between pb-3">
-                        <div>
-                          <CardTitle className="font-display text-lg flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-evidence" /> Bulk Investigation Results
-                          </CardTitle>
-                          <CardDescription className="text-xs font-mono">
-                            Summary of parallel OSINT triage. Click "Load Case" to view full recursive reconstruction.
-                          </CardDescription>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setBulkResults(null)}>
-                          Clear Results
-                        </Button>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto rounded-lg border border-slate-200">
-                          <table className="w-full text-left border-collapse text-xs font-mono">
-                            <thead>
-                              <tr className="bg-slate-50 text-slate-650 border-b border-slate-200 font-bold uppercase text-[9px] tracking-wider">
-                                <th className="p-3">Target</th>
-                                <th className="p-3">Type</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3">Risk Level</th>
-                                <th className="p-3">Accounts</th>
-                                <th className="p-3">Case ID</th>
-                                <th className="p-3 text-right">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {bulkResults.map((res, idx) => {
-                                const isErr = res.status === "error";
-                                return (
-                                  <tr key={idx} className="hover:bg-slate-50/50">
-                                    <td className="p-3 font-semibold text-slate-800 break-all select-all">{res.query}</td>
-                                    <td className="p-3 text-slate-500 uppercase">{res.type}</td>
-                                    <td className="p-3">
-                                      {isErr ? (
-                                        <span className="text-rose-600 font-bold">❌ FAILED</span>
-                                      ) : (
-                                        <span className="text-emerald-650 font-bold">✓ SUCCESS</span>
-                                      )}
-                                    </td>
-                                    <td className="p-3">
-                                      {!isErr && res.riskLevel ? (
-                                        <Badge className={`${riskColor(res.riskLevel)} text-[9px] uppercase font-bold py-0.5 px-1.5`}>
-                                          {res.riskLevel} ({res.riskScore || 0})
-                                        </Badge>
-                                      ) : (
-                                        <span className="text-slate-400">—</span>
-                                      )}
-                                    </td>
-                                    <td className="p-3 font-semibold text-slate-700">{!isErr ? res.accountCount : "—"}</td>
-                                    <td className="p-3 text-slate-500">{!isErr ? res.caseReference : "—"}</td>
-                                    <td className="p-3 text-right">
-                                      {!isErr && res.caseReference ? (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 font-bold"
-                                          onClick={async () => {
-                                            const recents = storage.getRecent();
-                                            const match = recents.find(r => r.caseReference === res.caseReference);
-                                            if (match) {
-                                              setSuspect(match);
-                                              setActiveTab("overview");
-                                            } else {
-                                              runSweep(res.query, res.type);
-                                            }
-                                          }}
-                                        >
-                                          Load Case
-                                        </Button>
-                                      ) : (
-                                        <span className="text-rose-500 text-[10px]">{res.error || "Failed"}</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
+                      setQuery={setQuery}
+                      nameContext={nameContext}
+                      setNameContext={setNameContext}
+                      dossierUsernames={dossierUsernames}
+                      setDossierUsernames={setDossierUsernames}
+                      dossierRealName={dossierRealName}
+                      setDossierRealName={setDossierRealName}
+                      dossierEmail={dossierEmail}
+                      setDossierEmail={setDossierEmail}
+                      dossierPhone={dossierPhone}
+                      setDossierPhone={setDossierPhone}
+                      dossierFaceData={dossierFaceData}
+                      setDossierFaceData={setDossierFaceData}
+                      bulkMode={bulkMode}
+                      setBulkMode={setBulkMode}
+                      bulkInput={bulkInput}
+                      setBulkInput={setBulkInput}
+                      runBulkSweep={runBulkSweep}
+                      handleCsvUpload={handleCsvUpload}
+                      quickScan={quickScan}
+                      setQuickScan={setQuickScan}
+                    />
 
-                 </div>
-              </div>
+                    {/* Bulk Triage Results */}
+                    {bulkResults && (
+                      <Card className="border-border shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-3">
+                          <div>
+                            <CardTitle className="font-display text-lg flex items-center gap-2">
+                              <Sparkles className="h-5 w-5 text-evidence" /> Bulk Investigation Results
+                            </CardTitle>
+                            <CardDescription className="text-xs font-mono">
+                              Summary of parallel OSINT triage. Click "Load Case" to view full recursive reconstruction.
+                            </CardDescription>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => setBulkResults(null)}>
+                            Clear Results
+                          </Button>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="w-full text-left border-collapse text-xs font-mono">
+                              <thead>
+                                <tr className="bg-slate-50 text-slate-650 border-b border-slate-200 font-bold uppercase text-[9px] tracking-wider">
+                                  <th className="p-3">Target</th>
+                                  <th className="p-3">Type</th>
+                                  <th className="p-3">Status</th>
+                                  <th className="p-3">Risk Level</th>
+                                  <th className="p-3">Accounts</th>
+                                  <th className="p-3">Case ID</th>
+                                  <th className="p-3 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {bulkResults.map((res, idx) => {
+                                  const isErr = res.status === "error";
+                                  return (
+                                    <tr key={idx} className="hover:bg-slate-50/50">
+                                      <td className="p-3 font-semibold text-slate-800 break-all select-all">{res.query}</td>
+                                      <td className="p-3 text-slate-500 uppercase">{res.type}</td>
+                                      <td className="p-3">
+                                        {isErr ? (
+                                          <span className="text-rose-600 font-bold">❌ FAILED</span>
+                                        ) : (
+                                          <span className="text-emerald-650 font-bold">✓ SUCCESS</span>
+                                        )}
+                                      </td>
+                                      <td className="p-3">
+                                        {!isErr && res.riskLevel ? (
+                                          <Badge className={`${riskColor(res.riskLevel)} text-[9px] uppercase font-bold py-0.5 px-1.5`}>
+                                            {res.riskLevel} ({res.riskScore || 0})
+                                          </Badge>
+                                        ) : (
+                                          <span className="text-slate-400">—</span>
+                                        )}
+                                      </td>
+                                      <td className="p-3 font-semibold text-slate-700">{!isErr ? res.accountCount : "—"}</td>
+                                      <td className="p-3 text-slate-500">{!isErr ? res.caseReference : "—"}</td>
+                                      <td className="p-3 text-right">
+                                        {!isErr && res.caseReference ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 font-bold"
+                                            onClick={async () => {
+                                              const recents = storage.getRecent();
+                                              const match = recents.find(r => r.caseReference === res.caseReference);
+                                              if (match) {
+                                                setSuspect(match);
+                                                setActiveTab("overview");
+                                              } else {
+                                                runSweep(res.query, res.type);
+                                              }
+                                            }}
+                                          >
+                                            Load Case
+                                          </Button>
+                                        ) : (
+                                          <span className="text-rose-500 text-[10px]">{res.error || "Failed"}</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                </div>
             )}
 
 
@@ -606,8 +806,6 @@ export default function InvestigatePage() {
                 printDossier(suspect);
               }}
             />
-            
-            {/* Animated Console Investigation Replay */}
 
             <SuspectTabs 
               profile={suspect} 
@@ -634,8 +832,10 @@ function SearchForm({
   onSearch, error, onDismissError,
   advanced, setAdvanced,
   type, setType,
+  showApiSettings, setShowApiSettings,
   githubTokenInput, setGithubTokenInput,
   query, setQuery,
+  nameContext, setNameContext,
   dossierUsernames, setDossierUsernames,
   dossierRealName, setDossierRealName,
   dossierEmail, setDossierEmail,
@@ -644,18 +844,23 @@ function SearchForm({
   bulkMode, setBulkMode,
   bulkInput, setBulkInput,
   runBulkSweep, handleCsvUpload,
+  quickScan, setQuickScan,
 }: {
-  onSearch: (query: string, type: string, dossier?: DossierInput) => void;
+  onSearch: (query: string, type: string, dossier?: DossierInput, nameContext?: string) => void;
   error: string | null;
   onDismissError: () => void;
   advanced: boolean;
   setAdvanced: React.Dispatch<React.SetStateAction<boolean>>;
   type: (typeof SEARCH_TYPES)[number]["value"];
   setType: React.Dispatch<React.SetStateAction<(typeof SEARCH_TYPES)[number]["value"]>>;
+  showApiSettings: boolean;
+  setShowApiSettings: React.Dispatch<React.SetStateAction<boolean>>;
   githubTokenInput: string;
   setGithubTokenInput: React.Dispatch<React.SetStateAction<string>>;
   query: string;
   setQuery: React.Dispatch<React.SetStateAction<string>>;
+  nameContext: string;
+  setNameContext: React.Dispatch<React.SetStateAction<string>>;
   dossierUsernames: string[];
   setDossierUsernames: React.Dispatch<React.SetStateAction<string[]>>;
   dossierRealName: string;
@@ -672,6 +877,8 @@ function SearchForm({
   setBulkInput: React.Dispatch<React.SetStateAction<string>>;
   runBulkSweep: () => void;
   handleCsvUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  quickScan: boolean;
+  setQuickScan: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
 
 
@@ -754,7 +961,7 @@ function SearchForm({
   const submitSimple = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    onSearch(query.trim(), type);
+    onSearch(query.trim(), type, undefined, type === "name" ? nameContext.trim() || undefined : undefined);
   };
 
   const submitDossier = (e: React.FormEvent) => {
@@ -789,19 +996,40 @@ function SearchForm({
   const current = SEARCH_TYPES.find((s) => s.value === type)!;
 
   return (
-    <div className="space-y-10">
-      {/* Brand Header block */}
+    <div className="space-y-6">
+      {error && (
+        <div className="flex items-start gap-3 rounded-md border-l-4 border-stamp bg-stamp/5 p-4 animate-shake">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-stamp" />
+          <div className="flex-1">
+            <div className="font-mono text-[11px] uppercase tracking-wider text-stamp">Sweep failed</div>
+            <div className="mt-1 text-sm">{error}</div>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onDismissError}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
+
+      {/* Two-card home: side by side, natural height, top-aligned */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      {/* Brand Hero card */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         <div className="classified-banner px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.3em]">
           Restricted · For authorized auditors only · KSP Cyber Cell
         </div>
-        <div className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:p-10">
-          <div className="space-y-4">
+        <div className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:p-10">
+          <div className="flex-1 space-y-4">
             <div className="flex flex-wrap gap-2 items-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-stamp/30 bg-stamp/5 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-stamp">
                 <ShieldAlert className="h-3.5 w-3.5" />
                 SOCMINT Sweep · public sources only
               </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowApiSettings(true)}
+                className="h-6 rounded-full font-mono text-[9px] uppercase tracking-wider px-3 border-indigo-200 text-indigo-650 bg-indigo-50 hover:bg-indigo-100/50"
+              >
+                ⚙️ API settings
+              </Button>
             </div>
 
             <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-5xl">
@@ -818,115 +1046,55 @@ function SearchForm({
         </div>
       </div>
 
-      {error && (
-        <div className="flex items-start gap-3 rounded-md border-l-4 border-stamp bg-stamp/5 p-4 animate-shake">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-stamp" />
-          <div className="flex-1">
-            <div className="font-mono text-[11px] uppercase tracking-wider text-stamp">Sweep failed</div>
-            <div className="mt-1 text-sm">{error}</div>
-          </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onDismissError}><X className="h-4 w-4" /></Button>
-        </div>
-      )}
-
-      {/* Forms Card */}
+      {/* Investigation form card */}
       <Card className="border-border">
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4">
-          <CardTitle className="flex items-center gap-2 font-display text-xl">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3 shrink-0">
+          <CardTitle className="flex items-center gap-2 font-display text-lg">
             <Sparkles className="h-4 w-4 text-evidence animate-pulse" /> Begin investigation
           </CardTitle>
-          <div className="flex flex-wrap gap-1.5">
-            <Button
-              variant={!advanced && !bulkMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setAdvanced(false); setBulkMode(false); }}
-              className="h-8 text-xs font-mono uppercase tracking-wider"
-            >
-              Quick search
-            </Button>
-            <Button
-              variant={advanced && !bulkMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setAdvanced(true); setBulkMode(false); }}
-              className="h-8 text-xs font-mono uppercase tracking-wider"
-            >
-              Dossier mode
-            </Button>
-            <Button
-              variant={bulkMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setBulkMode(true); }}
-              className="h-8 text-xs font-mono uppercase tracking-wider"
-            >
-              Bulk mode
-            </Button>
+          <div className="flex gap-1.5">
+            <Button variant={!advanced ? "default" : "outline"} size="sm" onClick={() => { setAdvanced(false); setBulkMode(false); }} className="h-7 text-[10px] font-mono uppercase tracking-wider px-3">Quick</Button>
+            <Button variant={advanced ? "default" : "outline"} size="sm" onClick={() => { setAdvanced(true); setBulkMode(false); }} className="h-7 text-[10px] font-mono uppercase tracking-wider px-3">Dossier</Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {bulkMode ? (
-            /* ═══════════ BULK UPLOAD FORM ═══════════ */
-            <div className="space-y-4">
-              <div className="rounded-md border border-indigo-500/30 bg-indigo-50/50 p-3 text-xs">
-                <span className="font-mono uppercase tracking-wider text-indigo-700 font-bold">Bulk mode</span> — input up to 20 targets, one per line, formatted as <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-900">query,type</code> (e.g., <code className="bg-slate-100 px-1 py-0.5 rounded">shadowtrader99,username</code>).
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Audit Targets List</Label>
-                  <label className="text-[10px] text-indigo-650 hover:underline cursor-pointer font-bold font-mono">
-                    📁 Load CSV Target File
-                    <input type="file" onChange={handleCsvUpload} accept=".csv,.txt" className="hidden" />
-                  </label>
-                </div>
-                <textarea
-                  value={bulkInput}
-                  onChange={(e) => setBulkInput(e.target.value)}
-                  placeholder={`shadowtrader99,username\n+919876543210,phone\nname@domain.com,email\nscam-site.xyz,domain`}
-                  className="w-full h-36 rounded-md border border-input bg-transparent px-3 py-2 text-xs font-mono shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
-              </div>
-              <div className="flex items-center justify-between pt-4 border-t border-border/60">
-                <p className="text-xs text-slate-500">Supported types: username, name, email, phone, crypto, domain.</p>
-                <Button onClick={runBulkSweep} disabled={!bulkInput.trim()} className="h-11 px-6">
-                  Launch bulk sweep <FilePlus className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ) : !advanced ? (
+        <CardContent className="space-y-4">
+          {!advanced ? (
             /* ═══════════ QUICK SCAN FORM ═══════════ */
-            <>
-              <div className="flex flex-wrap gap-2">
-                {SEARCH_TYPES.map((t, i) => {
-                  const Icon = t.icon;
-                  const active = type === t.value;
-                  return (
-                    <motion.button
-                      key={t.value}
-                      type="button"
-                      onClick={() => { setType(t.value); setQuery(""); stopCamera(); }}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.04, duration: 0.25 }}
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.96 }}
-                      className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${active ? "border-stamp bg-stamp text-primary-foreground" : "border-border bg-card hover:bg-muted"}`}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {t.label}
-                    </motion.button>
-                  );
-                })}
+            <div className="space-y-4">
+              {/* Identifier chips — stacked vertically */}
+              <div>
+                <Label className="mb-2 block text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Identifier type</Label>
+                <div className="grid grid-cols-1 gap-2">
+                  {SEARCH_TYPES.map((t, i) => {
+                    const Icon = t.icon;
+                    const active = type === t.value;
+                    return (
+                      <motion.button
+                        key={t.value}
+                        type="button"
+                        onClick={() => { setType(t.value); setQuery(""); stopCamera(); }}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.03, duration: 0.2 }}
+                        whileTap={{ scale: 0.97 }}
+                        className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${active ? "border-stamp bg-stamp text-primary-foreground shadow-sm" : "border-border bg-card text-foreground hover:border-stamp/40 hover:bg-muted"}`}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        {t.label}
+                      </motion.button>
+                    );
+                  })}
+                </div>
               </div>
 
               {type === "face" ? (
-                /* Webcam Face scan sub-view */
                 <div className="space-y-4">
                   <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                  
                   {useCamera && (
-                    <div className="flex flex-col items-center justify-center bg-background p-4 border border-border rounded-xl max-w-xs mx-auto">
-                      <div className="relative w-40 h-40 bg-black rounded-lg overflow-hidden border border-stamp/30 mb-3">
+                    <div className="flex flex-col items-center justify-center bg-background p-4 border border-border max-w-xs mx-auto">
+                      <div className="relative w-40 h-40 bg-black overflow-hidden border border-stamp/30 mb-3">
                         <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
-                        <div className="absolute left-0 right-0 h-0.5 bg-evidence shadow-[0_0_10px_#0891b2] animate-bounce top-1/2"></div>
+                        <div className="absolute left-0 right-0 h-0.5 bg-evidence animate-bounce top-1/2" />
                       </div>
                       <div className="flex gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={stopCamera}>Cancel</Button>
@@ -934,9 +1102,8 @@ function SearchForm({
                       </div>
                     </div>
                   )}
-
                   {!useCamera && !query && (
-                    <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
+                    <div className="grid grid-cols-2 gap-3 max-w-md mx-auto w-full">
                       <Button type="button" variant="outline" className="h-20 flex flex-col gap-2 font-mono text-xs uppercase" onClick={() => fileInputRef.current?.click()}>
                         <ImageIcon className="h-5 w-5 text-muted-foreground" /> Upload File
                       </Button>
@@ -945,46 +1112,75 @@ function SearchForm({
                       </Button>
                     </div>
                   )}
-
                   {query && (
-                    <div className="flex items-center gap-4 bg-muted/30 border border-border p-3 rounded-lg max-w-md mx-auto">
-                      <img src={query} alt="Capture" className="w-12 h-12 rounded object-cover border border-border" />
+                    <div className="flex items-center gap-4 bg-muted/30 border border-border p-3 max-w-md mx-auto">
+                      <img src={query} alt="Capture" className="w-12 h-12 object-cover border border-border" />
                       <span className="text-xs text-evidence font-mono flex-1">Face photo captured ✓</span>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setQuery("")}><X className="h-4 w-4 text-muted-foreground" /></Button>
                     </div>
                   )}
-
                   {query && (
                     <div className="text-center pt-2">
-                      <Button onClick={() => onSearch(query, "face")} className="h-11 px-6">
+                      <Button onClick={() => onSearch(query, "face")} className="h-11 px-8">
                         Run sweep <FilePlus className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
                   )}
                 </div>
               ) : (
-                /* Standard Text Input */
-                <form onSubmit={submitSimple} className="space-y-3">
-                  <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Search · {current.label}</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        autoFocus
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder={current.placeholder}
-                        className="h-12 pl-10 text-base"
-                      />
+                <form onSubmit={submitSimple} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Search · {current.label}</Label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={current.placeholder} className="h-11 pl-10" />
+                      </div>
+                      <Button type="submit" disabled={!query.trim()} className="h-11 px-5 shrink-0 font-semibold">
+                        Run sweep <FilePlus className="ml-2 h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button type="submit" disabled={!query.trim()} className="h-12 px-6">
-                      Run sweep <FilePlus className="ml-2 h-4 w-4" />
-                    </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">All queries are logged to the compliance audit ledger.</p>
+
+                  {type === "name" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
+                        Additional context <span className="text-muted-foreground/60">(optional)</span>
+                      </Label>
+                      <Input
+                        value={nameContext}
+                        onChange={(e) => setNameContext(e.target.value)}
+                        placeholder="Known username, college, or company — helps match the right LinkedIn profile"
+                        className="h-10"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Common names return many LinkedIn matches. A username, college, or employer narrows the search to the right person.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Scan depth</Label>
+                    <div className="flex rounded-md border border-border bg-paper p-1 gap-1">
+                      <button type="button" onClick={() => setQuickScan(true)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 text-xs font-semibold transition-colors ${quickScan ? "bg-stamp text-primary-foreground shadow-sm" : "text-forest/60 hover:text-forest"}`}>
+                        <Zap className="h-3.5 w-3.5" /> Quick · 15 sites
+                      </button>
+                      <button type="button" onClick={() => setQuickScan(false)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 text-xs font-semibold transition-colors ${!quickScan ? "bg-stamp text-primary-foreground shadow-sm" : "text-forest/60 hover:text-forest"}`}>
+                        <Shield className="h-3.5 w-3.5" /> Deep · 400+ sites
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {quickScan ? "Fast mode — 20-30s. Reliable content-verified platforms." : "Thorough mode — 1-3min. Full 400+ site sweep with correlation."}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                    <Shield className="h-3.5 w-3.5 shrink-0 text-stamp" />
+                    All queries are logged to the compliance audit ledger.
+                  </div>
                 </form>
               )}
-            </>
+            </div>
           ) : (
             /* ═══════════ DOSSIER COMPOSITE FORM ═══════════ */
             <form onSubmit={submitDossier} className="space-y-4">
@@ -1076,7 +1272,7 @@ function SearchForm({
 
               <div className="flex items-center justify-between pt-4 border-t border-border/60">
                 <p className="text-xs text-muted-foreground">Fusing multiple handles runs parallel sweeps - runtime is 10-15s.</p>
-                <Button type="submit" className="h-11 px-6 bg-red-600 hover:bg-red-700 text-white font-mono font-bold rounded-xl shadow-sm">
+                <Button type="submit" className="h-11 px-6">
                   Launch dossier sweep <FilePlus className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -1084,42 +1280,62 @@ function SearchForm({
           )}
         </CardContent>
       </Card>
+      </div>{/* end two-card grid */}
 
-      {/* Standalone Cryptographic Address Audit */}
-      <CryptoTraceCard />
+      {/* Developer API settings Dialog */}
+      <Dialog open={showApiSettings} onOpenChange={setShowApiSettings}>
+        <DialogContent className="sm:max-w-md font-mono text-xs bg-white text-slate-800 border border-slate-200 shadow-xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-sm uppercase text-indigo-950 font-bold">Developer API Credentials</DialogTitle>
+            <DialogDescription className="text-[10px] text-slate-500 font-medium">
+              Configure target API authentication keys overrides to prevent rate limits during heavy testing. Keys are stored safely in local browser storage.
+            </DialogDescription>
+          </DialogHeader>
 
-      {/* Capabilities Footer */}
-      <div className="grid gap-3 md:grid-cols-3">
-        {[
-          { t: "20+ OSINT sources", d: "GitHub · Reddit · HackerNews · Dev.to · GitLab · Chainalysis · MCA21 · IndiaKanoon · WhatsApp · Telegram …" },
-          { t: "Court-admissible dossier", d: "Every record carries provenance hash, capture timestamp, and Section 65B compliance." },
-          { t: "Authorized policing cell", d: "Designed exclusively for cybersecurity cells. Action footprint logged securely." },
-        ].map((c, i) => (
-          <motion.div
-            key={c.t}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 + i * 0.08, duration: 0.3 }}
-            className="rounded-md border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-stamp/30"
-          >
-            <div className="font-mono text-[11px] uppercase tracking-wider text-stamp">{c.t}</div>
-            <div className="mt-1 text-sm text-muted-foreground">{c.d}</div>
-          </motion.div>
-        ))}
-      </div>
+          <div className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-bold text-slate-700">GitHub Personal Access Token (PAT)</Label>
+              <Input
+                type="password"
+                placeholder="ghp_..."
+                value={githubTokenInput}
+                onChange={(e) => setGithubTokenInput(e.target.value)}
+                className="font-mono text-xs bg-slate-50 border border-slate-250 rounded-xl"
+              />
+              <p className="text-[9px] text-slate-500 leading-normal">
+                Used dynamically in `fetchGithubActivity()` to authenticate public requests (limits increase from 60/hr to 5,000/hr).
+              </p>
+            </div>
+          </div>
 
-      {/* Demo shortcuts */}
-      <div className="rounded-lg border border-dashed border-border p-5 text-center bg-card/40">
-        <div className="text-[11px] text-slate-500 font-mono uppercase tracking-wider mb-3">Tactical OSINT Demo Presets</div>
-        <div className="flex flex-wrap gap-2 justify-center">
-          <Button variant="outline" size="sm" className="border-rose-500/20 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 font-mono" onClick={() => onSearch("shadowtrader99", "username")}>
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse mr-1"></span> shadowtrader99
-          </Button>
-          <Button variant="outline" size="sm" className="border-amber-500/20 text-amber-600 dark:text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 font-mono" onClick={() => onSearch("sneha_fintech", "username")}>
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse mr-1"></span> sneha_fintech
-          </Button>
-        </div>
-      </div>
+          <DialogFooter className="gap-2 sm:gap-0 border-t border-slate-100 pt-3">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => { 
+                setGithubTokenInput(""); 
+                localStorage.removeItem("github_token_override"); 
+                toast.success("API credentials cleared"); 
+                setShowApiSettings(false); 
+              }}
+              className="font-bold font-mono text-[10px] uppercase"
+            >
+              Clear Keys
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => { 
+                localStorage.setItem("github_token_override", githubTokenInput.trim()); 
+                toast.success("API credentials saved"); 
+                setShowApiSettings(false); 
+              }}
+              className="font-bold font-mono text-[10px] uppercase bg-indigo-600 hover:bg-indigo-750 text-white"
+            >
+              Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1196,130 +1412,50 @@ function SuspectHeader({
 }: {
   suspect: SuspectProfile; orbTheme: import("@/components/visual/ShieldOrb").OrbTheme; onNew: () => void; onModify: () => void; onPrint: () => void
 }) {
-  // Determine priority badge and coloring based on risk score
-  const score = suspect.riskScore ?? 0;
-  let priorityLabel = "PRIORITY GAMMA · LOW";
-  let priorityColor = "bg-emerald-100/80 text-emerald-800 border-emerald-200";
-  let riskLabel = "LOW RISK SCORE";
-  let riskColorText = "text-emerald-700";
-  
-  if (score >= 75) {
-    priorityLabel = "PRIORITY ALPHA · CRITICAL";
-    priorityColor = "bg-rose-100/80 text-rose-800 border-rose-200";
-    riskLabel = "EXTREME RISK SCORE";
-    riskColorText = "text-rose-700";
-  } else if (score >= 35) {
-    priorityLabel = "PRIORITY BETA · HIGH";
-    priorityColor = "bg-amber-100/80 text-amber-800 border-amber-200";
-    riskLabel = "MEDIUM RISK SCORE";
-    riskColorText = "text-amber-700";
-  }
-
-  // Get aliases
-  const aliases = suspect.shadowAccounts?.map(a => a.handle).filter(Boolean) || [];
-  const aliasText = aliases.length > 0 
-    ? aliases.join(", ") 
-    : (suspect.username ? `@${suspect.username.replace(/^@/, "")}_alt, @${suspect.username.replace(/^@/, "")}_intel` : "None identified");
-
-  const cctvTime = (() => {
-    try {
-      const date = new Date(suspect.capturedAt);
-      return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
-    } catch {
-      return "02:14";
-    }
-  })();
-
   return (
-    <div className="rounded-lg border border-slate-200 bg-[#faf8f5] shadow-sm overflow-hidden text-slate-900">
-      {/* Active Dossier Banner */}
-      <div className="bg-[#b91c1c] text-white px-4 py-2 font-mono text-[10px] uppercase tracking-[0.25em] flex justify-between items-center select-none font-bold">
-        <span>ACTIVE DOSSIER · {suspect.caseReference}</span>
-        <span>CAPTURED {new Date(suspect.capturedAt).toLocaleString("en-IN")}</span>
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="classified-banner px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.3em]">
+        Active dossier · {suspect.caseReference} · Captured {new Date(suspect.capturedAt).toLocaleString("en-IN")}
       </div>
-
-      <div className="p-6 space-y-6">
-        {/* Main Details Panel */}
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          
-          {/* Left: Avatar & Details */}
-          <div className="flex flex-col sm:flex-row gap-6 items-start flex-1 min-w-0">
-            {/* Avatar with CCTV overlay */}
-            <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded border border-slate-350 bg-slate-100 shadow-inner">
-              <img src={suspect.photoUrl} alt={suspect.realName} className="h-full w-full object-cover grayscale brightness-90 contrast-125" />
-              <div className="absolute bottom-1 left-1 bg-black/80 px-1 py-0.5 text-[8px] font-mono font-semibold text-white/95 uppercase tracking-wide rounded-[2px] border border-white/10">
-                CCTV {cctvTime}
-              </div>
+      <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 overflow-hidden rounded-md border-2 border-stamp/40 bg-muted">
+            <img 
+              src={suspect.photoUrl?.replace(/&amp;/g, '&')} 
+              alt={suspect.realName} 
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                console.log('[HEADER] Profile photo failed to load:', suspect.photoUrl);
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(suspect.realName)}&size=256&background=0D8ABC&color=fff&bold=true`;
+              }}
+              onLoad={() => {
+                console.log('[HEADER] Profile photo loaded successfully:', suspect.photoUrl);
+              }}
+            />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display text-2xl font-semibold tracking-tight">{suspect.realName}</h2>
+              <Badge className={riskColor(suspect.riskLevel) + " font-mono text-[10px] uppercase tracking-wider"}>
+                {suspect.riskLevel} · {suspect.riskScore}
+              </Badge>
             </div>
-
-            {/* Suspect Info */}
-            <div className="flex-1 min-w-0 space-y-2">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider font-bold shadow-sm bg-white select-none">
-                <span className={`inline-block w-2 h-2 rounded-full ${score >= 75 ? "bg-rose-600 animate-pulse" : score >= 35 ? "bg-amber-500" : "bg-emerald-500"}`}></span>
-                {priorityLabel}
-              </div>
-
-              <h1 className="font-serif text-4xl font-bold tracking-tight text-slate-900 leading-none pb-0.5">
-                {suspect.realName}
-              </h1>
-
-              <p className="font-mono text-xs text-slate-500 font-medium">
-                Aliases: <span className="text-slate-800 font-semibold">{aliasText}</span>
-              </p>
-
-              {/* Grid detail metrics */}
-              <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
-                <div className="space-y-0.5 border-l border-slate-250 pl-3">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">CASE</div>
-                  <div className="font-mono text-xs font-bold text-slate-800">{suspect.caseReference}</div>
-                </div>
-                <div className="space-y-0.5 border-l border-slate-250 pl-3">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">PHONE</div>
-                  <div className="font-mono text-xs font-bold text-slate-800">{suspect.phoneNumber || "Not provided"}</div>
-                </div>
-                <div className="space-y-0.5 border-l border-slate-250 pl-3">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">EMAIL</div>
-                  <div className="font-mono text-xs font-bold text-slate-800 select-all">{suspect.emailAddress || "Not provided"}</div>
-                </div>
-              </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
+              <span>{suspect.username.startsWith("@") ? suspect.username : "@" + suspect.username}</span>
+              <span>{suspect.emailAddress}</span>
+              <span>{suspect.phoneNumber}</span>
             </div>
           </div>
-
-          {/* Right: Threat Score Indicator */}
-          <div className="flex flex-col sm:flex-row items-center gap-6 shrink-0 lg:pl-6 border-t lg:border-t-0 lg:border-l border-slate-200 pt-6 lg:pt-0">
-            <div className="text-center sm:text-right space-y-1">
-              <div className="flex items-baseline justify-center sm:justify-end gap-1">
-                <span className="text-6xl font-light font-sans tracking-tighter text-slate-900">{score}</span>
-                <span className="text-xl font-mono text-slate-400">/100</span>
-              </div>
-              <div className={`font-mono text-[10px] uppercase tracking-wider font-extrabold ${riskColorText}`}>
-                {riskLabel}
-              </div>
-              <div className="w-40 pt-1.5">
-                <Progress value={score} className="h-1 bg-slate-200" />
-              </div>
-            </div>
-            {/* Visual Orb */}
-            <div className="hidden md:block h-20 w-20 shrink-0 no-print" title={`Theme: ${orbTheme}`}>
-              <ShieldOrb className="h-20 w-20" theme={orbTheme} />
-            </div>
-          </div>
-
         </div>
-
-        {/* Buttons Bar (Separated line with solid dark line underneath as in design) */}
-        <div className="border-t border-slate-250 pt-4 flex flex-wrap items-center justify-between gap-3 no-print">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onModify} className="h-9 border-blue-200 text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 font-bold text-xs">
-              <SlidersHorizontal className="mr-2 h-3.5 w-3.5" /> Modify query
-            </Button>
-            <Button variant="outline" onClick={onNew} className="h-9 font-bold text-xs border-slate-250 hover:bg-slate-100">
-              <Search className="mr-2 h-3.5 w-3.5" /> New search
-            </Button>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:block h-20 w-20 shrink-0 no-print" title={`Theme: ${orbTheme}`}>
+            <ShieldOrb className="h-20 w-20" theme={orbTheme} />
           </div>
-          <Button onClick={onPrint} className="h-9 bg-[#b91c1c] hover:bg-[#991b1b] text-white font-bold text-xs px-4">
-            <Printer className="mr-2 h-3.5 w-3.5" /> Export report
-          </Button>
+          <div className="flex flex-wrap gap-2 no-print">
+            <Button variant="outline" onClick={onModify} className="border-blue-200 text-blue-600 hover:text-blue-700 bg-blue-50/50"><SlidersHorizontal className="mr-2 h-4 w-4" /> Modify query</Button>
+            <Button variant="outline" onClick={onNew}><Search className="mr-2 h-4 w-4" /> New search</Button>
+            <Button onClick={onPrint}><Printer className="mr-2 h-4 w-4" /> Export report</Button>
+          </div>
         </div>
       </div>
     </div>
@@ -1561,7 +1697,7 @@ function StandaloneIngestDialog({
             <Label className="text-[10px] font-mono uppercase tracking-wider">Caption / Text Content *</Label>
             <Textarea
               value={captionText}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCaptionText(e.target.value)}
+              onChange={e => setCaptionText(e.target.value)}
               placeholder="Paste content of the post..."
               className="font-mono text-sm h-20"
               required

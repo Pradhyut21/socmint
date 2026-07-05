@@ -24,12 +24,14 @@ interface AccountResult {
   followers: number;
   confidence: "CONFIRMED" | "PROBABLE" | "POSSIBLE";
   postCount: number;
+  confidenceScore?: number; // 0-100 percentage
 }
 
 interface PlatformState {
   status: "pending" | "FOUND" | "NOT_FOUND" | "ERROR";
   reason?: string;
   data?: AccountResult;
+  confidenceScore?: number; // 0-100 percentage
 }
 
 // ── Platforms we scan (same order as the SSE backend) ─────────────────────
@@ -48,7 +50,6 @@ const SCAN_PLATFORMS = [
   { id: "tumblr",          label: "Tumblr",          color: "text-indigo-900 bg-slate-100 border-slate-250" },
   { id: "twitter",         label: "X / Twitter",     color: "text-slate-850 bg-slate-50 border-slate-200" },
   { id: "facebook",        label: "Facebook",        color: "text-blue-700 bg-blue-50 border-blue-200" },
-  { id: "tiktok",          label: "TikTok",          color: "text-slate-950 bg-slate-50 border-slate-300" },
   { id: "snapchat",        label: "Snapchat",        color: "text-yellow-600 bg-yellow-50 border-yellow-250" },
   { id: "soundcloud",      label: "SoundCloud",      color: "text-orange-600 bg-orange-50 border-orange-200" },
   { id: "medium",          label: "Medium",          color: "text-slate-900 bg-slate-50 border-slate-200" },
@@ -119,6 +120,7 @@ export default function LinkedAccountsStreamTab({ username }: { username: string
               status: msg.status === "FOUND" ? "FOUND" : msg.status === "ERROR" ? "ERROR" : "NOT_FOUND",
               reason: msg.reason,
               data: msg.data,
+              confidenceScore: msg.confidenceScore, // Capture confidence score
             },
           }));
         }
@@ -246,22 +248,50 @@ function PlatformCard({
         ${!isFound && !isError && !isPending ? "border-slate-150 bg-slate-50/50" : ""}
       `}
     >
-      {/* Status icon */}
+      {/* Status icon or profile picture */}
       <div className="shrink-0">
         {isPending && <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />}
-        {isFound   && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+        {isFound && state.data?.profilePicUrl ? (
+          <img 
+            src={state.data.profilePicUrl.replace(/&amp;/g, '&')} 
+            alt={state.data.username}
+            className="w-10 h-10 rounded-full object-cover border-2 border-emerald-200"
+            onError={(e) => {
+              // Fallback to icon if image fails to load
+              console.log(`[LIVE SCAN IMG ERROR] Failed to load ${platform.label}:`, state.data?.profilePicUrl);
+              e.currentTarget.style.display = 'none';
+              const icon = e.currentTarget.nextElementSibling;
+              if (icon) icon.classList.remove('hidden');
+            }}
+            onLoad={() => {
+              console.log(`[LIVE SCAN IMG SUCCESS] Loaded ${platform.label}`);
+            }}
+          />
+        ) : isFound ? (
+          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        ) : null}
         {isError   && <AlertCircle  className="w-4 h-4 text-amber-500"   />}
         {!isPending && !isFound && !isError &&
           <XCircle className="w-4 h-4 text-slate-300" />}
+        {isFound && state.data?.profilePicUrl && (
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 hidden" />
+        )}
       </div>
 
       {/* Platform label */}
       <div className="flex-1 min-w-0">
         <div className="font-bold text-slate-800">{platform.label}</div>
         {state.status === "FOUND" && state.data && (
-          <div className="text-[10px] text-slate-500 truncate">
-            @{state.data.username}
-          </div>
+          <>
+            <div className="text-[10px] text-slate-500 truncate">
+              @{state.data.username}
+            </div>
+            {state.confidenceScore !== undefined && (
+              <div className="text-[9px] font-bold text-emerald-600">
+                {state.confidenceScore}% confidence
+              </div>
+            )}
+          </>
         )}
         {state.status === "NOT_FOUND" && (
           <div className="text-[10px] text-slate-400">Not found</div>
@@ -289,15 +319,24 @@ function PlatformCard({
 
 // ── Rich detail card for found accounts ────────────────────────────────────
 function AccountDetailCard({ account }: { account: AccountResult }) {
+  const confidenceScore = account.confidenceScore || 0;
   const confidenceColor =
-    account.confidence === "CONFIRMED"
+    confidenceScore >= 80
       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : account.confidence === "PROBABLE"
-      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-      : "bg-amber-50 text-amber-700 border-amber-200";
-
-  const confidenceRange =
-    account.confidence === "CONFIRMED" ? "85–100%" : account.confidence === "PROBABLE" ? "70–84%" : "50–69%";
+      : confidenceScore >= 60
+      ? "bg-blue-50 text-blue-700 border-blue-200"
+      : confidenceScore >= 40
+      ? "bg-amber-50 text-amber-700 border-amber-200"
+      : "bg-slate-50 text-slate-700 border-slate-200";
+      
+  const confidenceLabel =
+    confidenceScore >= 80
+      ? "Very High"
+      : confidenceScore >= 60
+      ? "High"
+      : confidenceScore >= 40
+      ? "Medium"
+      : "Low";
 
   return (
     <motion.div
@@ -307,55 +346,63 @@ function AccountDetailCard({ account }: { account: AccountResult }) {
     >
       <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
         <CardContent className="p-4 space-y-2">
-          <div className="flex items-start justify-between gap-2 flex-wrap border-b border-slate-100 pb-1.5">
-            <span className="font-bold text-[11px] uppercase tracking-wider text-indigo-900">
-              {account.platform}
-            </span>
-            <Badge variant="outline" className={`text-[8px] uppercase font-bold px-1.5 border ${confidenceColor}`}>
-              {account.confidence} ({confidenceRange})
-            </Badge>
-          </div>
-
-
-          {/* Avatar + Info side-by-side */}
-          <div className="flex items-start gap-3 pt-1">
-            {account.profilePicUrl && (
-              <img
-                src={account.profilePicUrl}
-                alt={`${account.username}'s avatar`}
-                className="w-12 h-12 rounded-xl object-cover border border-slate-200 bg-slate-50 shrink-0"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null;
-                  target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(account.username)}`;
-                }}
-              />
+          <div className="flex items-start gap-3">
+            {/* Profile Picture */}
+            {account.profilePicUrl ? (
+              <div className="relative shrink-0">
+                <img 
+                  src={account.profilePicUrl.replace(/&amp;/g, '&')} 
+                  alt={account.username}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-slate-200"
+                  onError={(e) => {
+                    // Log error and show fallback avatar
+                    console.log(`[IMG ERROR] Failed to load profile pic for ${account.platform}:`, account.profilePicUrl);
+                    // Replace with fallback avatar
+                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(account.username)}&size=128&background=random`;
+                  }}
+                  onLoad={() => {
+                    console.log(`[IMG SUCCESS] Loaded profile pic for ${account.platform}`);
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center shrink-0">
+                <span className="text-slate-600 font-bold text-xl">
+                  {account.username.charAt(0).toUpperCase()}
+                </span>
+              </div>
             )}
-            <div className="flex-1 min-w-0 space-y-1">
-              <div className="font-bold text-[13px] text-ink truncate">
+            
+            {/* Account Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <span className="font-bold text-[11px] uppercase tracking-wider text-indigo-900">
+                  {account.platform}
+                </span>
+                <Badge variant="outline" className={`text-[8px] uppercase font-bold px-1.5 border ${confidenceColor}`}>
+                  {confidenceScore}% {confidenceLabel}
+                </Badge>
+              </div>
+
+              <div className="font-bold text-[13px] text-ink">
                 @{account.username}
               </div>
+
               {account.displayName && account.displayName !== account.username && (
-                <div className="text-[11px] text-slate-600 font-semibold truncate">{account.displayName}</div>
-              )}
-              {account.bio && (
-                <p className="text-[10px] text-slate-655 leading-relaxed line-clamp-3 font-sans pt-0.5">
-                  {account.bio}
-                </p>
+                <div className="text-[11px] text-slate-600 font-semibold">{account.displayName}</div>
               )}
             </div>
           </div>
 
+          {account.bio && (
+            <p className="text-[10px] text-slate-655 leading-relaxed line-clamp-2 font-sans">
+              {account.bio}
+            </p>
+          )}
+
           <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-mono">
-            <div className="flex gap-2">
-              <span>{account.followers.toLocaleString()} followers</span>
-              {account.postCount > 0 && (
-                <>
-                  <span className="text-slate-300">•</span>
-                  <span>{account.postCount} posts</span>
-                </>
-              )}
-            </div>
+            <span>{account.followers.toLocaleString()} followers</span>
+            {account.postCount > 0 && <span>{account.postCount} post(s)</span>}
             <a
               href={account.profileUrl}
               target="_blank"

@@ -61,23 +61,8 @@ export default function StylometryPanel({ suspect }: StylometryPanelProps) {
       label: `${platform.toUpperCase()} posts (${suspect.username.startsWith("@") ? suspect.username : "@" + suspect.username})`,
       text,
       platform,
-    }));
-
-  const ghAcc = suspect.accounts?.find(a => a.platform === "github");
-  const ghIntel = (ghAcc as any)?.githubIntel;
-  if (ghIntel && Array.isArray(ghIntel.topRepos) && ghIntel.topRepos.length > 0) {
-    const reposText = ghIntel.topRepos
-      .map((r: any) => `${r.name}: ${r.description || "No description"}. Language: ${r.language || "Unknown"}.`)
-      .join(" ");
-    if (reposText.length > 30) {
-      autoSources.push({
-        id: "auto-github-repos",
-        label: `GITHUB Repositories (${ghIntel.login})`,
-        text: reposText,
-        platform: "github-repos",
-      });
-    }
-  }
+    }))
+    .slice(0, 6);
 
   const allSources = [...autoSources, ...customSources];
 
@@ -156,86 +141,6 @@ export default function StylometryPanel({ suspect }: StylometryPanelProps) {
               review before any official attribution is made.
             </p>
           </div>
-
-          {/* GitHub Repository Safety & Risk analysis */}
-          {ghIntel && Array.isArray(ghIntel.topRepos) && ghIntel.topRepos.length > 0 && (() => {
-            const DANGER_WORDS = ["dark web", "darkweb", "exploit", "bypass", "leak", "mule", "crypto", "malware", "hack", "botnet", "scam", "phishing", "ransomware", "spammer", "dox", "scraping", "shadow", "onion"];
-            
-            const flaggedRepos = ghIntel.topRepos.map((r: any) => {
-              const textToSearch = `${r.name} ${r.description || ""} ${(r.topics || []).join(" ")}`.toLowerCase();
-              const matchedWords = DANGER_WORDS.filter(word => textToSearch.includes(word));
-              return {
-                ...r,
-                matchedWords
-              };
-            });
-
-            const anyFlagged = flaggedRepos.some((r: any) => r.matchedWords.length > 0);
-
-            return (
-              <Card className="shadow-sm bg-white border-slate-200 border-l-4 border-l-rose-500">
-                <CardHeader className="pb-2">
-                  <CardTitle className="font-display text-sm text-ink flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-rose-600" />
-                    GitHub Repository Risk & Danger Analysis
-                  </CardTitle>
-                  <CardDescription className="text-[10px] font-mono">
-                    Scans repository metadata for technical threat cues and suspicious code signatures.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    {flaggedRepos.map((r: any, i: number) => (
-                      <div key={i} className="rounded-lg border border-slate-200 p-3 bg-slate-50 space-y-1.5 font-mono text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-ink hover:underline">
-                            <a href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
-                          </span>
-                          {r.language && (
-                            <Badge variant="outline" className="text-[10px] border-slate-350 font-semibold">{r.language}</Badge>
-                          )}
-                        </div>
-                        {r.description && (
-                          <p className="text-[10px] text-slate-600 leading-relaxed font-medium">{r.description}</p>
-                        )}
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {r.matchedWords.length > 0 ? (
-                            r.matchedWords.map((word: string) => (
-                              <Badge key={word} className="bg-rose-100 text-rose-800 border-rose-300 text-[9px] font-bold">
-                                ⚠️ RISK CUE: "{word}"
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="text-[9px] text-emerald-700 font-semibold flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3" /> No high-risk keywords detected
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Summary analysis */}
-                  <div className="p-3 bg-slate-150/40 border border-slate-200 rounded-lg text-xs leading-relaxed font-medium text-slate-700">
-                    <span className="font-bold block uppercase tracking-wider text-slate-650 text-[10px] mb-1 font-mono">Threat Vector Assessment:</span>
-                    {anyFlagged ? (
-                      <span>
-                        Subject's public repository footprint contains critical technical indicators relating to:{" "}
-                        <strong className="text-rose-800">
-                          {Array.from(new Set(flaggedRepos.flatMap((r: any) => r.matchedWords))).join(", ")}
-                        </strong>
-                        . This suggests specialized technical capability and alignment with active evasion or grey-hat tool development.
-                      </span>
-                    ) : (
-                      <span>
-                        No high-risk threat terms (such as 'dark web', 'exploit', or 'leak') identified in public repository descriptors. Linguistic patterns represent standard open-source development activity.
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
 
           {/* Corpus overview */}
           <div>

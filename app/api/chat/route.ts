@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildProfileContext } from "../../../lib/ai/buildProfileContext";
 
 export const runtime = "nodejs";
 
@@ -21,39 +22,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const evidenceContext = JSON.stringify(
-      {
-        subject: profile?.realName,
-        username: profile?.username,
-        riskScore: profile?.riskScore,
-        riskLevel: profile?.riskLevel,
-        riskSignals: profile?.riskSignals,
-        accounts: profile?.accounts?.map((account: { platform: string; username: string; confidence: string; reason: string; profileUrl: string }) => ({
-          platform: account.platform,
-          username: account.username,
-          confidence: account.confidence,
-          reason: account.reason,
-          url: account.profileUrl,
-        })),
-        posts: profile?.posts?.slice(0, 8),
-        legalRecords: profile?.legalRecords,
-        shadowProfiles: profile?.shadowAccounts?.map((s: any) => ({
-          handle: s.handle,
-          platform: s.platform,
-          confidenceLevel: s.confidenceLevel || s.overallConfidence,
-          signals: s.signals,
-          detectionMethod: s.detectionMethod,
-        })),
-
-      },
-      null,
-      2
-    );
+    // Build full profile context — all accounts, bios, locations, posts,
+    // correlation analysis, breaches, legal records, identity linkage, etc.
+    const evidenceContext = buildProfileContext(profile);
 
     const requestMessages = [
       {
         role: "system",
-        content: `You are NEXUS — an AI forensic intelligence analyst for CID Karnataka Police. You have access to the following live-collected evidence about suspect ${profile?.username || "the subject"}, including any shadow profiles and dark web threat logs/pastes.\n\nRULES:\n- Answer ONLY from evidence above\n- Explain shadow profiles and dark web leaks if found/asked\n- Always cite your source platform\n- If data is missing, say clearly: 'Not found in available public data'\n- Never speculate beyond what data shows\n- If asked about arrest/guilt, respond: 'That determination belongs to the investigating officer and the court. I can only present the evidence.'\n- Keep answers concise and factual\n- Use plain English — no technical jargon\n- All data is from publicly available sources only\n- You MUST end your response with: 'Sources: [list of platforms cited]'\n\nEvidence context:\n${evidenceContext}`
+        content: `You are NEXUS — an AI forensic intelligence analyst for CID Karnataka Police. You have the complete investigation profile for suspect ${profile?.realName || profile?.username || "the subject"}, including all discovered accounts (with bios, display names, followers, locations), identity correlation analysis, bio cross-links, Keybase cryptographic proofs, activity/posts, breach data, dark web pastes, legal records, and shadow accounts.
+
+RULES:
+- Answer ONLY from the evidence context provided below
+- Reference specific accounts, bios, locations, and correlation signals in your answers
+- Cite which platform / data source each fact comes from
+- If data is missing for a specific question, say: "Not found in available public data"
+- Never speculate beyond what the evidence shows
+- If asked about arrest/guilt: "That determination belongs to the investigating officer and the court. I can only present the evidence."
+- Keep answers concise, factual, and actionable
+- End responses with: "Sources: [list of platforms / data sources cited]"
+
+Complete investigation evidence:
+${evidenceContext}`
       },
       ...messages
     ];

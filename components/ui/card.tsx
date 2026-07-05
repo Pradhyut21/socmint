@@ -7,11 +7,11 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        "group/card relative rounded-xl border bg-card text-card-foreground shadow",
-        // 3D depth + sheen sweep + holographic edge glow (no tilt)
-        "card-3d sheen-sweep holo-edge",
-        "hover:border-stamp/40",
-        "focus-within:ring-2 focus-within:ring-stamp/30 focus-within:ring-offset-2 focus-within:ring-offset-background",
+        "group/card relative rounded-2xl border border-border bg-card text-card-foreground",
+        // Warm oxblood elevation + 3D depth + sheen sweep + holographic edge
+        "shadow-dossier card-3d sheen-sweep holo-edge",
+        "transition-colors hover:border-primary/40",
+        "focus-within:ring-2 focus-within:ring-primary/30 focus-within:ring-offset-2 focus-within:ring-offset-background",
         className,
       )}
       {...props}

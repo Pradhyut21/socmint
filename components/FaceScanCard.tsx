@@ -1,300 +1,285 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { SuspectProfile } from "../lib/types";
-import { Image as ImageIcon, Camera, MapPin, ShieldAlert, Sparkles, Cpu, Lock } from "lucide-react";
+import {
+  Search, ExternalLink, Upload, Image as ImageIcon,
+  Link2, ImageOff, Info,
+} from "lucide-react";
 
 interface FaceScanCardProps {
   suspect: SuspectProfile;
 }
 
+/** Proxy CDN images through the server to bypass CORS restrictions
+ *  (Instagram scontent-*, Facebook CDN, etc. block browser-direct fetches) */
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith("data:") || url.startsWith("/")) return url;
+  // Don't proxy GitHub/YouTube avatars — they allow CORS and don't expire
+  if (/avatars\.githubusercontent\.com|yt3\.googleusercontent\.com/i.test(url)) return url;
+  return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
+/** For Instagram/Threads CDN (scontent-*), fetch a fresh URL via Instagram oembed */
+async function refreshInstagramUrl(username: string): Promise<string | null> {
+  try {
+    // Instagram's public oembed returns the current profile pic URL
+    const r = await fetch(`/api/image-proxy?url=${encodeURIComponent(`https://www.instagram.com/${username}/?__a=1&__d=1`)}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const text = await r.text();
+    const m = text.match(/"profile_pic_url_hd":"([^"]+)"/);
+    if (!m) return null;
+    return m[1].replace(/\\u0026/g, "&");
+  } catch { return null; }
+}
+
+/** Build reverse-image-search URLs for each engine */
+function reverseSearchUrls(url: string) {
+  const enc = encodeURIComponent(url);
+  return [
+    { label: "Google Lens", icon: "🔍", url: `https://lens.google.com/uploadbyurl?url=${enc}` },
+    { label: "Bing Visual", icon: "🅱", url: `https://www.bing.com/images/search?view=detailv2&iss=sbi&FORM=SBIIDP&sbisrc=ImgDropper&q=imgurl:${enc}` },
+    { label: "Yandex", icon: "🔶", url: `https://yandex.com/images/search?source=collections&rpt=imageview&url=${enc}` },
+    { label: "TinEye", icon: "👁", url: `https://tineye.com/search?url=${enc}` },
+  ];
+}
+
+/** Collect all unique, non-generated profile photos from accounts */
+function collectProfilePhotos(suspect: SuspectProfile) {
+  const seen = new Set<string>();
+  const photos: { platform: string; username: string; url: string }[] = [];
+  for (const acc of suspect.accounts || []) {
+    const url = acc.profilePicUrl;
+    if (!url || /ui-avatars\.com/i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    photos.push({ platform: acc.platform, username: acc.username, url });
+  }
+  // Also include the primary photo if not already present
+  if (suspect.photoUrl && !seen.has(suspect.photoUrl) && !/ui-avatars\.com/i.test(suspect.photoUrl)) {
+    photos.unshift({ platform: "primary", username: suspect.username, url: suspect.photoUrl });
+  }
+  return photos;
+}
+
+/** Parse real EXIF from an uploaded local image file using exifr */
+async function parseExif(file: File): Promise<Record<string, any> | null> {
+  try {
+    const { default: exifr } = await import("exifr");
+    const data = await exifr.parse(file, {
+      pick: ["Make", "Model", "Software", "DateTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSAltitude", "ImageWidth", "ImageHeight", "Orientation", "LensModel", "FNumber", "ExposureTime", "ISO"],
+    });
+    return data || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function FaceScanCard({ suspect }: FaceScanCardProps) {
-  const [analyzing, setAnalyzing] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState<string>(suspect.photoUrl);
-  
-  // Client-side image dimensions and file metrics
-  const [dimensions, setDimensions] = useState("Resolving...");
-  const [fileSize, setFileSize] = useState("Analyzing...");
-  const [fileFormat, setFileFormat] = useState("Analyzing...");
+  const photos = collectProfilePhotos(suspect);
+  const [selected, setSelected] = useState(photos[0] || null);
+  const [imgDimensions, setImgDimensions] = useState<string | null>(null);
+  const [exifData, setExifData] = useState<Record<string, any> | null>(null);
+  const [uploadName, setUploadName] = useState<string | null>(null);
+  const [uploadUrl, setUploadUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const scanData = suspect.faceScan || {
-    landmarks: [
-      { name: "Left Eye", x: 38, y: 40, width: 8, height: 4 },
-      { name: "Right Eye", x: 54, y: 40, width: 8, height: 4 },
-      { name: "Nose", x: 47, y: 47, width: 6, height: 12 },
-      { name: "Mouth", x: 43, y: 65, width: 14, height: 6 }
-    ],
-    exif: {
-      camera: "Apple iPhone 15 Pro",
-      lens: "24mm f/1.78",
-      software: "iOS 17.4",
-      created: "2026-05-24 15:42:10 IST",
-      gps: {
-        lat: "12.9716° N",
-        lng: "77.5946° E",
-        place: "Indiranagar, Bengaluru"
+  // Resolved photo URLs — start with cached, auto-refresh expired Instagram/Threads CDN
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const instagramPhotos = photos.filter(ph =>
+      /cdninstagram|fbcdn|scontent/i.test(ph.url) &&
+      (ph.platform === "instagram" || ph.platform === "threads")
+    );
+    if (instagramPhotos.length === 0) return;
+
+    instagramPhotos.forEach(async (ph) => {
+      // Test if the cached URL is still valid via proxy
+      try {
+        const testResp = await fetch(proxyUrl(ph.url), { method: "HEAD", signal: AbortSignal.timeout(4000) });
+        if (testResp.ok) return; // still valid — no refresh needed
+      } catch { /* expired, try to refresh */ }
+
+      // Try to get a fresh URL
+      const freshUrl = await refreshInstagramUrl(ph.username);
+      if (freshUrl) {
+        setResolvedUrls(prev => ({ ...prev, [ph.url]: freshUrl }));
       }
-    },
-    deepfake: {
-      isSynthetic: true,
-      score: 84.5,
-      note: "High probability of AI-generation (Stable Diffusion / Midjourney avatar indicators). Frequency domain analysis displays grid artifacts. Eye reflections are inconsistent.",
-      factors: [
-        { name: "Frequency Domain Grid Artifacts", score: 92 },
-        { name: "Skin Texture Frequency Smoothness", score: 88 },
-        { name: "Pupil / Reflection Symmetry", score: 73 }
-      ]
-    }
+    });
+  }, [photos.map(p => p.url).join(",")]);
+
+  // Get the display URL for a photo (use refreshed if available)
+  const displayUrl = (ph: { url: string }) => proxyUrl(resolvedUrls[ph.url] || ph.url);
+  useEffect(() => {
+    setImgDimensions(null);
+    const url = uploadUrl || selected?.url;
+    if (!url) return;
+    const img = new window.Image();
+    img.onload = () => setImgDimensions(`${img.naturalWidth} × ${img.naturalHeight} px`);
+    img.onerror = () => setImgDimensions(null);
+    img.src = url;
+  }, [selected, uploadUrl]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const blobUrl = URL.createObjectURL(file);
+    setUploadUrl(blobUrl);
+    setUploadName(file.name);
+    setExifData(null);
+    const parsed = await parseExif(file);
+    setExifData(parsed);
   };
 
-  const [exifData, setExifData] = useState<any>(scanData.exif);
-  const [landmarks, setLandmarks] = useState<any>(scanData.landmarks);
-  const [deepfakeAnalysis, setDeepfakeAnalysis] = useState<any>(scanData.deepfake);
+  const activeUrl = uploadUrl || selected?.url || "";
+  // For reverse image search we need the original (non-proxied) URL
+  const searchUrls = activeUrl && !uploadUrl ? reverseSearchUrls(activeUrl) : uploadUrl ? reverseSearchUrls(uploadUrl) : [];
 
-  // Sync state if suspect updates
-  useEffect(() => {
-    setPhotoUrl(suspect.photoUrl);
-    if (suspect.faceScan) {
-      setExifData(suspect.faceScan.exif);
-      setLandmarks(suspect.faceScan.landmarks);
-      setDeepfakeAnalysis(suspect.faceScan.deepfake);
-    } else {
-      setExifData(scanData.exif);
-      setLandmarks(scanData.landmarks);
-      setDeepfakeAnalysis(scanData.deepfake);
-    }
-  }, [suspect]);
-
-  // Client-side image parser
-  useEffect(() => {
-    if (!photoUrl) return;
-
-    if (photoUrl.startsWith("data:")) {
-      const base64Length = photoUrl.split(",")[1]?.length || 0;
-      const sizeInBytes = base64Length * 0.75;
-      const sizeInKb = (sizeInBytes / 1024).toFixed(1);
-      setFileSize(`${sizeInKb} KB`);
-      
-      const format = photoUrl.split(";")[0]?.split("/")[1]?.toUpperCase() || "UNKNOWN";
-      setFileFormat(format);
-    } else {
-      setFileSize("Remote Fetch (CDN)");
-      setFileFormat("HTTP/PNG Source");
-    }
-
-    const img = new Image();
-    img.src = photoUrl;
-    img.onload = () => {
-      setDimensions(`${img.width} x ${img.height} px`);
-    };
-    img.onerror = () => {
-      setDimensions("Unresolved pixels");
-    };
-  }, [photoUrl]);
-
-  const triggerUploadAnalysis = () => {
-    setAnalyzing(true);
-    setTimeout(() => {
-      setAnalyzing(false);
-    }, 2000);
-  };
+  // Photo clusters from identity correlation
+  const clusters = suspect.identityCorrelation?.photoClusters || [];
+  const selectedInCluster = selected
+    ? clusters.find(c => c.accounts.some(a => a.includes(selected.platform)))
+    : null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs text-ink">
-      
-      {/* Visual Landmarks Inspector */}
-      <div className="lg:col-span-2 space-y-4">
-        <div className="glass-panel p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-ink uppercase tracking-wider">
-            Facial Landmark & Perceptual Matching
-          </h4>
-          <span className="text-[10px] text-slate-600 font-semibold">GPU-Accelerated Scan</span>
-        </div>
+    <div className="space-y-6 font-mono text-xs text-forest">
 
-        <div className="glass-panel p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-6 items-center">
-          
-          {/* Mock Upload Image Box with Detection Overlay */}
-          <div className="relative w-56 h-56 bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center">
-            {analyzing ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-20">
-                <Cpu className="w-8 h-8 text-blue-600 animate-spin mb-2" />
-                <span className="text-[10px] text-blue-700 font-bold">Scanning landmarks...</span>
-              </div>
-            ) : (
-              <>
-                <img 
-                  src={photoUrl} 
-                  alt="Suspect face" 
-                  className="w-full h-full object-cover opacity-90"
-                />
-                
-                {/* Horizontal Sweeper Line */}
-                <div className="absolute left-0 right-0 h-0.5 bg-cyan-500 shadow-[0_0_10px_#06b6d4] animate-bounce top-1/2"></div>
-                
-                {/* Landmarks Boxes */}
-                {landmarks.map((lm: any, idx: number) => (
-                  <div 
-                    key={idx}
-                    className="absolute border border-cyan-500 bg-cyan-500/20 flex items-center justify-center group"
-                    style={{
-                      left: `${lm.x}%`,
-                      top: `${lm.y}%`,
-                      width: `${lm.width}%`,
-                      height: `${lm.height}%`
-                    }}
-                  >
-                    <span className="hidden group-hover:block absolute bottom-full bg-slate-900 text-[7px] text-cyan-300 px-1 rounded border border-cyan-500/30 whitespace-nowrap mb-1">
-                      {lm.name}
+      {/* ── Row 1: photo grid + active photo ───────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+
+        {/* Left: discovered profile photos */}
+        <div className="border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+              Discovered Profile Photos ({photos.length})
+            </span>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 border border-stamp/30 bg-stamp/5 px-2.5 py-1.5 text-[10px] font-bold text-stamp hover:bg-stamp/10 transition-colors"
+            >
+              <Upload className="h-3 w-3" /> Upload Image
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+          </div>
+
+          {photos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+              <ImageOff className="h-8 w-8 opacity-40" />
+              <span className="text-[11px]">No profile photos discovered yet.</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map((ph, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setSelected(ph); setUploadUrl(null); setUploadName(null); setExifData(null); }}
+                  className={`relative group border-2 transition-colors ${selected?.url === ph.url && !uploadUrl ? "border-stamp" : "border-border hover:border-stamp/40"}`}
+                >
+                  <img
+                    src={displayUrl(ph)}
+                    alt={ph.username}
+                    className="w-full aspect-square object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                  <span className="absolute bottom-0 inset-x-0 bg-forest/70 text-ivory text-[8px] font-bold px-1 py-0.5 truncate uppercase">
+                    {ph.platform}
+                  </span>
+                  {/* Photo cluster badge */}
+                  {clusters.some(c => c.accounts.some(a => a.includes(ph.platform))) && (
+                    <span className="absolute top-1 right-1 bg-stamp text-ivory text-[7px] font-bold px-1 py-0.5">
+                      CLUSTER
                     </span>
-                  </div>
-                ))}
-
-                {/* Primary bounding box */}
-                <div className="absolute border-2 border-dashed border-blue-500/50 inset-8 rounded-xl"></div>
-              </>
-            )}
-          </div>
-
-          {/* Analysis Actions */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <span className="text-slate-500 text-[10px] uppercase block mb-1">Target Real Name</span>
-              <span className="text-ink font-bold text-sm block mb-1">{suspect.realName}</span>
-              <span className="text-[10px] text-slate-600">Avatar matched from public registries.</span>
-            </div>
-
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button 
-                onClick={triggerUploadAnalysis}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold font-mono tracking-wider text-[10px] flex items-center gap-1 shadow-md glow-blue transition-all"
-              >
-                <Cpu className="w-3.5 h-3.5" /> Re-Scan Image Heuristics
-              </button>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* EXIF and Deepfake check sidebar */}
-      <div className="lg:col-span-1 space-y-6">
-        
-        {/* EXIF Metadata Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-200">
-            <Camera className="w-5 h-5 text-blue-600" />
-            <h4 className="text-sm font-semibold text-ink uppercase tracking-wider">
-              EXIF Metadata Extractor
-            </h4>
-          </div>
-
-          {exifData ? (
-            <div className="space-y-3 font-mono text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Camera Model</span>
-                <span className="text-ink font-semibold">{exifData.camera}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Lens / Aperture</span>
-                <span className="text-ink font-semibold">{exifData.lens}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Software Tag</span>
-                <span className="text-ink font-semibold">{exifData.software}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Creation Date</span>
-                <span className="text-ink font-semibold">{exifData.created}</span>
-              </div>
-              
-              <div className="pt-2 border-t border-slate-200 mt-2 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Dimensions</span>
-                  <span className="text-ink font-bold">{dimensions}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">File Size</span>
-                  <span className="text-ink font-bold">{fileSize}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Mime Format</span>
-                  <span className="text-ink font-bold">{fileFormat}</span>
-                </div>
-              </div>
-
-              {exifData.gps && (
-                <div className="pt-2 border-t border-slate-200 mt-2 space-y-1">
-                  <span className="text-slate-500 block text-[9px] uppercase">GPS Coordinates Tagged</span>
-                  <div className="flex items-start gap-1.5 text-blue-700">
-                    <MapPin className="w-3.5 h-3.5 mt-0.5" />
-                    <div>
-                      <span className="font-bold block">{exifData.gps.place}</span>
-                      <span className="text-[10px] text-slate-600 block">({exifData.gps.lat}, {exifData.gps.lng})</span>
-                    </div>
-                  </div>
+                  )}
+                </button>
+              ))}
+              {/* Uploaded image slot */}
+              {uploadUrl && (
+                <div className="relative border-2 border-ember">
+                  <img src={uploadUrl} alt="Uploaded" className="w-full aspect-square object-cover" />
+                  <span className="absolute bottom-0 inset-x-0 bg-ember/80 text-ivory text-[8px] font-bold px-1 py-0.5 truncate">
+                    UPLOADED
+                  </span>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-3 font-mono text-[11px] text-slate-600 leading-relaxed text-[10px]">
-              <p>⚠️ No EXIF metadata detected in this profile image.</p>
-              <p className="text-slate-500">Most social media and hosting platforms strip camera metadata tags (EXIF) and GPS location stamps upon image upload to protect user privacy.</p>
-              <div className="pt-2 border-t border-slate-200 mt-2 space-y-2 text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Dimensions</span>
-                  <span className="text-ink font-bold">{dimensions}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">File Size</span>
-                  <span className="text-ink font-bold">{fileSize}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Mime Format</span>
-                  <span className="text-ink font-bold">{fileFormat}</span>
-                </div>
+          )}
+
+          {/* Photo hash cluster result */}
+          {clusters.length > 0 && (
+            <div className="border border-stamp/30 bg-stamp/5 p-2.5 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-stamp uppercase">
+                <Link2 className="h-3 w-3" /> Same-photo clusters detected
               </div>
+              {clusters.map((c, i) => (
+                <p key={i} className="text-[10px] text-muted-foreground">
+                  Cluster {i + 1}: {c.accounts.map(a => a.split(":")[0]).join(", ")} — same avatar
+                </p>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Deepfake Analyzer Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-rose-200 bg-rose-50/40 shadow-sm">
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-rose-200 text-rose-800">
-            <ShieldAlert className="w-5 h-5" />
-            <h4 className="text-sm font-semibold text-ink uppercase tracking-wider">
-              AI Deepfake Classification
-            </h4>
+        {/* Right: active photo + reverse search */}
+        <div className="border border-border bg-card p-4 space-y-4">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            {uploadUrl ? `Uploaded: ${uploadName}` : selected ? `${selected.platform.toUpperCase()} · @${selected.username}` : "No photo selected"}
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-600">Synthetic Confidence</span>
-              <span className="text-rose-700 font-extrabold">{deepfakeAnalysis.score}%</span>
+          {activeUrl ? (
+            <img
+              src={proxyUrl(activeUrl)}
+              alt="Active"
+              className="w-full max-h-52 object-contain border border-border bg-paper"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-48 border border-dashed border-border text-muted-foreground">
+              <ImageIcon className="h-10 w-10 opacity-30" />
             </div>
+          )}
 
-            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200">
-              <div 
-                className="h-full rounded-full bg-rose-500 glow-red"
-                style={{ width: `${deepfakeAnalysis.score}%` }}
-              ></div>
+          {imgDimensions && (
+            <p className="text-[10px] text-muted-foreground">Dimensions: <span className="font-bold text-forest">{imgDimensions}</span></p>
+          )}
+
+          {/* Reverse image search buttons */}
+          {searchUrls.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                Reverse Image Search
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {searchUrls.map(s => (
+                  <a
+                    key={s.label}
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 border border-border bg-paper px-3 py-2 text-[11px] font-bold text-forest hover:border-stamp/50 hover:bg-stamp/5 transition-colors"
+                  >
+                    <span>{s.icon}</span>
+                    {s.label}
+                    <ExternalLink className="h-2.5 w-2.5 ml-auto text-muted-foreground" />
+                  </a>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Each link opens the selected photo in the respective reverse-image engine. Results may surface where this photo has been posted online.
+              </p>
             </div>
-
-            <p className="text-[10px] text-slate-700 leading-relaxed font-mono font-medium">
-              {deepfakeAnalysis.note}
-            </p>
-
-            <div className="space-y-2 pt-2 border-t border-rose-200 text-[9px] text-slate-600">
-              {deepfakeAnalysis.factors.map((f: any, i: number) => (
-                <div key={i} className="flex justify-between">
-                  <span>{f.name}</span>
-                  <span className="text-rose-700 font-bold">{f.score}% match</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
-
       </div>
+
+      {/* ── Row 2: expired URL warning for CDN images ───────────────────────── */}
+      {photos.some(ph => /cdninstagram|fbcdn|scontent/i.test(ph.url)) && (
+        <div className="border border-stamp/25 bg-stamp/5 p-3 flex items-start gap-2 text-[11px] text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0 text-stamp mt-0.5" />
+          <span>
+            Instagram and Threads photos use <strong className="text-forest">signed expiring CDN URLs</strong> — they are valid for a few hours after the sweep. If thumbnails appear blank, re-run the investigation to get fresh URLs. GitHub and YouTube photos load permanently.
+          </span>
+        </div>
+      )}
 
     </div>
   );

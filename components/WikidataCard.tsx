@@ -1,31 +1,66 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { SuspectProfile } from "../lib/types";
-import { Globe, Search, ArrowUpRight, HelpCircle, ShieldCheck } from "lucide-react";
+import { Globe, Search, ArrowUpRight, HelpCircle, ShieldCheck, Loader2 } from "lucide-react";
 
 interface WikidataCardProps {
   suspect: SuspectProfile;
 }
 
+interface WikidataEntity {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 export default function WikidataCard({ suspect }: WikidataCardProps) {
-  // Generate mock Wikidata lookups based on realName
+  // Investigator dork queries (genuinely useful, built from the real subject)
   const dorks = [
-    { platform: "GitHub", query: `site:github.com "${suspect.realName}" "bengaluru"` },
-    { platform: "LinkedIn", query: `site:linkedin.com/in "${suspect.realName}" "fintech" OR "crypto"` },
+    { platform: "GitHub", query: `site:github.com "${suspect.realName}"` },
+    { platform: "LinkedIn", query: `site:linkedin.com/in "${suspect.realName}"` },
     { platform: "Twitter / X", query: `site:x.com "${suspect.username.replace(/^@/, "")}"` }
   ];
 
-  const wikidataMatches = [
-    {
-      id: "Q11827982",
-      label: suspect.realName,
-      description: "Indian blockchain software developer & cryptology researcher",
-      nativeName: suspect.realName,
-      occupations: ["software developer", "cryptographer"],
-      birthPlace: "Bengaluru, Karnataka, India"
+  // REAL Wikidata entity search (wbsearchentities, CORS-enabled with origin=*)
+  const [wikidataMatches, setWikidataMatches] = useState<WikidataEntity[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const name = (suspect.realName || "").trim();
+    if (!name || name.length < 3 || /@/.test(name)) {
+      setWikidataMatches([]);
+      return;
     }
-  ];
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const url =
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities` +
+      `&search=${encodeURIComponent(name)}&language=en&uselang=en&format=json&origin=*&limit=5&type=item`;
+
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data) => {
+        if (cancelled) return;
+        const results: WikidataEntity[] = (data?.search || []).map((s: any) => ({
+          id: s.id,
+          label: s.label || s.match?.text || name,
+          description: s.description,
+        }));
+        setWikidataMatches(results);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message || "Wikidata lookup failed");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [suspect.realName, suspect.username]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs text-ink">
@@ -72,34 +107,39 @@ export default function WikidataCard({ suspect }: WikidataCardProps) {
           </div>
 
           <div className="space-y-4">
-            {wikidataMatches.map((entity) => (
-              <div key={entity.id} className="p-3 bg-slate-5  0 border border-slate-200 rounded-xl space-y-3 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="flex justify-between items-start">
+            {loading && (
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 py-3">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Querying Wikidata knowledge base…
+              </div>
+            )}
+
+            {!loading && error && (
+              <p className="text-[10px] text-amber-600 py-2">Wikidata lookup unavailable ({error}).</p>
+            )}
+
+            {!loading && !error && wikidataMatches.length === 0 && (
+              <p className="text-[10px] text-slate-500 py-2 leading-relaxed">
+                No Wikidata entity matches for <span className="font-semibold text-ink">{suspect.realName}</span>.
+                This is expected for private individuals — Wikidata only indexes notable public figures.
+              </p>
+            )}
+
+            {!loading && wikidataMatches.map((entity) => (
+              <div key={entity.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+                <div className="flex justify-between items-start gap-2">
                   <span className="font-bold text-ink text-xs block">{entity.label}</span>
-                  <a 
+                  <a
                     href={`https://www.wikidata.org/wiki/${entity.id}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-blue-600 hover:underline text-[9px] flex items-center gap-0.5 font-bold"
+                    className="text-blue-600 hover:underline text-[9px] flex items-center gap-0.5 font-bold shrink-0"
                   >
                     {entity.id} <ArrowUpRight className="w-3 h-3" />
                   </a>
                 </div>
-                
                 <p className="text-[10px] text-slate-700 leading-relaxed font-medium">
-                  {entity.description}
+                  {entity.description || "No description available on Wikidata."}
                 </p>
-
-                <div className="pt-2 border-t border-slate-200 space-y-2 text-[9px]">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Birth Place</span>
-                    <span className="text-ink font-semibold">{entity.birthPlace}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Occupations</span>
-                    <span className="text-ink font-semibold">{entity.occupations.join(", ")}</span>
-                  </div>
-                </div>
               </div>
             ))}
           </div>

@@ -4,8 +4,6 @@ import { DossierInput } from "../../../lib/types";
 import { checkRateLimit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
-export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
@@ -20,12 +18,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const query = typeof body.query === "string" ? body.query.trim() : "";
-    let type = typeof body.type === "string" ? body.type : "username";
-
-    // Auto-promote username queries with spaces to real name searches
-    if (type === "username" && query.replace(/^@/, "").includes(" ")) {
-      type = "name";
-    }
+    const type = typeof body.type === "string" ? body.type : "username";
+    const quickScan = typeof body.quickScan === "boolean" ? body.quickScan : true; // Default to Quick Scan (fast mode)
+    // Optional disambiguating hint for "Real name" searches — a college, company,
+    // or known username that narrows a common name down to the right LinkedIn profile.
+    const extraContext = typeof body.nameContext === "string" ? body.nameContext.trim() : undefined;
 
     // Multi-field dossier mode
     if (type === "dossier" && body.dossier) {
@@ -111,11 +108,11 @@ export async function POST(request: NextRequest) {
     }
 
     const githubToken = request.headers.get("x-github-token") || undefined;
-    const profile = await investigatePublicSubject(query, type, githubToken);
+    const profile = await investigatePublicSubject(query, type, githubToken, quickScan, extraContext);
     return NextResponse.json({
       profile,
       acquiredAt: new Date().toISOString(),
-      mode: "live-public-osint",
+      mode: quickScan ? "quick-scan" : "deep-scan",
     });
 
   } catch (error) {

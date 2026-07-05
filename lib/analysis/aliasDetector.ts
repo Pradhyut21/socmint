@@ -93,6 +93,13 @@ export function detectAliases(primaryUsername: string, accounts: PlatformAccount
   const primaryPosts = posts.filter((post) => post.platform === primaryAccount.platform);
 
   return accounts
+    // An "alias" is a DIFFERENT handle that may belong to the same person
+    // (e.g. a burner/evasion account). An account using the exact same
+    // username as the primary query on another platform is just a
+    // confirmed cross-platform presence, not an alias — excluding it here
+    // prevents every same-named account from collapsing into duplicate
+    // "alias:<handle>" network-graph nodes that all share one ID.
+    .filter((account) => account.username.toLowerCase() !== primaryAccount.username.toLowerCase())
     .map((account) => {
       const writing = writingStyleScore(primaryPosts.length ? primaryPosts : posts, account, posts);
       const username = usernameScore(primaryAccount.username, account.username);

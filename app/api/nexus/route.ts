@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "../../../lib/rateLimit";
+import { buildProfileContext } from "../../../lib/ai/buildProfileContext";
 
 export const runtime = "nodejs";
 
@@ -27,24 +28,16 @@ export async function POST(request: NextRequest) {
     }
 
 
-    const evidenceContext = JSON.stringify(
-      {
-        subject: profile?.realName,
-        accounts: profile?.accounts?.map((a: any) => ({ platform: a.platform, username: a.username, confidence: a.confidence })),
-        posts: profile?.posts?.slice(0, 10),
-        legalRecords: profile?.legalRecords,
-        aliasResults: profile?.aliasResults
-      },
-      null,
-      2
-    );
+    // Build rich evidence context covering ALL profile data
+    const evidenceContext = buildProfileContext(profile);
 
-    const prompt = `Analyse this suspect profile and connect all signals. Find:
-1. Which accounts are definitely the same person
-2. Any location patterns or travel signals
-3. Any timing anomalies (silence periods)
-4. Connections between legal records and social media activity
-5. The most important thing an investigator should know
+    const prompt = `Analyse the complete suspect profile above and connect all signals. Find:
+1. Which accounts are cryptographically or behaviorally linked to the same individual (use identity correlation scores and Keybase proofs if present)
+2. Location patterns derived from bio data, location fields, and post metadata
+3. Timing anomalies (silence periods, burst activity)
+4. Connections between breach data, dark web pastes, and social media activity
+5. What the bio cross-links and display names reveal about the subject's real identity
+6. The single most important finding an investigator should act on first
 
 Return as JSON:
 {
@@ -52,7 +45,7 @@ Return as JSON:
   "connected_signals": [{"signal1": "string", "signal2": "string", "connection": "string"}],
   "anomalies": [{"description": "string", "severity": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"}],
   "investigator_priority": "string",
-  "investigator_brief": "string (A detailed markdown brief under 250 words summarizing the investigation. Focus strictly on public evidence with sections: Investigation Overview, Evidence Collected, Evidence Correlation, Confidence Evolution, Risk Evolution, Modules Used, Remaining Unknowns, Recommended Next Steps. If info for a section is missing, state 'evidence insufficient'. Never fabricate missing details.)"
+  "investigator_brief": "string (A detailed markdown brief under 300 words. Sections: Investigation Overview, Accounts & Identity Linkage, Activity & Behavioural Patterns, Risk Indicators, Evidence Gaps, Recommended Next Steps. State 'evidence insufficient' for missing sections. Never fabricate.)"
 }`;
 
 
@@ -63,7 +56,7 @@ Return as JSON:
         Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
         "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         model: NVIDIA_MODEL,
         temperature: 0.2,
@@ -107,8 +100,7 @@ Return as JSON:
       });
     }
 
-  } catch (error: any) {
-    console.warn("[NEXUS ERROR]", error.message || error);
+  } catch (error) {
     return NextResponse.json({
       key_finding: "AI analysis encountered an error.",
       connected_signals: [],

@@ -115,6 +115,10 @@ export interface PlatformAccount {
   education?: string;
   headline?: string;
   mergeJustification?: string;
+  /** Calculated confidence score (0-100) from confidenceScoring.ts */
+  confidenceScore?: number;
+  /** Reasoning array explaining the confidence score */
+  confidenceReasoning?: string[];
 }
 
 
@@ -401,8 +405,6 @@ export interface SuspectProfile {
   domainIntel?: any;
   toolkitExecutions?: ToolkitExecution[];
   toolkitFindings?: NormalizedFinding[];
-  waybackArchive?: import("./fetchers/wayback").WaybackArchiveResult;
-  contactDiscovery?: import("./fetchers/contactDiscovery").ContactDiscoveryResult;
   evidenceGraph?: EvidenceGraphData;
   reasoningSteps?: ReasoningStep[];
   evidenceAttribution?: Record<string, FieldAttribution>;
@@ -422,6 +424,10 @@ export interface SuspectProfile {
   evidenceReliability?: ReliableEvidenceItem[];
   developerFingerprint?: PlatformComparison;
   bioSimilarity?: SemanticSimilarityResult;
+  /** Cross-account identity correlation ("same individual" linkage) */
+  identityCorrelation?: import("./intelligence/identityCorrelation").CorrelationResult;
+  /** Verified linked accounts discovered via Keybase */
+  keybase?: import("./fetchers/keybase").KeybaseResult;
   network: {
 
     nodes: NetworkNode[];
